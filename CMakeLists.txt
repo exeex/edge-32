@@ -100,6 +100,13 @@ set(CORE_RTL
   ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
   ${EDGE_RV_ROOT}/edge_scalar_divrem/edge_scalar_divrem.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_code_33.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_compressor.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_add16_carry_select8.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_add64_carry_select16.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_lane.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_dual_booth_pipeline.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul64_dual_booth.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_generic.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_asap7.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel.v
