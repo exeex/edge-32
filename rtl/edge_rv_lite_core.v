@@ -4,6 +4,7 @@ module edge_rv_lite_core #(
   parameter PC_WIDTH = 40,
   parameter DMEM_RESP_FORMATTED = 0,
   parameter ENABLE_FPU = 0,
+  parameter MULDIV_ASAP7 = 0,
   parameter [46:0] EDGE_ASIC_ID = 47'd0
 ) (
   input wire clk, input wire reset_n,
@@ -154,11 +155,13 @@ module edge_rv_lite_core #(
     .branch_taken(branch_taken),.branch_target(branch_target));
 
   wire mul_ready,mul_result_valid,mul_busy; wire [63:0] mul_result;
+  wire [5:0] mul_latency;
   wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
-  edge_scalar_muldiv_leaf muldiv(.clk(clk),.reset_n(reset_n),
+  edge_scalar_muldiv_kernel #(.ASAP7_IMPLEMENTATION(MULDIV_ASAP7)) muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),.op(alu_op),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
-    .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy));
+    .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
+    .op_latency(mul_latency));
 
   wire lsu_ready,lsu_done,lsu_error,lsu_busy; wire [63:0] lsu_value;
   wire lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;

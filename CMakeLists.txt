@@ -100,7 +100,9 @@ set(CORE_RTL
   ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
   ${EDGE_RV_ROOT}/edge_scalar_divrem/edge_scalar_divrem.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_leaf.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_generic.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_asap7.v
+  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel.v
   ${FPU_RTL}
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_frontend.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_instruction_assembler.v

@@ -10,6 +10,7 @@ module edge_rv_lite_cached_core #(
   parameter DTCM_ADDR_WIDTH = 14,
   parameter ENABLE_DTCM_PORT = 0,
   parameter ENABLE_FPU = 0,
+  parameter MULDIV_ASAP7 = 0,
   parameter [46:0] EDGE_ASIC_ID = 47'd0
 ) (
   input  wire                   clk,
@@ -132,7 +133,8 @@ module edge_rv_lite_cached_core #(
 
   edge_rv_lite_core #(
     .PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(1),
-    .ENABLE_FPU(ENABLE_FPU), .EDGE_ASIC_ID(EDGE_ASIC_ID)
+    .ENABLE_FPU(ENABLE_FPU), .MULDIV_ASAP7(MULDIV_ASAP7),
+    .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) core (
     .clk(clk), .reset_n(reset_n),
     .imem_req_valid(core_imem_req_valid),

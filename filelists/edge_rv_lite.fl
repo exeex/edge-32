@@ -3,7 +3,9 @@ ${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
 ${EDGE_RV_ROOT}/edge_scalar_fast_alu/edge_scalar_fast_alu.v
 ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
 ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv.v
-${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_leaf.v
+${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_generic.v
+${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_asap7.v
+${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel.v
 ${EDGE_RV_ROOT}/edge_scalar_divrem/edge_scalar_divrem.v
 ${EDGE_RV_ROOT}/edge_scalar_alu/edge_scalar_alu.v
 ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
