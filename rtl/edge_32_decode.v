@@ -19,9 +19,14 @@ module edge_32_decode (
   wire shared_legal;
   wire shared_writes_gpr;
   wire shared_is_edge64;
+  wire shared_accel_needs_capture;
+  wire [4:0] shared_accel_capture_src_gpr;
   wire [6:0] opcode = inst[6:0];
   wire [2:0] funct3 = inst[14:12];
   wire [6:0] funct7 = inst[31:25];
+  wire is_asic32 = !inst_is_64b && (opcode == 7'h3f);
+  wire [63:0] classifier_inst = is_asic32 ?
+    {24'b0, 1'b1, funct7, inst[31:0]} : inst;
 
   wire rv32_shift_legal =
     (opcode != 7'h13) ||
@@ -37,21 +42,25 @@ module edge_32_decode (
   wire rv32_scalar_legal = shared_legal && !rv64_word_opcode &&
                            rv32_shift_legal && rv32_load_legal &&
                            rv32_store_legal;
-  wire local_legal = shared_is_edge64 ? shared_legal :
+  wire local_legal = is_asic32 ? shared_legal :
+                     shared_is_edge64 ? shared_legal :
                      (!inst_is_64b && rv32_scalar_legal);
 
   assign legal = local_legal;
   assign op_class = local_legal ? shared_op_class : CLASS_ILLEGAL;
-  assign writes_gpr = local_legal && shared_writes_gpr;
+  assign writes_gpr = local_legal && !is_asic32 && shared_writes_gpr;
+  assign accel_needs_capture = shared_accel_needs_capture;
+  assign accel_capture_src_gpr = is_asic32 ? inst[19:15] :
+                                shared_accel_capture_src_gpr;
 
   edge_instruction_classifier classifier (
-    .inst(inst), .inst_is_64b(inst_is_64b),
+    .inst(classifier_inst), .inst_is_64b(is_asic32 || inst_is_64b),
     .op_class(shared_op_class), .legal(shared_legal),
     .rd(rd), .rs1(rs1), .rs2(rs2), .scalar_issue_class(),
     .writes_gpr(shared_writes_gpr), .is_edge64(shared_is_edge64),
     .accel_is_tensor(), .accel_subop(accel_subop),
-    .accel_needs_capture(accel_needs_capture),
-    .accel_capture_src_gpr(accel_capture_src_gpr),
+    .accel_needs_capture(shared_accel_needs_capture),
+    .accel_capture_src_gpr(shared_accel_capture_src_gpr),
     .accel_needs_base_gpr(), .accel_base_src_gpr(),
     .accel_is_sync(), .accel_is_getcsr());
 endmodule

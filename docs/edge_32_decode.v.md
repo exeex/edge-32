@@ -15,11 +15,13 @@ into RV32 execution:
 - integer `LD`, `LWU`, and `SD`
 
 Rejected instructions report class 15, clear `writes_gpr`, and retain decoded
-register indices only for debug visibility. Valid Edge64 accelerator commands
-remain supported as a product protocol and are not architectural XLEN values.
+register indices only for debug visibility. ASIC32 commands use opcode
+`7'h3f`, reserved `rd[11:7]`, `rs1[19:15]`, command `funct7[31:25]`, and
+`imm8={inst[24:20],inst[14:12]}`. They never write a GPR; `rs1` is the sole
+optional captured scalar operand.
 
 ## Test
 
 `tests/edge_32_decode_tb.v` checks accepted RV32I/RV32M/Zba encodings, every
 RV32 integer load/store width, shift boundary encodings, all OP-32 and
-OP-IMM-32 funct3/funct7 combinations, and valid/invalid Edge64 commands.
+OP-IMM-32 funct3/funct7 combinations, and valid/invalid ASIC32 commands.

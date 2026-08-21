@@ -23,20 +23,16 @@ module edge_rv_lite_instruction_assembler_tb;
       $fatal(1,"scalar parcel did not pass through");
     @(posedge clk); parcel_valid<=0;
 
-    send(32'h4,32'h0000_003f);
-    if(op_valid) $fatal(1,"low Edge64 parcel escaped alone");
-    parcel_pc<=32'h8; parcel_data<=32'h1234_5678; parcel_valid<=1; #1;
-    if(!op_valid||!op_is_64b||op_pc!=32'h4||
-       op_inst!=64'h1234_5678_0000_003f)
-      $fatal(1,"Edge64 assembly mismatch");
+    parcel_pc<=32'h4; parcel_data<=32'h4862_803f; parcel_valid<=1; #1;
+    if(!op_valid||op_is_64b||op_pc!=32'h4||op_inst!=64'h4862_803f)
+      $fatal(1,"ASIC32 command did not pass through");
     @(posedge clk); parcel_valid<=0;
 
-    send(32'hc,32'h0000_003f);
     flush<=1; @(posedge clk); flush<=0;
     parcel_pc<=32'h80; parcel_data<=32'h0000_0013; parcel_valid<=1; #1;
     if(!op_valid||op_is_64b||op_pc!=32'h80)
       $fatal(1,"flush did not clear pending low parcel");
-    $display("TEST PASS: scalar pass-through, Edge64 assembly, flush");
+    $display("TEST PASS: fixed-width scalar/ASIC pass-through and flush");
     $finish;
   end
 endmodule

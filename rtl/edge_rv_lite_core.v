@@ -25,7 +25,7 @@ module edge_rv_lite_core #(
   output wire icache_invalidate_valid,input wire icache_invalidate_ready,
   input wire icache_invalidate_complete,
   output wire accel_req_valid, input wire accel_req_ready,
-  output wire [63:0] accel_req_inst,
+  output wire [31:0] accel_req_inst,
   output wire [63:0] accel_req_src0, output wire [63:0] accel_req_src1,
   input wire accel_resp_valid, input wire accel_resp_error,
   input wire [63:0] accel_resp_value,
@@ -65,7 +65,7 @@ module edge_rv_lite_core #(
     .writes_gpr(id_decoded_writes_gpr), .accel_subop(),
     .accel_needs_capture(id_decoded_needs_capture),
     .accel_capture_src_gpr(id_decoded_capture_src_gpr));
-  wire id_is_accel=id_is_64b&&(id_decoded_class==4'd8);
+  wire id_is_accel=(id_inst[6:0]==7'h3f)&&(id_decoded_class==4'd8);
   wire [4:0] id_rs1=id_scalar_rs1;
   wire [4:0] id_rs2=id_is_accel ?
     (id_decoded_needs_capture ? id_decoded_capture_src_gpr:5'd0):id_scalar_rs2;
@@ -113,7 +113,7 @@ module edge_rv_lite_core #(
   wire is_fence_i=is_fence&&(f3==3'b001);
   wire is_supported_system=is_cycle||is_instret||is_hardware_id||is_ebreak||
     is_edge_break||is_fp_csr||is_fence;
-  wire is_accel=ex_is_64b&&(decoded_class==4'd8);
+  wire is_accel=(ex_inst[6:0]==7'h3f)&&(decoded_class==4'd8);
   wire fpu_legal;
   wire ex_supported=is_accel||is_fast_class||is_muldiv||is_int_mem||is_fp_mem||
     is_supported_system||is_edge_cache||
@@ -217,7 +217,7 @@ module edge_rv_lite_core #(
   wire fpu_start=ex_issue_ok&&is_fp_compute&&!fpu_started_q&&fpu_ready;
 
   assign accel_req_valid=ex_issue_ok&&is_accel&&!accel_started_q;
-  assign accel_req_inst=ex_inst;
+  assign accel_req_inst=ex_inst[31:0];
   assign accel_req_src0={32'd0,ex_rs1_value};
   assign accel_req_src1={32'd0,ex_rs2_value};
   wire accel_req_fire=accel_req_valid&&accel_req_ready;

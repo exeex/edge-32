@@ -5,7 +5,8 @@ module edge_rv_lite_accel_serial_tb;
   wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire accel_req_valid; reg accel_req_ready=0;
-  wire [63:0] accel_req_inst, accel_req_src0, accel_req_src1;
+  wire [31:0] accel_req_inst;
+  wire [63:0] accel_req_src0, accel_req_src1;
   reg accel_resp_valid=0, accel_resp_error=0;
   reg [63:0] accel_resp_value=0;
   wire halted, illegal; wire [63:0] instret_count;
@@ -36,14 +37,13 @@ module edge_rv_lite_accel_serial_tb;
     case(imem_req_addr)
       32'h0: imem_resp_data<=32'h02a0_0293; // addi x5,x0,42
       32'h4: imem_resp_data<=32'h0630_0313; // addi x6,x0,99
-      32'h8: imem_resp_data<=32'h0062_803f; // rs1/capture=x5, ordinary rs2=x6
-      32'hc: imem_resp_data<=32'h0000_00a4; // actu.setscalar
+      32'h8: imem_resp_data<=32'h4862_803f; // funct7=24, rs1=x5, imm8=30
       default: imem_resp_data<=32'h0010_0073;
     endcase
     accel_resp_valid<=0;
     if(accel_req_valid&&accel_req_ready) begin
       accepted<=accepted+1; delay<=3;
-      if(accel_req_inst!=64'h0000_00a4_0062_803f ||
+      if(accel_req_inst!=32'h4862_803f ||
          accel_req_src0!=64'd42 || accel_req_src1!=64'd42)
         $fatal(1,"serialized accelerator payload mismatch");
     end
@@ -58,7 +58,7 @@ module edge_rv_lite_accel_serial_tb;
     wait(accel_req_valid);
     repeat(3) begin
       @(posedge clk);
-      if(accel_req_inst!=64'h0000_00a4_0062_803f ||
+      if(accel_req_inst!=32'h4862_803f ||
          accel_req_src0!=64'd42 || accel_req_src1!=64'd42)
         $fatal(1,"request changed under backpressure inst=%h src0=%h src1=%h",
                accel_req_inst, accel_req_src0, accel_req_src1);
@@ -67,7 +67,7 @@ module edge_rv_lite_accel_serial_tb;
     wait(halted);
     if(illegal||accepted!=1||instret_count!=4)
       $fatal(1,"serial accelerator completion/retire mismatch");
-    $display("TEST PASS: Edge64 fetch and serialized accelerator completion");
+    $display("TEST PASS: ASIC32 fetch and serialized accelerator completion");
     $finish;
   end
 endmodule

@@ -57,10 +57,11 @@ module edge_32_decode_tb;
         inst[6:0]=7'h3b; check_decode(0,4'd15,"OP-32 rejected");
       end
 
-    inst=0; inst[6:0]=7'h3f; inst[39]=1; inst[38:32]=7'h11;
-    inst_is_64b=1; check_decode(1,4'd8,"Edge64 tensor command");
-    inst[38:32]=7'h7f; check_decode(0,4'd15,"unallocated Edge64 command");
-    inst_is_64b=0; check_decode(0,4'd15,"truncated Edge64 marker");
+    inst=0; inst[6:0]=7'h3f; inst[31:25]=7'h11; inst[19:15]=5'd6;
+    check_decode(1,4'd8,"ASIC32 command");
+    if(accel_subop!=7'h11||accel_capture_src_gpr!=5'd6||writes_gpr)
+      $fatal(1,"TEST FAIL: ASIC32 field decode");
+    inst[31:25]=7'h7f; check_decode(0,4'd15,"unallocated ASIC32 command");
 
     $display("TEST PASS: edge_32_decode RV32 legality boundary");
     $finish;

@@ -17,7 +17,7 @@ There are no sequence IDs, epochs, RTU records, completion ports, or snapshots.
 
 The architectural value path is 32 bits: the GPR file, ID operands, EX operand
 registers, completion forwarding, immediates, and GPR writeback all use XLEN=32.
-Wider cache, DTCM, AXI, counter, FPU, and Edge64 command interfaces are system
+Wider cache, DTCM, AXI, counter, and FPU interfaces are system
 boundaries and are explicitly extended or truncated at the containing core.
 
 The `edge32-xlen32` Xilinx synthesis checkpoint maps the complete lite core to
@@ -25,11 +25,9 @@ The `edge32-xlen32` Xilinx synthesis checkpoint maps the complete lite core to
 This is the first retained whole-core checkpoint after narrowing the value path,
 so it is a cumulative baseline rather than an adjacent-revision area delta.
 
-The pipeline carries a complete 64-bit instruction plus an explicit
-`is_64b` bit. Scalar instructions keep their upper word zero. The separate
-`edge_rv_lite_instruction_assembler` consumes ordered 32-bit frontend parcels;
-an opcode `7'h3f` low parcel captures the following parcel and emits one Edge64
-instruction at the low parcel's PC. Redirect flush discards an incomplete pair.
+The compatibility pipeline container remains 64 bits, but edge-32 always keeps
+its upper word zero and `is_64b` false. The instruction adapter is stateless:
+opcode `7'h3f` is a complete ASIC32 command and never captures another parcel.
 
 ID classifies each instruction once with `edge_32_decode` and the
 pipeline carries `op_class`, `legal`, and `writes_gpr` beside the instruction

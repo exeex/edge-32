@@ -250,10 +250,23 @@ and controller move through `IDLE -> REQUEST -> RESPONSE` while F and D wait.
 
 ### 5.3 Instruction assembly and decode
 
-The frontend supplies ordered 32-bit parcels. An opcode `7'h3f` length marker
-causes `edge_rv_lite_instruction_assembler` to capture the following parcel
-and emit one complete 64-bit Edge instruction at the first parcel's PC. A
-redirect discards an incomplete pair.
+The frontend supplies fixed 32-bit instructions. Opcode `7'h3f` identifies a
+complete ASIC32 command; it no longer marks a two-parcel Edge64 instruction.
+The fields are `funct7[31:25]`, `rs1[19:15]`, reserved `rd[11:7]`, and
+`imm8={inst[24:20],inst[14:12]}`. There is no partial-instruction redirect
+state.
+
+Edge-32 software should include `include/intrinsic.hpp` (or the explicit
+`edge32_intrinsic.hpp`). It provides a constexpr bit encoder, generic command
+templates, and named DMA/Tensor/ACTU/CMPU wrappers which emit exactly one
+32-bit instruction. The legacy RV64 `edge_intrinsic.hpp` remains unchanged.
+
+The Edge-32 DMA API retains the `edge_dma_setsrc`, `edge_dma_settar`, and
+`edge_dma_start` names but takes `uint64_t` addresses. Each address is emitted
+as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`) when
+the high half is nonzero. Accepting a low command clears the retained high
+half, so software that starts DMA without a high command always addresses the
+low 4 GiB window.
 
 `edge_rv_lite_decode.v` wraps the shared `edge_instruction_classifier`; it
 does not maintain a second legality table. D classifies once and carries the

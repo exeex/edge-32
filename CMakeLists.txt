@@ -2,8 +2,37 @@ cmake_minimum_required(VERSION 3.20)
 project(edge_32 LANGUAGES NONE)
 
 find_program(VERILATOR verilator REQUIRED)
+find_program(CLANGXX clang++ REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 enable_testing()
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/edge32_intrinsic_compile_test
+  COMMAND ${CLANGXX} -std=c++17 -Wall -Wextra -Werror
+          -I${CMAKE_CURRENT_LIST_DIR}/include
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_intrinsic_compile.cpp
+          -o ${CMAKE_CURRENT_BINARY_DIR}/edge32_intrinsic_compile_test
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/include/intrinsic.hpp
+          ${CMAKE_CURRENT_LIST_DIR}/include/edge32_intrinsic.hpp
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_intrinsic_compile.cpp)
+add_custom_target(edge32_intrinsic_compile ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/edge32_intrinsic_compile_test)
+add_test(NAME edge32_intrinsic_compile
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/edge32_intrinsic_compile_test)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj/Vedge32_dma_addr_split_tb
+  COMMAND ${VERILATOR} --binary --timing --Wno-fatal
+          --top-module edge32_dma_addr_split_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj
+          ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_accel_pipe/edge_accel_pipe.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_dma_addr_split_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_accel_pipe/edge_accel_pipe.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_dma_addr_split_tb.v)
+add_custom_target(edge32_dma_addr_split_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj/Vedge32_dma_addr_split_tb)
+add_test(NAME edge32_dma_addr_split
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj/Vedge32_dma_addr_split_tb)
 
 set(RTL
   ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_instruction_classifier/edge_instruction_classifier.v

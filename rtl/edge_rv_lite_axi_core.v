@@ -74,7 +74,7 @@ module edge_rv_lite_axi_core #(
 
   output wire                         accel_req_valid,
   input  wire                         accel_req_ready,
-  output wire [63:0]                  accel_req_inst,
+  output wire [31:0]                  accel_req_inst,
   output wire [63:0]                  accel_req_src0,
   output wire [63:0]                  accel_req_src1,
   input  wire                         accel_resp_valid,
