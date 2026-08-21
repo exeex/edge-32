@@ -140,12 +140,15 @@ module edge_rv_lite_core #(
     else if(is_auipc) alu_op=A_AUIPC; else if(is_jal) alu_op=A_JAL;
     else if(is_jalr) alu_op=A_JALR; else if(is_branch) alu_op=A_BRANCH;
   end
-  wire [63:0] fast_result;
-  edge_scalar_fast_alu fast_alu(.fast_issue_op(alu_op),.fast_issue_pc(ex_pc),
-    .fast_issue_src0_value(ex_rs1_value),.fast_issue_src1_value(ex_rs2_value),
-    .fast_issue_imm((is_lui||is_auipc)?imm_u:imm_i),.fast_issue_funct3(f3),
+  wire [31:0] fast_result;
+  edge_32_alu #(.PC_WIDTH(PC_WIDTH)) fast_alu(
+    .fast_issue_op(alu_op),.fast_issue_pc(ex_pc),
+    .fast_issue_src0_value(ex_rs1_value[31:0]),
+    .fast_issue_src1_value(ex_rs2_value[31:0]),
+    .fast_issue_imm((is_lui||is_auipc)?imm_u[31:0]:imm_i[31:0]),
+    .fast_issue_funct3(f3),
     .fast_issue_funct7_bit5(ex_inst[30]),.fast_issue_funct7_is_m(1'b0),
-    .fast_issue_shamt(ex_inst[25:20]),.fast_issue_shamt32(ex_inst[24:20]),
+    .fast_issue_shamt(ex_inst[24:20]),
     .fast_result(fast_result));
   wire branch_taken; wire [PC_WIDTH-1:0] branch_target;
   edge_scalar_branch branch(.branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
@@ -249,7 +252,7 @@ module edge_rv_lite_core #(
      ex_inst[31:20]==12'h002 ? {61'd0,frm_q} : {56'd0,frm_q,fflags_q}):
     is_hardware_id?
     {9'd2,EDGE_ASIC_ID[46:32],(ENABLE_FPU?4'd1:4'd0),4'd0,
-     EDGE_ASIC_ID[31:0]}:fast_result;
+     EDGE_ASIC_ID[31:0]}:{32'd0,fast_result};
   wire [63:0] fp_csr_source=f3[2]?{59'd0,ex_inst[19:15]}:ex_rs1_value;
   wire [7:0] fp_csr_old=(ex_inst[31:20]==12'h001)?
                         {3'd0,fflags_q}:

@@ -11,6 +11,19 @@ set(RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v)
 
 add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb
+  COMMAND ${VERILATOR} --binary --timing --top-module edge_32_alu_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_alu_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_alu_tb.v)
+add_custom_target(edge_32_alu_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb)
+add_test(NAME edge_32_alu
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb)
+
+add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_rv_lite_pipeline_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/obj_dir
@@ -96,7 +109,7 @@ set(FPU_RTL
 set(CORE_RTL
   ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_decode.v
-  ${EDGE_RV_ROOT}/edge_scalar_fast_alu/edge_scalar_fast_alu.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
   ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
   ${EDGE_RV_ROOT}/edge_scalar_divrem/edge_scalar_divrem.v
   ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv.v
