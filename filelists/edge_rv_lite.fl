@@ -1,7 +1,7 @@
-# Shared, bit-identical edge-rv execution units. Parent defines both roots.
+# Local RV32 units plus shared edge-rv units. Parent defines both roots.
 ${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
 ${EDGE_RV_LITE_ROOT}/rtl/edge_32_alu.v
-${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
+${EDGE_RV_LITE_ROOT}/rtl/edge_32_branch.v
 ${EDGE_RV_LITE_ROOT}/rtl/edge_32_muldiv.v
 ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
 ${EDGE_RV_ROOT}/edge_fpu_misc/edge_fpu_misc.v

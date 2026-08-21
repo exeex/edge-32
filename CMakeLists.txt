@@ -24,6 +24,19 @@ add_test(NAME edge_32_alu
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb)
 
 add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/branch32_obj/Vedge_32_branch_tb
+  COMMAND ${VERILATOR} --binary --timing --top-module edge_32_branch_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/branch32_obj
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_branch.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_branch_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_branch.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_branch_tb.v)
+add_custom_target(edge_32_branch_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/branch32_obj/Vedge_32_branch_tb)
+add_test(NAME edge_32_branch
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/branch32_obj/Vedge_32_branch_tb)
+
+add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj/Vedge_32_muldiv_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_32_muldiv_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj
@@ -124,7 +137,7 @@ set(CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv.v
-  ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_branch.v
   ${FPU_RTL}
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_frontend.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_instruction_assembler.v
@@ -146,6 +159,20 @@ add_custom_target(edge_32_muldiv_core_vvp
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb)
 add_test(NAME edge_32_muldiv_core
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/branch32_core_obj/Vedge_32_branch_core_tb
+  COMMAND ${VERILATOR} --binary --timing -Wno-fatal
+          --top-module edge_32_branch_core_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/branch32_core_obj
+          ${CORE_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_branch_core_tb.v
+  DEPENDS ${CORE_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_branch_core_tb.v)
+add_custom_target(edge_32_branch_core_vvp
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/branch32_core_obj/Vedge_32_branch_core_tb)
+add_test(NAME edge_32_branch_core
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/branch32_core_obj/Vedge_32_branch_core_tb)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fpu_alu_obj/Vedge_fpu_alu_tb

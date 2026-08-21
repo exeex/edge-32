@@ -151,12 +151,12 @@ module edge_rv_lite_core #(
     .fast_issue_shamt(ex_inst[24:20]),
     .fast_result(fast_result));
   wire branch_taken; wire [PC_WIDTH-1:0] branch_target;
-  edge_scalar_branch branch(.branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
-    .branch_issue_src0_value({{32{ex_rs1_value[31]}},ex_rs1_value}),
-    .branch_issue_src1_value({{32{ex_rs2_value[31]}},ex_rs2_value}),
-    .branch_issue_imm({{32{imm_i[31]}},imm_i}),
-    .branch_issue_branch_imm({{32{imm_b[31]}},imm_b}),
-    .branch_issue_jal_imm({{32{imm_j[31]}},imm_j}),.branch_issue_funct3(f3),
+  edge_32_branch #(.PC_WIDTH(PC_WIDTH)) branch(
+    .branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
+    .branch_issue_src0_value(ex_rs1_value),
+    .branch_issue_src1_value(ex_rs2_value),
+    .branch_issue_imm(imm_i),.branch_issue_branch_imm(imm_b),
+    .branch_issue_jal_imm(imm_j),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
   wire mul_ready,mul_result_valid,mul_busy; wire [31:0] mul_result;
