@@ -35,7 +35,7 @@ module edge_rv_lite_coremark_tb;
   wire [63:0] cycle_count;
   wire [63:0] instret_count;
 
-  edge_rv_lite_core dut (
+  edge_rv_lite_core #(.ENABLE_FPU(1)) dut (
     .clk(clk), .reset_n(reset_n),
     .imem_req_valid(imem_req_valid), .imem_req_ready(1'b1),
     .imem_req_addr(imem_req_addr), .imem_resp_valid(imem_resp_valid),
@@ -99,7 +99,7 @@ module edge_rv_lite_coremark_tb;
     dmem_resp_rdata = 64'd0;
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file)) begin
-      $display("FAIL: pass +mem64=<coremark_bench.data64.memh>");
+      $display("FAIL: pass +mem64=<software.data64.memh>");
       $fatal(1);
     end
     $readmemh(mem64_file, mem);
@@ -120,10 +120,10 @@ module edge_rv_lite_coremark_tb;
       $fatal(1);
     end
     if (debug_x31 == 0) begin
-      $display("FAIL: CoreMark returned a zero cycle count");
+      $display("FAIL: software image returned x31=0");
       $fatal(1);
     end
-    $display("PASS: edge-rv-lite CoreMark x31=%0d cycles=%0d instret=%0d",
+    $display("PASS: edge-rv-lite software x31=%0d cycles=%0d instret=%0d",
              debug_x31, cycle_count, instret_count);
     $finish;
   end

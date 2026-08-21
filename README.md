@@ -261,6 +261,12 @@ Edge-32 software should include `include/intrinsic.hpp` (or the explicit
 templates, and named DMA/Tensor/ACTU/CMPU wrappers which emit exactly one
 32-bit instruction. The legacy RV64 `edge_intrinsic.hpp` remains unchanged.
 
+The native Edge-32 software profile is `riscv32-unknown-elf` with
+`-march=rv32imf_zba -mabi=ilp32f`. Atomic instructions are intentionally not
+part of this profile. The `edge32_software_rv32imf_zba_smoke_vvp` target builds
+and runs a bare-metal image covering integer, M, Zba, and single-precision F
+instructions on the core RTL.
+
 The Edge-32 DMA API retains the `edge_dma_setsrc`, `edge_dma_settar`, and
 `edge_dma_start` names but takes `uint64_t` addresses. Each address is emitted
 as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`) when

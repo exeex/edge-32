@@ -6,6 +6,15 @@ find_program(CLANGXX clang++ REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 enable_testing()
 
+get_filename_component(EDGE32_LLVM_BIN "${CLANGXX}" DIRECTORY)
+set(EDGE32_CLANG "${EDGE32_LLVM_BIN}/clang")
+set(EDGE32_OBJDUMP "${EDGE32_LLVM_BIN}/llvm-objdump")
+find_program(EDGE32_LLD ld.lld REQUIRED)
+get_filename_component(EDGE32_LLD_BIN "${EDGE32_LLD}" DIRECTORY)
+set(EDGE32_RISCV_TARGET "riscv32-unknown-elf")
+set(EDGE32_RISCV_MARCH "rv32imf_zba")
+set(EDGE32_RISCV_ABI "ilp32f")
+
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/edge32_intrinsic_compile_test
   COMMAND ${CLANGXX} -std=c++17 -Wall -Wextra -Werror
@@ -253,6 +262,57 @@ add_test(NAME edge_rv_lite_coremark
           +mem64=${EDGE_COREMARK_MEM64})
 set_tests_properties(edge_rv_lite_coremark PROPERTIES
   REQUIRED_FILES "${EDGE_COREMARK_MEM64}" TIMEOUT 30)
+
+set(EDGE32_SOFTWARE_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/software/rv32imf_zba_smoke")
+set(EDGE32_SOFTWARE_SOURCE
+    "${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_zba_smoke.s")
+set(EDGE32_SOFTWARE_OBJECT "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.o")
+set(EDGE32_SOFTWARE_ELF "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.elf")
+set(EDGE32_SOFTWARE_MEM128 "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.memh")
+set(EDGE32_SOFTWARE_WORDS "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.words")
+set(EDGE32_SOFTWARE_MEM64 "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.data64.memh")
+set(EDGE32_SOFTWARE_MEM64_WORDS
+    "${EDGE32_SOFTWARE_DIR}/rv32imf_zba_smoke.data64.words")
+
+add_custom_command(
+  OUTPUT ${EDGE32_SOFTWARE_MEM64}
+         ${EDGE32_SOFTWARE_MEM128}
+         ${EDGE32_SOFTWARE_ELF}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDGE32_SOFTWARE_DIR}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -x assembler-with-cpp
+          -c ${EDGE32_SOFTWARE_SOURCE} -o ${EDGE32_SOFTWARE_OBJECT}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -fuse-ld=lld -B${EDGE32_LLD_BIN}
+          -nostdlib -nostartfiles
+          -Wl,-T,${CMAKE_CURRENT_LIST_DIR}/tests/rv64im_lite_flat.ld
+          ${EDGE32_SOFTWARE_OBJECT} -o ${EDGE32_SOFTWARE_ELF}
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+          ${EDGE32_SOFTWARE_ELF}
+          -o ${EDGE32_SOFTWARE_MEM128}
+          --words-file ${EDGE32_SOFTWARE_WORDS}
+          --mem64-output ${EDGE32_SOFTWARE_MEM64}
+          --mem64-words-file ${EDGE32_SOFTWARE_MEM64_WORDS}
+  DEPENDS ${EDGE32_SOFTWARE_SOURCE}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/rv64im_lite_flat.ld
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+  VERBATIM)
+add_custom_target(edge32_software_rv32imf_zba_smoke
+  DEPENDS ${EDGE32_SOFTWARE_MEM64})
+add_custom_target(edge32_software_rv32imf_zba_smoke_vvp
+  DEPENDS edge32_software_rv32imf_zba_smoke
+          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb)
+add_test(NAME edge32_software_rv32imf_zba_smoke
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+          +mem64=${EDGE32_SOFTWARE_MEM64})
+set_tests_properties(edge32_software_rv32imf_zba_smoke PROPERTIES
+  REQUIRED_FILES "${EDGE32_SOFTWARE_MEM64}" TIMEOUT 30)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb
