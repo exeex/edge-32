@@ -118,10 +118,11 @@ module edge_32_div_srt4_native (
   localparam [3:0] STATE_SCALE_MID = 4'd5;
   localparam [3:0] STATE_SCALE_HIGH = 4'd6;
   localparam [3:0] STATE_CORRECT_LOW = 4'd7;
-  localparam [3:0] STATE_SIGN = 4'd8;
+  localparam [3:0] STATE_SIGN_LOW = 4'd8;
   localparam [3:0] STATE_DECIDE = 4'd9;
   localparam [3:0] STATE_CORRECT_HIGH = 4'd10;
   localparam [3:0] STATE_COMBINE_HIGH = 4'd11;
+  localparam [3:0] STATE_SIGN_HIGH = 4'd12;
   localparam integer RING_STAGES = 2;
 
   function [4:0] msb_index32;
@@ -181,6 +182,10 @@ module edge_32_div_srt4_native (
   reg remainder_correction_carry_r;
   reg [31:0] quotient_mag_r;
   reg [31:0] remainder_mag_r;
+  reg [15:0] sign_low_r;
+  reg [15:0] sign_high_magnitude_r;
+  reg sign_high_carry_r;
+  reg sign_negative_r;
   reg rem_r;
   reg quotient_negative_r;
   reg remainder_negative_r;
@@ -343,15 +348,21 @@ module edge_32_div_srt4_native (
   );
   wire remainder_ge_divisor = remainder_scaled_r >=
                               $signed({3'b000, divisor_mag_r});
-  wire [34:0] negative_quotient_wide;
-  wire [34:0] negative_remainder_wide;
-  assign negative_quotient_wide = {3'b000, ~quotient_mag_r} + 35'd1;
-  assign negative_remainder_wide = {3'b000, ~remainder_mag_r} + 35'd1;
-  wire [31:0] signed_quotient = quotient_negative_r ?
-                                negative_quotient_wide[31:0] : quotient_mag_r;
-  wire [31:0] signed_remainder = remainder_negative_r ?
-                                 negative_remainder_wide[31:0] : remainder_mag_r;
-  wire [31:0] selected_result = rem_r ? signed_remainder : signed_quotient;
+  // Select the architectural result before negation, then pipeline the
+  // two's-complement carry at bit 16.  This removes two parallel 32-bit
+  // negators and prevents their carry chains from reaching result_value.
+  wire [31:0] sign_magnitude = rem_r ? remainder_mag_r : quotient_mag_r;
+  wire sign_negative = rem_r ? remainder_negative_r : quotient_negative_r;
+  wire [16:0] sign_low_negative =
+    {1'b0, ~sign_magnitude[15:0]} + 17'd1;
+  wire [15:0] sign_low_value = sign_negative ?
+    sign_low_negative[15:0] : sign_magnitude[15:0];
+  wire sign_low_carry = sign_negative && sign_low_negative[16];
+  wire [16:0] sign_high_negative =
+    {1'b0, ~sign_high_magnitude_r} + sign_high_carry_r;
+  wire [15:0] sign_high_value = sign_negative_r ?
+    sign_high_negative[15:0] : sign_high_magnitude_r;
+  wire [31:0] selected_result = {sign_high_value, sign_low_r};
 
   reg [31:0] fast_value;
   always @* begin
@@ -370,9 +381,9 @@ module edge_32_div_srt4_native (
   // Each pass through the two-slice ring consumes two radix-4 digits.  Exit
   // at the first pass boundary after all requested digits have completed.
   wire [3:0] ring_passes = srt_rounds[4:1] + srt_rounds[0];
-  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd9;
+  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd10;
   assign op_latency = fast_case ? 7'd1 :
-                      srt_rounds == 5'd0 ? 7'd9 : ring_latency;
+                      srt_rounds == 5'd0 ? 7'd10 : ring_latency;
 
   reg [3:0] state_next;
   reg [RING_STAGES-1:0] ring_valid_next;
@@ -417,8 +428,9 @@ module edge_32_div_srt4_native (
       STATE_SCALE_HIGH: state_next = STATE_DECIDE;
       STATE_DECIDE: state_next = STATE_CORRECT_LOW;
       STATE_CORRECT_LOW: state_next = STATE_CORRECT_HIGH;
-      STATE_CORRECT_HIGH: state_next = STATE_SIGN;
-      STATE_SIGN: begin
+      STATE_CORRECT_HIGH: state_next = STATE_SIGN_LOW;
+      STATE_SIGN_LOW: state_next = STATE_SIGN_HIGH;
+      STATE_SIGN_HIGH: begin
         state_next = STATE_IDLE;
         result_valid_next = 1'b1;
       end
@@ -582,7 +594,13 @@ module edge_32_div_srt4_native (
           remainder_mag_r <= {remainder_correction_high[13:0],
                               remainder_correction_low_r};
         end
-        STATE_SIGN: begin
+        STATE_SIGN_LOW: begin
+          sign_low_r <= sign_low_value;
+          sign_high_magnitude_r <= sign_magnitude[31:16];
+          sign_high_carry_r <= sign_low_carry;
+          sign_negative_r <= sign_negative;
+        end
+        STATE_SIGN_HIGH: begin
           result_value <= selected_result;
         end
         default: ;
