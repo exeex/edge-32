@@ -72,14 +72,21 @@ module edge_32_div_radix4_slice (
   wire [34:0] divisor_x1 = {3'd0, divisor};
   wire [34:0] divisor_x2 = {2'd0, divisor, 1'b0};
   wire [34:0] divisor_x3 = divisor_x1 + divisor_x2;
-  wire [1:0] digit = (trial >= divisor_x3) ? 2'd3 :
-                     (trial >= divisor_x2) ? 2'd2 :
-                     (trial >= divisor_x1) ? 2'd1 : 2'd0;
-  wire [34:0] subtract_value = digit[1] ?
-    (digit[0] ? divisor_x3 : divisor_x2) :
-    (digit[0] ? divisor_x1 : 35'd0);
+  // Compute all three candidate remainders in parallel.  Each carry-select
+  // subtractor also returns no-borrow, so digit selection does not precede
+  // another wide subtract on the critical path.
+  wire [35:0] subtract_x1 = {1'b0, trial} - {1'b0, divisor_x1};
+  wire [35:0] subtract_x2 = {1'b0, trial} - {1'b0, divisor_x2};
+  wire [35:0] subtract_x3 = {1'b0, trial} - {1'b0, divisor_x3};
+  wire ge_x1 = !subtract_x1[35];
+  wire ge_x2 = !subtract_x2[35];
+  wire ge_x3 = !subtract_x3[35];
+  wire [1:0] digit = ge_x3 ? 2'd3 : ge_x2 ? 2'd2 :
+                     ge_x1 ? 2'd1 : 2'd0;
 
-  assign remainder_out = trial - subtract_value;
+  assign remainder_out = ge_x3 ? subtract_x3[34:0] :
+                         ge_x2 ? subtract_x2[34:0] :
+                         ge_x1 ? subtract_x1[34:0] : trial;
   assign dividend_out = {dividend_in[29:0], 2'b00};
   assign quotient_out = {quotient_in[29:0], digit};
 endmodule
