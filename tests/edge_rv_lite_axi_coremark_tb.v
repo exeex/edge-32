@@ -79,7 +79,7 @@ module edge_rv_lite_axi_coremark_tb;
   assign awready = !aw_pending_q && !bvalid_q;
   assign wready = aw_pending_q && !bvalid_q;
 
-  edge_rv_lite_axi_core dut (
+  edge32_axi_core dut (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .biu_pad_araddr(araddr), .biu_pad_arburst(arburst),
     .biu_pad_arcache(arcache), .biu_pad_arid(arid),

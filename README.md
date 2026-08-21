@@ -267,6 +267,12 @@ part of this profile. The `edge32_software_rv32imf_zba_smoke_vvp` target builds
 and runs a bare-metal image covering integer, M, Zba, and single-precision F
 instructions on the core RTL.
 
+The `edge32_software_coremark_vvp` target builds the checked-in two-iteration
+CoreMark workload with the same RV32 profile and runs it on the direct-memory
+core testbench. The RV32 startup and linker files initialize `gp`, `sp`, and
+`.bss`, then return the validated average cycle count through `x31` before
+halting with `ebreak`; no machine-mode setup or interrupt support is required.
+
 The Edge-32 DMA API retains the `edge_dma_setsrc`, `edge_dma_settar`, and
 `edge_dma_start` names but takes `uint64_t` addresses. Each address is emitted
 as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`) when
@@ -435,7 +441,7 @@ read owner until response. Raw DTCM bank data is normalized to the same
 size/sign-formatted response used by D-cache, allowing scalar code to verify
 BF16 and byte results produced by ASIC tests.
 
-`edge_rv_lite_cache_biu` and `edge_rv_lite_axi_core` connect this hierarchy to
+`edge_rv_lite_cache_biu` and product-facing `edge32_axi_core` connect this hierarchy to
 the existing 128-bit Edge AXI boundary. The BIU checks response IDs, status,
 burst beat counts, and `RLAST`. Failed instruction fills do not populate
 I-cache. Failed dirty writebacks remain buffered for retry, and AW/W may
@@ -772,7 +778,8 @@ the implementation:
   `FENCE.I`;
 - `docs/edge_rv_lite_dtcm_router.v.md`: cache/DTCM ownership and formatting;
 - `docs/edge_rv_lite_cache_biu.v.md`: refill, writeback, error, and retry;
-- `docs/edge_rv_lite_axi_core.v.md`: maintained Edge AXI boundary.
+- `docs/edge32_axi_core.v.md`: selectable Edge-32 product AXI boundary;
+- `docs/edge_rv_lite_axi_core.v.md`: maintained Edge AXI implementation contract.
 
 Together, these contracts and tests establish that the performance and area
 comparison comes from scalar issue policy—not from silently removing product

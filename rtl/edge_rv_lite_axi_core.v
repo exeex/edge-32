@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 // Bootable edge-rv-lite cache hierarchy with the Edge 128-bit AXI boundary.
-module edge_rv_lite_axi_core #(
+module edge32_axi_core #(
   parameter PC_WIDTH = 32,
   parameter AXI_ADDR_WIDTH = 64,
   parameter AXI_DATA_WIDTH = 128,

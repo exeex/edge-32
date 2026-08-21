@@ -1,4 +1,4 @@
-# edge_rv_lite_axi_core.v
+# edge32_axi_core (`edge_rv_lite_axi_core.v`)
 
 `DTCM_ADDR_WIDTH` parameterizes the scalar DTCM word-address port. It defaults
 to 14 for the 128 KiB e3 configuration and is 15 for the 256 KiB e4 setup.

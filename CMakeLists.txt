@@ -9,8 +9,10 @@ enable_testing()
 get_filename_component(EDGE32_LLVM_BIN "${CLANGXX}" DIRECTORY)
 set(EDGE32_CLANG "${EDGE32_LLVM_BIN}/clang")
 set(EDGE32_OBJDUMP "${EDGE32_LLVM_BIN}/llvm-objdump")
+set(EDGE32_OBJCOPY "${EDGE32_LLVM_BIN}/llvm-objcopy")
 find_program(EDGE32_LLD ld.lld REQUIRED)
 get_filename_component(EDGE32_LLD_BIN "${EDGE32_LLD}" DIRECTORY)
+get_filename_component(EDGE32_LLD_PREFIX "${EDGE32_LLD_BIN}" DIRECTORY)
 set(EDGE32_RISCV_TARGET "riscv32-unknown-elf")
 set(EDGE32_RISCV_MARCH "rv32imf_zba")
 set(EDGE32_RISCV_ABI "ilp32f")
@@ -313,6 +315,55 @@ add_test(NAME edge32_software_rv32imf_zba_smoke
           +mem64=${EDGE32_SOFTWARE_MEM64})
 set_tests_properties(edge32_software_rv32imf_zba_smoke PROPERTIES
   REQUIRED_FILES "${EDGE32_SOFTWARE_MEM64}" TIMEOUT 30)
+
+set(EDGE32_COREMARK_DIR "${CMAKE_CURRENT_BINARY_DIR}/software/edge32_coremark")
+set(EDGE32_COREMARK_SOURCE
+    "${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench/coremark_bench.c")
+set(EDGE32_COREMARK_MEM64
+    "${EDGE32_COREMARK_DIR}/edge32_coremark.data64.memh")
+set(EDGE32_COREMARK_DEPENDS
+  ${EDGE32_COREMARK_SOURCE}
+  ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench/platform.hpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/include/edge_intrinsic.hpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_list_join.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_matrix.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_state.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_util.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_portme.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_portme.h
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/core_main.c
+  ${CMAKE_CURRENT_LIST_DIR}/../../third_party/coremark/coremark.h
+  ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_crt0.s
+  ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_flat.ld
+  ${CMAKE_CURRENT_LIST_DIR}/../../tools/build_rv64im_rom.py)
+add_custom_command(
+  OUTPUT ${EDGE32_COREMARK_MEM64}
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/build_rv64im_rom.py
+          ${EDGE32_COREMARK_SOURCE}
+          --name edge32_coremark --out-dir ${EDGE32_COREMARK_DIR}
+          --build-dir ${CMAKE_CURRENT_BINARY_DIR}
+          --crt0 ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_crt0.s
+          --linker ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_flat.ld
+          --clang ${EDGE32_CLANG} --objdump ${EDGE32_OBJDUMP}
+          --objcopy ${EDGE32_OBJCOPY} --lld-prefix ${EDGE32_LLD_PREFIX}
+          --target ${EDGE32_RISCV_TARGET} --march ${EDGE32_RISCV_MARCH}
+          --abi ${EDGE32_RISCV_ABI}
+          --include-dir ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench
+          --include-dir ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/include
+          --size 0x100000
+  DEPENDS ${EDGE32_COREMARK_DEPENDS}
+  VERBATIM)
+add_custom_target(edge32_software_coremark
+  DEPENDS ${EDGE32_COREMARK_MEM64})
+add_custom_target(edge32_software_coremark_vvp
+  DEPENDS edge32_software_coremark
+          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb)
+add_test(NAME edge32_software_coremark
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+          +mem64=${EDGE32_COREMARK_MEM64})
+set_tests_properties(edge32_software_coremark PROPERTIES
+  REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 60)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb
