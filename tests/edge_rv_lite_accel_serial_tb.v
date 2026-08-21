@@ -2,7 +2,7 @@
 module edge_rv_lite_accel_serial_tb;
   reg clk=0; always #5 clk=~clk;
   reg reset_n=0;
-  wire imem_req_valid; wire [39:0] imem_req_addr;
+  wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire accel_req_valid; reg accel_req_ready=0;
   wire [63:0] accel_req_inst, accel_req_src0, accel_req_src1;
@@ -34,10 +34,10 @@ module edge_rv_lite_accel_serial_tb;
   always @(posedge clk) begin
     imem_resp_valid<=imem_req_valid;
     case(imem_req_addr)
-      40'h0: imem_resp_data<=32'h02a0_0293; // addi x5,x0,42
-      40'h4: imem_resp_data<=32'h0630_0313; // addi x6,x0,99
-      40'h8: imem_resp_data<=32'h0062_803f; // rs1/capture=x5, ordinary rs2=x6
-      40'hc: imem_resp_data<=32'h0000_00a4; // actu.setscalar
+      32'h0: imem_resp_data<=32'h02a0_0293; // addi x5,x0,42
+      32'h4: imem_resp_data<=32'h0630_0313; // addi x6,x0,99
+      32'h8: imem_resp_data<=32'h0062_803f; // rs1/capture=x5, ordinary rs2=x6
+      32'hc: imem_resp_data<=32'h0000_00a4; // actu.setscalar
       default: imem_resp_data<=32'h0010_0073;
     endcase
     accel_resp_valid<=0;

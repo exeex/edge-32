@@ -14,14 +14,14 @@ module edge_rv_lite_halt_tb;
   integer dmem_requests = 0;
   integer timeout;
   reg [63:0] halted_instret;
-  reg [39:0] halted_pc;
+  reg [31:0] halted_pc;
   reg last_dmem_write;
   reg [63:0] last_dmem_addr;
   reg [63:0] last_dmem_wdata;
   reg [7:0] last_dmem_wstrb;
 
   wire imem_req_valid;
-  wire [39:0] imem_req_addr;
+  wire [31:0] imem_req_addr;
   reg imem_resp_valid = 0;
   reg [31:0] imem_resp_data = 0;
   wire dmem_req_valid;
@@ -64,8 +64,8 @@ module edge_rv_lite_halt_tb;
     case (test_case)
       EBREAK_CASE: begin
         case (imem_req_addr)
-          40'h0: imem_resp_data <= 32'h0010_0073; // ebreak
-          40'h4: imem_resp_data <= 32'h02a0_0293; // addi x5,x0,42
+          32'h0: imem_resp_data <= 32'h0010_0073; // ebreak
+          32'h4: imem_resp_data <= 32'h02a0_0293; // addi x5,x0,42
           default: imem_resp_data <= 32'h0050_2023; // sw x5,0(x0)
         endcase
       end
@@ -75,11 +75,11 @@ module edge_rv_lite_halt_tb;
       end
       FORMER_MAILBOX_STORE_CASE: begin
         case (imem_req_addr)
-          40'h00: imem_resp_data <= 32'h0000_32b7; // lui x5,0x3
-          40'h04: imem_resp_data <= 32'hee82_8293; // addi x5,x5,-280
-          40'h08: imem_resp_data <= 32'h02a0_0313; // addi x6,x0,42
-          40'h0c: imem_resp_data <= 32'h0062_a023; // sw x6,0(x5)
-          40'h10: imem_resp_data <= 32'h0070_0393; // addi x7,x0,7
+          32'h00: imem_resp_data <= 32'h0000_32b7; // lui x5,0x3
+          32'h04: imem_resp_data <= 32'hee82_8293; // addi x5,x5,-280
+          32'h08: imem_resp_data <= 32'h02a0_0313; // addi x6,x0,42
+          32'h0c: imem_resp_data <= 32'h0062_a023; // sw x6,0(x5)
+          32'h10: imem_resp_data <= 32'h0070_0393; // addi x7,x0,7
           default: imem_resp_data <= 32'h0010_0073; // ebreak
         endcase
       end

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module edge_rv_lite_fcsr_tb;
   reg clk=0,reset_n=0; always #5 clk=~clk;
-  wire imem_req_valid; wire [39:0] imem_req_addr;
+  wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire dmem_req_valid,dmem_req_write;
   wire [63:0] dmem_req_addr,dmem_req_wdata; wire [7:0] dmem_req_wstrb;
@@ -32,30 +32,30 @@ module edge_rv_lite_fcsr_tb;
   always @(posedge clk) begin
     imem_resp_valid<=imem_req_valid;
     case(imem_req_addr)
-      40'h00: imem_resp_data<=32'h00002087; // flw f1,0(x0): sNaN
-      40'h04: imem_resp_data<=32'h00402107; // flw f2,4(x0): 1.0
-      40'h08: imem_resp_data<=32'h002081d3; // fadd.s: NV
-      40'h0c: imem_resp_data<=32'h00802087; // flw f1,8(x0): 1.0
-      40'h10: imem_resp_data<=32'h00c02107; // flw f2,12(x0): 0.0
-      40'h14: imem_resp_data<=32'h182081d3; // fdiv.s: DZ
-      40'h18: imem_resp_data<=32'h01002087; // flw f1,16(x0): max finite
-      40'h1c: imem_resp_data<=32'h01402107; // flw f2,20(x0): 2.0
-      40'h20: imem_resp_data<=32'h102081d3; // fmul.s: OF|NX
-      40'h24: imem_resp_data<=32'h01802087; // flw f1,24(x0): min subnormal
-      40'h28: imem_resp_data<=32'h01c02107; // flw f2,28(x0): 0.5
-      40'h2c: imem_resp_data<=32'h102081d3; // fmul.s: UF|NX
-      40'h30: imem_resp_data<=32'h001022f3; // csrr x5,fflags
-      40'h34: imem_resp_data<=32'h04502023; // sw x5,64(x0)
-      40'h38: imem_resp_data<=32'h0021d073; // csrwi frm,3 (RUP)
-      40'h3c: imem_resp_data<=32'h02002087; // flw f1,32(x0): 1.0
-      40'h40: imem_resp_data<=32'h02402107; // flw f2,36(x0): 2^-24
-      40'h44: imem_resp_data<=32'h0020f1d3; // fadd.s dynamic
-      40'h48: imem_resp_data<=32'h04302427; // fsw f3,72(x0)
-      40'h4c: imem_resp_data<=32'h002023f3; // csrr x7,frm
-      40'h50: imem_resp_data<=32'h04702823; // sw x7,80(x0)
-      40'h54: imem_resp_data<=32'h00101073; // csrw fflags,x0
-      40'h58: imem_resp_data<=32'h00102473; // csrr x8,fflags
-      40'h5c: imem_resp_data<=32'h04802c23; // sw x8,88(x0)
+      32'h00: imem_resp_data<=32'h00002087; // flw f1,0(x0): sNaN
+      32'h04: imem_resp_data<=32'h00402107; // flw f2,4(x0): 1.0
+      32'h08: imem_resp_data<=32'h002081d3; // fadd.s: NV
+      32'h0c: imem_resp_data<=32'h00802087; // flw f1,8(x0): 1.0
+      32'h10: imem_resp_data<=32'h00c02107; // flw f2,12(x0): 0.0
+      32'h14: imem_resp_data<=32'h182081d3; // fdiv.s: DZ
+      32'h18: imem_resp_data<=32'h01002087; // flw f1,16(x0): max finite
+      32'h1c: imem_resp_data<=32'h01402107; // flw f2,20(x0): 2.0
+      32'h20: imem_resp_data<=32'h102081d3; // fmul.s: OF|NX
+      32'h24: imem_resp_data<=32'h01802087; // flw f1,24(x0): min subnormal
+      32'h28: imem_resp_data<=32'h01c02107; // flw f2,28(x0): 0.5
+      32'h2c: imem_resp_data<=32'h102081d3; // fmul.s: UF|NX
+      32'h30: imem_resp_data<=32'h001022f3; // csrr x5,fflags
+      32'h34: imem_resp_data<=32'h04502023; // sw x5,64(x0)
+      32'h38: imem_resp_data<=32'h0021d073; // csrwi frm,3 (RUP)
+      32'h3c: imem_resp_data<=32'h02002087; // flw f1,32(x0): 1.0
+      32'h40: imem_resp_data<=32'h02402107; // flw f2,36(x0): 2^-24
+      32'h44: imem_resp_data<=32'h0020f1d3; // fadd.s dynamic
+      32'h48: imem_resp_data<=32'h04302427; // fsw f3,72(x0)
+      32'h4c: imem_resp_data<=32'h002023f3; // csrr x7,frm
+      32'h50: imem_resp_data<=32'h04702823; // sw x7,80(x0)
+      32'h54: imem_resp_data<=32'h00101073; // csrw fflags,x0
+      32'h58: imem_resp_data<=32'h00102473; // csrr x8,fflags
+      32'h5c: imem_resp_data<=32'h04802c23; // sw x8,88(x0)
       default: imem_resp_data<=32'h00100073; // ebreak
     endcase
 

@@ -15,7 +15,7 @@ module edge_rv_lite_coremark_tb;
   integer cycles;
 
   wire imem_req_valid;
-  wire [39:0] imem_req_addr;
+  wire [31:0] imem_req_addr;
   reg imem_resp_valid;
   reg [31:0] imem_resp_data;
   reg imem_resp_error;

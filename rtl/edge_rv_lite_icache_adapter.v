@@ -3,7 +3,7 @@
 // Converts the lite core's single 32-bit fetch into the maintained Edge
 // I-cache request/128-bit response contract. The core owns at most one request.
 module edge_rv_lite_icache_adapter #(
-  parameter PC_WIDTH = 40
+  parameter PC_WIDTH = 32
 ) (
   input  wire                clk,
   input  wire                reset_n,

@@ -3,7 +3,7 @@
 // Combinational RV32 branch comparison and control-target calculation.
 (* keep_hierarchy = "yes" *)
 module edge_32_branch #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
   parameter OP_WIDTH = 4
 ) (
   input  wire [OP_WIDTH-1:0] branch_issue_op,

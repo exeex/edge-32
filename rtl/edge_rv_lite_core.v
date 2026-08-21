@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Bootable RV32IM_Zba three-stage core. Variable-latency EX freezes IF/ID.
 module edge_rv_lite_core #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
   parameter DMEM_RESP_FORMATTED = 0,
   parameter ENABLE_FPU = 0,
   parameter MULDIV_ASAP7 = 0,

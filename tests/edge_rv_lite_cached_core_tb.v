@@ -17,7 +17,7 @@ module edge_rv_lite_cached_core_tb;
   reg saw_icache_invalidate_busy;
 
   wire imem_refill_req_valid;
-  wire [39:0] imem_refill_req_addr;
+  wire [31:0] imem_refill_req_addr;
   reg imem_refill_resp_valid;
   wire imem_refill_resp_ready;
   reg [127:0] imem_refill_resp_data;
@@ -91,7 +91,7 @@ module edge_rv_lite_cached_core_tb;
     imem_refill_resp_valid <= 1'b0;
     if (imem_refill_req_valid) begin
       imem_refill_count <= imem_refill_count + 1;
-      if (imem_refill_req_addr == 40'd64)
+      if (imem_refill_req_addr == 32'd64)
         target_refill_count <= target_refill_count + 1;
       imem_refill_resp_valid <= 1'b1;
       imem_refill_resp_data <= {

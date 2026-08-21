@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module edge_rv_lite_fpu_tb;
   reg clk=0, reset_n=0; always #5 clk=~clk;
-  wire imem_req_valid; wire [39:0] imem_req_addr;
+  wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire dmem_req_valid,dmem_req_write; wire [63:0] dmem_req_addr,dmem_req_wdata;
   wire [7:0] dmem_req_wstrb; reg dmem_resp_valid=0;

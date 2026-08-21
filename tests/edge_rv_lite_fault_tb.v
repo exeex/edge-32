@@ -22,7 +22,7 @@ module edge_rv_lite_fault_tb;
   integer timeout;
 
   wire imem_req_valid;
-  wire [39:0] imem_req_addr;
+  wire [31:0] imem_req_addr;
   reg imem_resp_valid = 0;
   reg [31:0] imem_resp_data = 0;
   reg imem_resp_error = 0;
@@ -76,8 +76,8 @@ module edge_rv_lite_fault_tb;
       end
       ACCEL_RESP_FAULT: begin
         case (imem_req_addr)
-          40'h0: imem_resp_data <= 32'h0000_02bf; // tensor.getcsr rd=x5 low
-          40'h4: imem_resp_data <= 32'h0000_00af; // tensor.getcsr high
+          32'h0: imem_resp_data <= 32'h0000_02bf; // tensor.getcsr rd=x5 low
+          32'h4: imem_resp_data <= 32'h0000_00af; // tensor.getcsr high
           default: imem_resp_data <= 32'h0010_0073;
         endcase
       end

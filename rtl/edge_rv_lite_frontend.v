@@ -2,7 +2,7 @@
 // Single-outstanding fetch frontend. A resolved control transfer discards the
 // F/D contents and restarts at redirect_pc; no epoch or prediction is needed.
 module edge_rv_lite_frontend #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
   parameter [PC_WIDTH-1:0] RESET_PC = {PC_WIDTH{1'b0}}
 ) (
   input  wire                clk,

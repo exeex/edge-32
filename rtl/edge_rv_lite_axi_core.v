@@ -2,7 +2,8 @@
 
 // Bootable edge-rv-lite cache hierarchy with the Edge 128-bit AXI boundary.
 module edge_rv_lite_axi_core #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
+  parameter AXI_ADDR_WIDTH = 64,
   parameter AXI_DATA_WIDTH = 128,
   parameter AXI_ID_WIDTH = 8,
   parameter AXI_LEN_WIDTH = 8,
@@ -22,7 +23,7 @@ module edge_rv_lite_axi_core #(
   input  wire                         forever_cpuclk,
   input  wire                         cpurst_b,
 
-  output wire [PC_WIDTH-1:0]          biu_pad_araddr,
+  output wire [AXI_ADDR_WIDTH-1:0]    biu_pad_araddr,
   output wire [1:0]                   biu_pad_arburst,
   output wire [3:0]                   biu_pad_arcache,
   output wire [AXI_ID_WIDTH-1:0]      biu_pad_arid,
@@ -39,7 +40,7 @@ module edge_rv_lite_axi_core #(
   input  wire                         pad_biu_rvalid,
   output wire                         biu_pad_rready,
 
-  output wire [PC_WIDTH-1:0]          biu_pad_awaddr,
+  output wire [AXI_ADDR_WIDTH-1:0]    biu_pad_awaddr,
   output wire [1:0]                   biu_pad_awburst,
   output wire [3:0]                   biu_pad_awcache,
   output wire [AXI_ID_WIDTH-1:0]      biu_pad_awid,
@@ -89,6 +90,8 @@ module edge_rv_lite_axi_core #(
   wire imem_refill_req_valid;
   wire imem_refill_req_ready;
   wire [PC_WIDTH-1:0] imem_refill_req_addr;
+  wire [AXI_ADDR_WIDTH-1:0] imem_refill_req_axi_addr =
+    {{(AXI_ADDR_WIDTH-PC_WIDTH){1'b0}}, imem_refill_req_addr};
   wire imem_refill_resp_valid;
   wire imem_refill_resp_ready;
   wire [127:0] imem_refill_resp_data;
@@ -153,13 +156,13 @@ module edge_rv_lite_axi_core #(
   );
 
   edge_rv_lite_cache_biu #(
-    .ADDR_WIDTH(PC_WIDTH), .DATA_WIDTH(AXI_DATA_WIDTH),
+    .ADDR_WIDTH(AXI_ADDR_WIDTH), .DATA_WIDTH(AXI_DATA_WIDTH),
     .ID_WIDTH(AXI_ID_WIDTH), .LEN_WIDTH(AXI_LEN_WIDTH)
   ) cache_biu (
     .clk(forever_cpuclk), .reset_n(cpurst_b),
     .icache_req_valid(imem_refill_req_valid),
     .icache_req_ready(imem_refill_req_ready),
-    .icache_req_addr(imem_refill_req_addr),
+    .icache_req_addr(imem_refill_req_axi_addr),
     .icache_resp_valid(imem_refill_resp_valid),
     .icache_resp_ready(imem_refill_resp_ready),
     .icache_resp_data(imem_refill_resp_data),

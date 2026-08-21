@@ -2,7 +2,7 @@
 module edge_rv_lite_hardware_id_tb;
   reg clk=0; always #5 clk=~clk;
   reg reset_n=0;
-  wire imem_req_valid; wire [39:0] imem_req_addr;
+  wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire halted,illegal; wire [63:0] debug_x31;
 
@@ -31,7 +31,7 @@ module edge_rv_lite_hardware_id_tb;
   always @(posedge clk) begin
     imem_resp_valid<=imem_req_valid;
     case(imem_req_addr)
-      40'h0: imem_resp_data<=32'hfc00_2ff3; // csrr x31, 0xfc0
+      32'h0: imem_resp_data<=32'hfc00_2ff3; // csrr x31, 0xfc0
       default: imem_resp_data<=32'h0010_0073; // ebreak
     endcase
   end

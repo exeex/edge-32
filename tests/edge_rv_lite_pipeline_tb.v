@@ -2,15 +2,15 @@
 module edge_rv_lite_pipeline_tb;
   reg clk = 0; always #5 clk = ~clk;
   reg reset_n = 0, fetch_valid = 0, fetch_error = 0;
-  wire fetch_ready; reg [39:0] fetch_pc = 0; reg [63:0] fetch_inst = 0;
+  wire fetch_ready; reg [31:0] fetch_pc = 0; reg [63:0] fetch_inst = 0;
   reg fetch_is_64b = 0;
-  wire id_valid; wire [39:0] id_pc; wire [63:0] id_inst; wire id_is_64b;
+  wire id_valid; wire [31:0] id_pc; wire [63:0] id_inst; wire id_is_64b;
   wire id_error;
   reg [4:0] id_rs1 = 0, id_rs2 = 0;
   reg [31:0] id_rs1_raw = 0, id_rs2_raw = 0;
   reg [3:0] id_op_class = 0;
   reg id_legal = 1, id_writes_gpr = 0;
-  wire ex_valid; wire [39:0] ex_pc; wire [63:0] ex_inst; wire ex_is_64b;
+  wire ex_valid; wire [31:0] ex_pc; wire [63:0] ex_inst; wire ex_is_64b;
   wire ex_error;
   wire [31:0] ex_rs1_value, ex_rs2_value;
   wire [3:0] ex_op_class;
@@ -20,7 +20,7 @@ module edge_rv_lite_pipeline_tb;
   edge_rv_lite_pipeline dut(.*);
 
   task push;
-    input [39:0] pc; input [31:0] inst;
+    input [31:0] pc; input [31:0] inst;
     begin
       while (!fetch_ready) @(posedge clk);
       fetch_valid <= 1; fetch_pc <= pc; fetch_inst <= {32'b0, inst};
@@ -62,7 +62,7 @@ module edge_rv_lite_pipeline_tb;
       begin $display("redirect did not flush younger work"); $finish; end
 
     // Width metadata travels with an Edge64 instruction.
-    fetch_pc <= 40'h100; fetch_inst <= 64'h1234_5678_0000_003f;
+    fetch_pc <= 32'h100; fetch_inst <= 64'h1234_5678_0000_003f;
     fetch_is_64b <= 1; fetch_valid <= 1; id_op_class <= 4'd8;
     id_legal <= 1; id_writes_gpr <= 1;
     @(posedge clk); fetch_valid <= 0; fetch_is_64b <= 0;

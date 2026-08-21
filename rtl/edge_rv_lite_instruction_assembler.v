@@ -3,7 +3,7 @@
 // Converts the frontend's ordered 32-bit parcels into complete scalar32 or
 // Edge64 instructions. The 7'h3f low-parcel marker owns the following parcel.
 module edge_rv_lite_instruction_assembler #(
-  parameter PC_WIDTH = 40
+  parameter PC_WIDTH = 32
 ) (
   input  wire                 clk,
   input  wire                 reset_n,

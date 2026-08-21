@@ -6,7 +6,7 @@ module edge_32_muldiv_core_tb;
   reg imem_resp_valid=0;
   reg [31:0] imem_resp_data=0;
   wire imem_req_valid;
-  wire [39:0] imem_req_addr;
+  wire [31:0] imem_req_addr;
   wire halted, illegal;
   integer timeout;
 
@@ -31,10 +31,10 @@ module edge_32_muldiv_core_tb;
   always @(posedge clk) begin
     imem_resp_valid <= imem_req_valid;
     case(imem_req_addr)
-      40'h00: imem_resp_data <= 32'hff90_0293; // addi x5,x0,-7
-      40'h04: imem_resp_data <= 32'h0030_0313; // addi x6,x0,3
-      40'h08: imem_resp_data <= 32'h0262_c3b3; // div x7,x5,x6
-      40'h0c: imem_resp_data <= 32'h0262_9433; // mulh x8,x5,x6
+      32'h00: imem_resp_data <= 32'hff90_0293; // addi x5,x0,-7
+      32'h04: imem_resp_data <= 32'h0030_0313; // addi x6,x0,3
+      32'h08: imem_resp_data <= 32'h0262_c3b3; // div x7,x5,x6
+      32'h0c: imem_resp_data <= 32'h0262_9433; // mulh x8,x5,x6
       default: imem_resp_data <= 32'h0010_0073; // ebreak
     endcase
   end

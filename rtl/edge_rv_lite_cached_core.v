@@ -4,7 +4,7 @@
 // The exposed refill/writeback ports are the cache-to-BIU boundary used by the
 // later edge_core_top-compatible wrapper.
 module edge_rv_lite_cached_core #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
   parameter ICACHE_BYTES = 16384,
   parameter DCACHE_BYTES = 16384,
   parameter DTCM_ADDR_WIDTH = 14,

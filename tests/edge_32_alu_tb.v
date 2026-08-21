@@ -5,7 +5,7 @@ module edge_32_alu_tb;
   localparam LUI=4'd4, AUIPC=4'd5, JAL=4'd6, JALR=4'd7;
   localparam ZBA=4'd9, ZBA_UW=4'd10;
   reg [3:0] op;
-  reg [39:0] pc;
+  reg [31:0] pc;
   reg [31:0] src0, src1, imm;
   reg [2:0] funct3;
   reg bit5, is_m;
@@ -32,7 +32,7 @@ module edge_32_alu_tb;
   endtask
 
   initial begin
-    op=OP_IMM; pc=40'h1_00001000; src0=0; src1=0; imm=0;
+    op=OP_IMM; pc=32'h1_00001000; src0=0; src1=0; imm=0;
     funct3=0; bit5=0; is_m=0; shamt=0;
     src0=32'hffff_ffff; imm=1; check(0, "addi wrap");
     funct3=3'b010; src0=32'hffff_ffff; imm=0; check(1, "slti signed");
@@ -64,7 +64,7 @@ module edge_32_alu_tb;
     is_m=1; funct3=0; check(0, "M bypass"); is_m=0;
 
     op=LUI; imm=32'h1234_5000; check(32'h1234_5000, "lui");
-    op=AUIPC; pc=40'h1_fffffff0; imm=32'h20; check(32'h10, "auipc wrap");
+    op=AUIPC; pc=32'h1_fffffff0; imm=32'h20; check(32'h10, "auipc wrap");
     op=JAL; check(32'hffff_fff4, "jal link");
     op=JALR; check(32'hffff_fff4, "jalr link");
 

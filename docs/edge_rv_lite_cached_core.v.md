@@ -14,6 +14,11 @@ Scalar effective addresses originate as 32-bit values in `edge_32_lsu` and
 are zero-extended before the existing 64-bit D-cache/DTCM address contracts.
 DMA addressing is independent of this scalar path and remains natively 64-bit.
 
+The frontend, branch targets, I-cache tags, and instruction refill address are
+all 32 bits. Address expansion is deliberately outside this module at the
+64-bit AXI boundary, where a future instruction high-header CSR can be applied
+without widening the RV32 cache internals.
+
 The external instruction interface is one aligned 16-byte refill. The external
 data interface is the maintained 64-byte D-cache refill protocol carried as
 four 128-bit beats, plus the 128-bit dirty-line writeback stream and completion

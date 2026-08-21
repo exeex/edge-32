@@ -21,7 +21,7 @@ module edge_rv_lite_axi_coremark_tb;
   integer write_responses;
   integer byte_i;
 
-  wire [39:0] araddr;
+  wire [63:0] araddr;
   wire [1:0] arburst;
   wire [3:0] arcache;
   wire [7:0] arid;
@@ -37,10 +37,10 @@ module edge_rv_lite_axi_coremark_tb;
   reg [1:0] rresp_q;
   reg rvalid_q;
   wire rready;
-  reg [39:0] raddr_q;
+  reg [63:0] raddr_q;
   reg [7:0] rbeats_left_q;
 
-  wire [39:0] awaddr;
+  wire [63:0] awaddr;
   wire [1:0] awburst;
   wire [3:0] awcache;
   wire [7:0] awid;
@@ -56,7 +56,7 @@ module edge_rv_lite_axi_coremark_tb;
   wire wvalid;
   wire wready;
   reg aw_pending_q;
-  reg [39:0] awaddr_q;
+  reg [63:0] awaddr_q;
   reg [7:0] awid_q;
   reg bvalid_q;
   reg [7:0] bid_q;
@@ -69,7 +69,7 @@ module edge_rv_lite_axi_coremark_tb;
   wire [63:0] instret_count;
 
   function [127:0] read128;
-    input [39:0] addr;
+    input [63:0] addr;
     begin
       read128 = {mem[addr[19:3] + 1], mem[addr[19:3]]};
     end
@@ -105,6 +105,8 @@ module edge_rv_lite_axi_coremark_tb;
 
   always @(posedge clk) begin
     if (arvalid && arready) begin
+      if (araddr[63:32] != 0)
+        $fatal(1, "scalar cache read escaped the 32-bit address window");
       if (arburst != 2'b01 || arsize != 3'd4 || arcache != 0 || arlock ||
           arprot != 0 || (arid == 8'hf1 && arlen != 0) ||
           (arid == 8'hd1 && arlen != 3))
@@ -113,7 +115,7 @@ module edge_rv_lite_axi_coremark_tb;
       rid_q <= arid;
       rlast_q <= arlen == 0;
       rvalid_q <= 1'b1;
-      raddr_q <= araddr + 40'd16;
+      raddr_q <= araddr + 64'd16;
       rbeats_left_q <= arlen;
       if (arid == 8'hf1) icache_reads <= icache_reads + 1;
       else if (arid == 8'hd1) dcache_reads <= dcache_reads + 1;
@@ -121,7 +123,7 @@ module edge_rv_lite_axi_coremark_tb;
     end else if (rvalid_q && rready) begin
       if (rbeats_left_q != 0) begin
         rdata_q <= read128(raddr_q);
-        raddr_q <= raddr_q + 40'd16;
+        raddr_q <= raddr_q + 64'd16;
         rbeats_left_q <= rbeats_left_q - 1'b1;
         rlast_q <= rbeats_left_q == 1;
       end else begin
@@ -131,6 +133,8 @@ module edge_rv_lite_axi_coremark_tb;
     end
 
     if (awvalid && awready) begin
+      if (awaddr[63:32] != 0)
+        $fatal(1, "scalar cache write escaped the 32-bit address window");
       if (awburst != 2'b01 || awsize != 3'd4 || awlen != 0 ||
           awid != 8'hc1 || awcache != 0 || awlock || awprot != 0)
         $fatal(1, "invalid lite AXI write attributes");

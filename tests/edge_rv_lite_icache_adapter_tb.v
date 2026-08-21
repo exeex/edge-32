@@ -7,13 +7,13 @@ module edge_rv_lite_icache_adapter_tb;
 
   reg core_req_valid = 1'b0;
   wire core_req_ready;
-  reg [39:0] core_req_addr = 40'd0;
+  reg [31:0] core_req_addr = 32'd0;
   wire core_resp_valid;
   wire [31:0] core_resp_data;
   wire core_resp_error;
   wire cache_req_valid;
   reg cache_req_ready = 1'b0;
-  wire [39:0] cache_req_addr;
+  wire [31:0] cache_req_addr;
   reg cache_resp_valid = 1'b0;
   wire cache_resp_ready;
   reg [127:0] cache_resp_bits = 128'd0;
@@ -27,7 +27,7 @@ module edge_rv_lite_icache_adapter_tb;
 
     @(negedge clk);
     core_req_valid = 1'b1;
-    core_req_addr = 40'h8;
+    core_req_addr = 32'h8;
     if (core_req_ready) $fatal(1, "request ignored cache backpressure");
     cache_req_ready = 1'b1;
     @(posedge clk);
@@ -40,11 +40,11 @@ module edge_rv_lite_icache_adapter_tb;
                        32'h2222_0001, 32'h1111_0000};
     cache_resp_valid = 1'b1;
     core_req_valid = 1'b1;
-    core_req_addr = 40'hc;
+    core_req_addr = 32'hc;
     #1;
     if (!core_resp_valid || core_resp_data != 32'h3333_0002)
       $fatal(1, "wrong 128b response word selection");
-    if (!core_req_ready || !cache_req_valid || cache_req_addr != 40'hc)
+    if (!core_req_ready || !cache_req_valid || cache_req_addr != 32'hc)
       $fatal(1, "response/request crossing lost");
     @(posedge clk);
 

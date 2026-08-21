@@ -2,7 +2,7 @@
 // Standard single-issue three-stage pipeline register/control slice:
 // external fetch (IF) -> decode/register-read (ID) -> execute/writeback (EX).
 module edge_rv_lite_pipeline #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
   parameter VALUE_WIDTH = 32
 ) (
   input  wire                   clk,

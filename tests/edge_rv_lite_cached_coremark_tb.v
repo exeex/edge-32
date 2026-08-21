@@ -7,7 +7,7 @@ module edge_rv_lite_cached_coremark_tb;
   // Linux LLVM 19.1.1 baseline for the parent-produced CoreMark image.
   // The LLVM 22.1.8 image is a separate checkpoint at 616228 instructions.
   localparam [63:0] LLVM19_COREMARK_INSTRET = 64'd743510;
-  localparam [39:0] MEM_BYTES_40 = 40'd1_048_576;
+  localparam [31:0] MEM_BYTES_40 = 32'd1_048_576;
   localparam [63:0] MEM_BYTES_64 = 64'd1_048_576;
 
   reg clk = 1'b0;
@@ -23,7 +23,7 @@ module edge_rv_lite_cached_coremark_tb;
   integer dmem_writeback_beats;
 
   wire imem_refill_req_valid;
-  wire [39:0] imem_refill_req_addr;
+  wire [31:0] imem_refill_req_addr;
   reg imem_refill_resp_valid;
   wire imem_refill_resp_ready;
   reg [127:0] imem_refill_resp_data;

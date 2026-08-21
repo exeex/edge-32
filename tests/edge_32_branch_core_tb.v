@@ -5,7 +5,7 @@ module edge_32_branch_core_tb;
   always #5 clk=~clk;
 
   wire imem_req_valid; reg imem_req_ready=1;
-  wire [39:0] imem_req_addr;
+  wire [31:0] imem_req_addr;
   reg imem_resp_valid=0;
   reg [31:0] imem_resp_data;
   wire dmem_req_valid, dmem_req_write; wire [63:0] dmem_req_addr;

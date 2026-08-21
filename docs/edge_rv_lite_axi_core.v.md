@@ -9,6 +9,13 @@ cache attributes match the `biu_pad_*`/`pad_biu_*` boundary of the maintained
 Edge product core. It is therefore the first lite boundary that can connect to
 the existing SoC AXI interconnect without testbench SRAM ports.
 
+The scalar instruction/cache address domain is 32 bits. `AXI_ADDR_WIDTH`
+defaults to 64 bits, and the wrapper zero-extends instruction refill addresses
+only at the cache-BIU boundary. This leaves the external AXI fabric ready for
+native 64-bit DMA traffic without carrying unused upper address bits through
+the RV32 frontend or I-cache. Future I-cache high-header CSR concatenation
+belongs at this same boundary.
+
 The wrapper currently starts at reset PC zero and exposes halt, illegal, x31,
 cycle and instret status for bring-up. It does not yet implement the full
 `edge_core_top` control surface (`core_start`, dynamic `boot_pc`, DMA or ASIC
