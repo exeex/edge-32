@@ -4,6 +4,7 @@ module edge_rv_lite_halt_tb;
   localparam integer EBREAK_CASE = 1;
   localparam integer ILLEGAL_CASE = 2;
   localparam integer FORMER_MAILBOX_STORE_CASE = 3;
+  localparam integer RV64_STORE_CASE = 4;
   localparam [63:0] FORMER_MAILBOX_ADDR = 64'h0000_0000_0000_2ee8;
 
   reg clk = 0;
@@ -65,22 +66,26 @@ module edge_rv_lite_halt_tb;
         case (imem_req_addr)
           40'h0: imem_resp_data <= 32'h0010_0073; // ebreak
           40'h4: imem_resp_data <= 32'h02a0_0293; // addi x5,x0,42
-          default: imem_resp_data <= 32'h0050_3023; // sd x5,0(x0)
+          default: imem_resp_data <= 32'h0050_2023; // sw x5,0(x0)
         endcase
       end
       ILLEGAL_CASE: begin
         imem_resp_data <= imem_req_addr == 0 ?
-          32'hffff_ffff : 32'h0050_3023; // illegal; sd x5,0(x0)
+          32'hffff_ffff : 32'h0050_2023; // illegal; sw x5,0(x0)
       end
       FORMER_MAILBOX_STORE_CASE: begin
         case (imem_req_addr)
           40'h00: imem_resp_data <= 32'h0000_32b7; // lui x5,0x3
           40'h04: imem_resp_data <= 32'hee82_8293; // addi x5,x5,-280
           40'h08: imem_resp_data <= 32'h02a0_0313; // addi x6,x0,42
-          40'h0c: imem_resp_data <= 32'h0062_b023; // sd x6,0(x5)
+          40'h0c: imem_resp_data <= 32'h0062_a023; // sw x6,0(x5)
           40'h10: imem_resp_data <= 32'h0070_0393; // addi x7,x0,7
           default: imem_resp_data <= 32'h0010_0073; // ebreak
         endcase
+      end
+      RV64_STORE_CASE: begin
+        imem_resp_data <= imem_req_addr == 0 ?
+          32'h0062_b023 : 32'h0010_0073; // sd is illegal in RV32
       end
       default: imem_resp_data <= 32'h0010_0073;
     endcase
@@ -140,7 +145,7 @@ module edge_rv_lite_halt_tb;
                selected_case, halted_instret, dmem_requests);
       if (selected_case == FORMER_MAILBOX_STORE_CASE &&
           (!last_dmem_write || last_dmem_addr != FORMER_MAILBOX_ADDR ||
-           last_dmem_wdata != 64'd42 || last_dmem_wstrb != 8'hff ||
+           last_dmem_wdata != 64'd42 || last_dmem_wstrb != 8'h0f ||
            dut.gpr[7] != 64'd7))
         $fatal(1, "former mailbox address was not an ordinary store");
     end
@@ -150,7 +155,8 @@ module edge_rv_lite_halt_tb;
     run_case(EBREAK_CASE, 64'd1, 1'b0, 0);
     run_case(ILLEGAL_CASE, 64'd0, 1'b1, 0);
     run_case(FORMER_MAILBOX_STORE_CASE, 64'd6, 1'b0, 1);
-    $display("TEST PASS: terminal halt is quiescent and former mailbox stores are ordinary");
+    run_case(RV64_STORE_CASE, 64'd0, 1'b1, 0);
+    $display("TEST PASS: RV32 halt/store behavior and RV64 store rejection");
     $finish;
   end
 endmodule

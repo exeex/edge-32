@@ -21,12 +21,13 @@ The pipeline carries a complete 64-bit instruction plus an explicit
 an opcode `7'h3f` low parcel captures the following parcel and emits one Edge64
 instruction at the low parcel's PC. Redirect flush discards an incomplete pair.
 
-ID classifies each instruction once with `edge_instruction_classifier` and the
+ID classifies each instruction once with `edge_32_decode` and the
 pipeline carries `op_class`, `legal`, and `writes_gpr` beside the instruction
 into EX. EX does not reclassify or maintain a second opcode/funct legality
 table. Product capability checks remain local: a build without FPU rejects FP,
 and lite rejects system/custom operations for which it has no implementation.
-The shared classifier is authoritative for reserved scalar encodings and Edge
+The local decode wrapper owns RV32 width legality while the shared classifier
+remains authoritative for common encodings, accelerator metadata, and Edge
 cache-operation fields.
 
 An Edge64 instruction remains the sole EX owner until the serialized

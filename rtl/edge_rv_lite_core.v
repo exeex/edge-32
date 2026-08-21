@@ -59,7 +59,7 @@ module edge_rv_lite_core #(
   wire id_decoded_writes_gpr;
   wire id_decoded_needs_capture;
   wire [4:0] id_decoded_capture_src_gpr;
-  edge_rv_lite_decode id_decode(
+  edge_32_decode id_decode(
     .inst(id_inst), .inst_is_64b(id_is_64b), .op_class(id_decoded_class),
     .legal(id_decoded_legal), .rd(), .rs1(), .rs2(),
     .writes_gpr(id_decoded_writes_gpr), .accel_subop(),
