@@ -1,4 +1,28 @@
-# edge-rv-lite: Is Single Issue Enough for an ASIC Control Plane?
+# edge-32: RV32 Control Core
+
+`edge-32` is the RV32 derivative of `edge-rv-lite`. The repository preserves
+the lite core history so the width and ISA migration can proceed in reviewable,
+bit-true steps instead of starting from an unrelated implementation.
+
+The imported baseline is still RV64. Until the RV32 migration tests pass, the
+existing `edge_rv_lite_*` RTL names and RV64 behavior are intentionally kept as
+the reference implementation. The migration will change the architectural
+register, address, LSU, CSR, M-extension, software image, and top-level bus
+contracts together; accelerator instructions may remain 64-bit where required
+by the Edge product protocol.
+
+## Migration acceptance criteria
+
+- RV32I integer and control-flow directed tests pass.
+- RV32M multiply/divide semantics pass, including high-half operations.
+- RV64-only integer encodings are illegal.
+- Register and architectural address results are 32-bit.
+- Load/store widths and sign extension match RV32.
+- A bare-metal RV32 smoke image boots through the maintained top-level wrapper.
+- Documentation, filelists, CMake targets, and synthesis tops use `edge-32`
+  names once their corresponding RTL boundary has migrated.
+
+## Imported design rationale
 
 ## Abstract
 

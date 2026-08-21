@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(edge_rv_lite LANGUAGES NONE)
+project(edge_32 LANGUAGES NONE)
 
 find_program(VERILATOR verilator REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
