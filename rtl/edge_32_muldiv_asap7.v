@@ -95,7 +95,7 @@ endmodule
 // boundary separates the slices, so every timing path crosses only one digit
 // selection/subtract stage.  A normal operation completes in sixteen cycles.
 (* keep_hierarchy = "yes" *)
-module edge_32_div_asap7 (
+module edge_32_div_restoring_asap7 (
   input wire clk, input wire reset_n,
   input wire op_valid, output wire op_ready,
   input wire [31:0] src0, input wire [31:0] src1,
@@ -226,6 +226,26 @@ module edge_32_div_asap7 (
       end
     end
   end
+endmodule
+
+// Native RV32 radix-4 SRT wrapper.  The iterative datapath is 35 bits wide,
+// uses two registered ring slices, seven high bits for quotient-digit
+// selection, and carry-save partial-remainder feedback.
+(* keep_hierarchy = "yes" *)
+module edge_32_div_asap7 (
+  input wire clk, input wire reset_n,
+  input wire op_valid, output wire op_ready,
+  input wire [31:0] src0, input wire [31:0] src1,
+  input wire [2:0] funct3,
+  output wire result_valid, output wire [31:0] result_value,
+  output wire busy, output wire [6:0] op_latency
+);
+  edge_32_div_srt4_native srt4 (
+    .clk(clk), .reset_n(reset_n), .op_valid(op_valid), .op_ready(op_ready),
+    .op(4'd1), .src0(src0), .src1(src1), .funct3(funct3),
+    .result_valid(result_valid), .result_value(result_value),
+    .busy(busy), .op_latency(op_latency)
+  );
 endmodule
 
 // Drop-in RV32M owner for ASAP7 builds.  Only one operation may be in flight,
