@@ -255,34 +255,23 @@ module edge_32_div_srt4_native (
 
   // Truncated digit selection can leave one signed correction in either
   // direction. DECIDE isolates the comparison from these carry-select adders.
-  wire [34:0] quotient_minus_one;
-  wire [34:0] quotient_plus_one;
-  wire [34:0] remainder_plus_divisor;
-  wire [34:0] remainder_minus_divisor;
-  edge_32_add35_csel18 quotient_decrement (
-    .lhs(quotient_binary_r), .rhs({35{1'b1}}), .carry_in(1'b0),
-    .sum(quotient_minus_one)
+  wire correction_negative = correction_r < 0;
+  wire correction_positive = correction_r > 0;
+  wire [34:0] quotient_correction_operand = correction_negative ?
+                                             {35{1'b1}} : 35'd0;
+  wire [34:0] remainder_correction_operand = correction_negative ?
+    {3'b000, divisor_mag_r} : correction_positive ?
+    ~{3'b000, divisor_mag_r} : 35'd0;
+  wire [34:0] corrected_quotient;
+  wire [34:0] corrected_remainder;
+  edge_32_add35_csel18 quotient_correction (
+    .lhs(quotient_binary_r), .rhs(quotient_correction_operand),
+    .carry_in(correction_positive), .sum(corrected_quotient)
   );
-  edge_32_add35_csel18 remainder_add_divisor (
-    .lhs(remainder_scaled_r), .rhs({3'b000, divisor_mag_r}),
-    .carry_in(1'b0), .sum(remainder_plus_divisor)
+  edge_32_add35_csel18 remainder_correction (
+    .lhs(remainder_scaled_r), .rhs(remainder_correction_operand),
+    .carry_in(correction_positive), .sum(corrected_remainder)
   );
-  edge_32_add35_csel18 quotient_increment (
-    .lhs(quotient_binary_r), .rhs(35'd0), .carry_in(1'b1),
-    .sum(quotient_plus_one)
-  );
-  edge_32_add35_csel18 remainder_sub_divisor (
-    .lhs(remainder_scaled_r), .rhs(~{3'b000, divisor_mag_r}),
-    .carry_in(1'b1), .sum(remainder_minus_divisor)
-  );
-  wire [34:0] corrected_quotient = correction_r < 0 ? quotient_minus_one :
-                                   correction_r > 0 ? quotient_plus_one :
-                                                      quotient_binary_r;
-  wire [34:0] corrected_remainder = correction_r < 0 ?
-                                     remainder_plus_divisor :
-                                     correction_r > 0 ?
-                                     remainder_minus_divisor :
-                                     remainder_scaled_r;
   wire remainder_ge_divisor = remainder_scaled_r >=
                               $signed({3'b000, divisor_mag_r});
   wire [34:0] negative_quotient_wide;
