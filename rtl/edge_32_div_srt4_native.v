@@ -73,24 +73,23 @@ module edge_32_div_srt4_ring_slice (
   assign quotient_neg_out = iterate ? iter_qneg : quotient_neg_in;
 endmodule
 
-// A shallow 35-bit carry-select adder for the non-iterative COMBINE stage.
-// The upper 17 bits are speculated in parallel; the lower 18-bit carry drives
-// one final mux instead of rippling through the complete word.
+// Nine-bit carry-select boundary for the 500 ps post-iteration stages.  The
+// upper half is speculated in parallel with the lower carry chain.
 (* keep_hierarchy = "yes" *)
-module edge_32_add35_csel18 (
-  input wire [34:0] lhs,
-  input wire [34:0] rhs,
-  input wire carry_in,
-  output wire [34:0] sum
+module edge_32_add18_csel9 (
+  input  wire [17:0] lhs,
+  input  wire [17:0] rhs,
+  input  wire        carry_in,
+  output wire [18:0] sum
 );
-  wire [18:0] low = {1'b0, lhs[17:0]} +
-                    {1'b0, rhs[17:0]} + carry_in;
-  wire [17:0] high_c0 = {1'b0, lhs[34:18]} +
-                        {1'b0, rhs[34:18]};
-  wire [17:0] high_c1 = {1'b0, lhs[34:18]} +
-                        {1'b0, rhs[34:18]} + 18'd1;
-  wire [16:0] high = low[18] ? high_c1[16:0] : high_c0[16:0];
-  assign sum = {high, low[17:0]};
+  wire [9:0] low = {1'b0, lhs[8:0]} +
+                   {1'b0, rhs[8:0]} + carry_in;
+  wire [9:0] high_c0 = {1'b0, lhs[17:9]} +
+                       {1'b0, rhs[17:9]};
+  wire [9:0] high_c1 = {1'b0, lhs[17:9]} +
+                       {1'b0, rhs[17:9]} + 10'd1;
+  wire [9:0] high = low[9] ? high_c1 : high_c0;
+  assign sum = {high, low[8:0]};
 endmodule
 
 // ASAP7-oriented radix-4 SRT integer divider.  The partial remainder may be
@@ -114,22 +113,49 @@ module edge_32_div_srt4_native (
   localparam [3:0] STATE_IDLE = 4'd0;
   localparam [3:0] STATE_FAST = 4'd1;
   localparam [3:0] STATE_ITER = 4'd2;
-  localparam [3:0] STATE_COMBINE = 4'd3;
+  localparam [3:0] STATE_COMBINE_LOW = 4'd3;
   localparam [3:0] STATE_SCALE_LOW = 4'd4;
   localparam [3:0] STATE_SCALE_MID = 4'd5;
   localparam [3:0] STATE_SCALE_HIGH = 4'd6;
-  localparam [3:0] STATE_CORRECT = 4'd7;
+  localparam [3:0] STATE_CORRECT_LOW = 4'd7;
   localparam [3:0] STATE_SIGN = 4'd8;
   localparam [3:0] STATE_DECIDE = 4'd9;
+  localparam [3:0] STATE_CORRECT_HIGH = 4'd10;
+  localparam [3:0] STATE_COMBINE_HIGH = 4'd11;
   localparam integer RING_STAGES = 2;
 
   function [4:0] msb_index32;
     input [31:0] value;
-    integer i;
+    reg [1:0] byte_index;
+    reg [7:0] selected_byte;
+    reg [2:0] bit_index;
     begin
-      msb_index32 = 5'd0;
-      for (i = 0; i < 32; i = i + 1)
-        if (value[i]) msb_index32 = i[4:0];
+      if (|value[31:24]) begin
+        byte_index = 2'd3;
+        selected_byte = value[31:24];
+      end else if (|value[23:16]) begin
+        byte_index = 2'd2;
+        selected_byte = value[23:16];
+      end else if (|value[15:8]) begin
+        byte_index = 2'd1;
+        selected_byte = value[15:8];
+      end else begin
+        byte_index = 2'd0;
+        selected_byte = value[7:0];
+      end
+
+      if (|selected_byte[7:4]) begin
+        if (|selected_byte[7:6])
+          bit_index = selected_byte[7] ? 3'd7 : 3'd6;
+        else
+          bit_index = selected_byte[5] ? 3'd5 : 3'd4;
+      end else begin
+        if (|selected_byte[3:2])
+          bit_index = selected_byte[3] ? 3'd3 : 3'd2;
+        else
+          bit_index = selected_byte[1] ? 3'd1 : 3'd0;
+      end
+      msb_index32 = {byte_index, bit_index};
     end
   endfunction
 
@@ -141,9 +167,18 @@ module edge_32_div_srt4_native (
   reg [31:0] divisor_mag_r;
   reg signed [34:0] quotient_binary_r;
   reg signed [34:0] partial_binary_r;
+  reg [17:0] quotient_combine_low_r;
+  reg [17:0] remainder_combine_low_r;
+  reg quotient_combine_carry_r;
+  reg remainder_combine_carry_r;
   reg signed [34:0] partial_scale_r;
   reg signed [34:0] remainder_scaled_r;
-  reg signed [1:0] correction_r;
+  reg correction_negative_r;
+  reg correction_positive_r;
+  reg [17:0] quotient_correction_low_r;
+  reg [17:0] remainder_correction_low_r;
+  reg quotient_correction_carry_r;
+  reg remainder_correction_carry_r;
   reg [31:0] quotient_mag_r;
   reg [31:0] remainder_mag_r;
   reg rem_r;
@@ -227,50 +262,84 @@ module edge_32_div_srt4_native (
     {3'b000, divisor_mag} << scale_even;
   wire [5:0] aligned_msb = {1'b0, divisor_msb} + scale_even;
   wire [5:0] normalize_shift = 6'd32 - aligned_msb;
-  wire [5:0] remainder_scale = scale_even + normalize_shift;
-  wire [34:0] normalized_divisor = aligned_divisor << normalize_shift;
+  // The divisor's two shifts collapse algebraically:
+  //   scale_even + (32 - (divisor_msb + scale_even)) = 32 - divisor_msb.
+  // Keep normalize_shift for the dividend, but remove scale_even from the
+  // normalized-divisor and final-remainder shift cones.
+  wire [5:0] divisor_normalize_shift = 6'd32 -
+                                         {1'b0, divisor_msb};
+  wire [5:0] remainder_scale = divisor_normalize_shift;
+  wire [34:0] normalized_divisor =
+    {3'b000, divisor_mag} << divisor_normalize_shift;
   wire [34:0] dividend_extended = {3'b000, dividend_mag};
   wire choose_initial_zero = (dividend_extended << 1) < aligned_divisor;
   wire choose_initial_two = (dividend_extended << 1) >=
                             (aligned_divisor + (aligned_divisor << 1));
-  wire signed [34:0] initial_partial = choose_initial_zero ?
-    $signed(dividend_extended) : choose_initial_two ?
-    $signed(dividend_extended) - $signed(aligned_divisor << 1) :
-    $signed(dividend_extended) - $signed(aligned_divisor);
+  wire signed [34:0] normalized_dividend =
+    $signed(dividend_extended << normalize_shift);
   wire signed [34:0] normalized_initial_partial =
-    initial_partial <<< normalize_shift;
+    choose_initial_zero ? normalized_dividend : choose_initial_two ?
+    normalized_dividend - $signed(normalized_divisor << 1) :
+    normalized_dividend - $signed(normalized_divisor);
 
   // Slot zero owns the final carry-save remainder and signed-digit quotient.
-  // Reusing it for COMBINE avoids a second 140-bit register bank.
-  wire [34:0] quotient_binary_next;
-  wire [34:0] partial_binary_next;
-  edge_32_add35_csel18 quotient_combine (
-    .lhs(ring_qpos_r[0]), .rhs(~ring_qneg_r[0]), .carry_in(1'b1),
-    .sum(quotient_binary_next)
+  // COMBINE_LOW and COMBINE_HIGH form a true 18/17-bit pipeline, avoiding a
+  // complete 35-bit carry path at the 500 ps target.
+  wire [34:0] quotient_neg_inverted = ~ring_qneg_r[0];
+  wire [18:0] quotient_combine_low;
+  wire [18:0] remainder_combine_low;
+  wire [18:0] quotient_combine_high;
+  wire [18:0] remainder_combine_high;
+  edge_32_add18_csel9 quotient_combine_low_add (
+    .lhs(ring_qpos_r[0][17:0]),
+    .rhs(quotient_neg_inverted[17:0]), .carry_in(1'b1),
+    .sum(quotient_combine_low)
   );
-  edge_32_add35_csel18 remainder_combine (
-    .lhs(ring_sum_r[0]), .rhs(ring_carry_r[0]), .carry_in(1'b0),
-    .sum(partial_binary_next)
+  edge_32_add18_csel9 remainder_combine_low_add (
+    .lhs(ring_sum_r[0][17:0]), .rhs(ring_carry_r[0][17:0]),
+    .carry_in(1'b0), .sum(remainder_combine_low)
+  );
+  edge_32_add18_csel9 quotient_combine_high_add (
+    .lhs({1'b0, ring_qpos_r[0][34:18]}),
+    .rhs({1'b0, quotient_neg_inverted[34:18]}),
+    .carry_in(quotient_combine_carry_r), .sum(quotient_combine_high)
+  );
+  edge_32_add18_csel9 remainder_combine_high_add (
+    .lhs({1'b0, ring_sum_r[0][34:18]}),
+    .rhs({1'b0, ring_carry_r[0][34:18]}),
+    .carry_in(remainder_combine_carry_r), .sum(remainder_combine_high)
   );
 
-  // Truncated digit selection can leave one signed correction in either
-  // direction. DECIDE isolates the comparison from these carry-select adders.
-  wire correction_negative = correction_r < 0;
-  wire correction_positive = correction_r > 0;
-  wire [34:0] quotient_correction_operand = correction_negative ?
-                                             {35{1'b1}} : 35'd0;
-  wire [34:0] remainder_correction_operand = correction_negative ?
-    {3'b000, divisor_mag_r} : correction_positive ?
-    ~{3'b000, divisor_mag_r} : 35'd0;
-  wire [34:0] corrected_quotient;
-  wire [34:0] corrected_remainder;
-  edge_32_add35_csel18 quotient_correction (
-    .lhs(quotient_binary_r), .rhs(quotient_correction_operand),
-    .carry_in(correction_positive), .sum(corrected_quotient)
+  // DECIDE registers one-hot correction controls.  CORRECT_LOW and
+  // CORRECT_HIGH then form a true 18/14-bit pipeline instead of asking one
+  // carry-select adder and its control fanout to close in a single cycle.
+  wire [31:0] quotient_correction_operand = correction_negative_r ?
+                                                32'hffff_ffff : 32'd0;
+  wire [31:0] remainder_correction_operand = correction_negative_r ?
+    divisor_mag_r : correction_positive_r ? ~divisor_mag_r : 32'd0;
+  wire [18:0] quotient_correction_low;
+  wire [18:0] remainder_correction_low;
+  wire [18:0] quotient_correction_high;
+  wire [18:0] remainder_correction_high;
+  edge_32_add18_csel9 quotient_correction_low_add (
+    .lhs(quotient_binary_r[17:0]),
+    .rhs(quotient_correction_operand[17:0]),
+    .carry_in(correction_positive_r), .sum(quotient_correction_low)
   );
-  edge_32_add35_csel18 remainder_correction (
-    .lhs(remainder_scaled_r), .rhs(remainder_correction_operand),
-    .carry_in(correction_positive), .sum(corrected_remainder)
+  edge_32_add18_csel9 remainder_correction_low_add (
+    .lhs(remainder_scaled_r[17:0]),
+    .rhs(remainder_correction_operand[17:0]),
+    .carry_in(correction_positive_r), .sum(remainder_correction_low)
+  );
+  edge_32_add18_csel9 quotient_correction_high_add (
+    .lhs({4'b0000, quotient_binary_r[31:18]}),
+    .rhs({4'b0000, quotient_correction_operand[31:18]}),
+    .carry_in(quotient_correction_carry_r), .sum(quotient_correction_high)
+  );
+  edge_32_add18_csel9 remainder_correction_high_add (
+    .lhs({4'b0000, remainder_scaled_r[31:18]}),
+    .rhs({4'b0000, remainder_correction_operand[31:18]}),
+    .carry_in(remainder_correction_carry_r), .sum(remainder_correction_high)
   );
   wire remainder_ge_divisor = remainder_scaled_r >=
                               $signed({3'b000, divisor_mag_r});
@@ -301,9 +370,9 @@ module edge_32_div_srt4_native (
   // Each pass through the two-slice ring consumes two radix-4 digits.  Exit
   // at the first pass boundary after all requested digits have completed.
   wire [3:0] ring_passes = srt_rounds[4:1] + srt_rounds[0];
-  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd7;
+  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd9;
   assign op_latency = fast_case ? 7'd1 :
-                      srt_rounds == 5'd0 ? 7'd7 : ring_latency;
+                      srt_rounds == 5'd0 ? 7'd9 : ring_latency;
 
   reg [3:0] state_next;
   reg [RING_STAGES-1:0] ring_valid_next;
@@ -320,7 +389,7 @@ module edge_32_div_srt4_native (
         if (fast_case)
           state_next = STATE_FAST;
         else if (srt_rounds == 0)
-          state_next = STATE_COMBINE;
+          state_next = STATE_COMBINE_LOW;
         else begin
           state_next = STATE_ITER;
           ring_valid_next = {{(RING_STAGES-1){1'b0}}, 1'b1};
@@ -339,14 +408,16 @@ module edge_32_div_srt4_native (
         ring_valid_next[0] = ring_valid_r[1] &&
                              (ring_rounds_next[1] != 5'd0);
         if (ring_valid_r[1] && (ring_rounds_next[1] == 5'd0))
-          state_next = STATE_COMBINE;
+          state_next = STATE_COMBINE_LOW;
       end
-      STATE_COMBINE: state_next = STATE_SCALE_LOW;
+      STATE_COMBINE_LOW: state_next = STATE_COMBINE_HIGH;
+      STATE_COMBINE_HIGH: state_next = STATE_SCALE_LOW;
       STATE_SCALE_LOW: state_next = STATE_SCALE_MID;
       STATE_SCALE_MID: state_next = STATE_SCALE_HIGH;
       STATE_SCALE_HIGH: state_next = STATE_DECIDE;
-      STATE_DECIDE: state_next = STATE_CORRECT;
-      STATE_CORRECT: state_next = STATE_SIGN;
+      STATE_DECIDE: state_next = STATE_CORRECT_LOW;
+      STATE_CORRECT_LOW: state_next = STATE_CORRECT_HIGH;
+      STATE_CORRECT_HIGH: state_next = STATE_SIGN;
       STATE_SIGN: begin
         state_next = STATE_IDLE;
         result_valid_next = 1'b1;
@@ -370,6 +441,23 @@ module edge_32_div_srt4_native (
   end
 
   integer ring_i;
+`ifdef EDGE32_QDS_LATCH
+  // QDS is evaluated during the high half-cycle.  The latch closes before
+  // the carry-save update edge, so the update stage sees a stable digit while
+  // borrowing the otherwise unused high phase.  Keep CLK ungated so CTS and
+  // latch timing analysis see the primary clock, not a derived enable.
+  always_latch begin
+    if (clk) begin
+      for (ring_i = 0; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
+        ring_q_pos2_r[ring_i] <= ring_q_pos2_next[ring_i];
+        ring_q_pos1_r[ring_i] <= ring_q_pos1_next[ring_i];
+        ring_q_neg1_r[ring_i] <= ring_q_neg1_next[ring_i];
+        ring_q_neg2_r[ring_i] <= ring_q_neg2_next[ring_i];
+      end
+    end
+  end
+`endif
+
   always @(posedge clk) begin
       case (state_r)
         STATE_IDLE: if (op_valid) begin
@@ -393,12 +481,14 @@ module edge_32_div_srt4_native (
             ring_qpos_r[0] <= choose_initial_zero ? 35'd0 :
                               choose_initial_two ? 35'd2 : 35'd1;
             ring_qneg_r[0] <= 35'd0;
+`ifndef EDGE32_QDS_LATCH
             if (srt_rounds != 0) begin
               ring_q_pos2_r[0] <= 1'b0;
               ring_q_pos1_r[0] <= 1'b0;
               ring_q_neg1_r[0] <= 1'b0;
               ring_q_neg2_r[0] <= 1'b0;
             end
+`endif
           end
         end
         STATE_FAST: begin
@@ -406,12 +496,14 @@ module edge_32_div_srt4_native (
         end
         STATE_ITER: begin
           if (ring_qds_phase_r) begin
+`ifndef EDGE32_QDS_LATCH
             for (ring_i = 0; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
               ring_q_pos2_r[ring_i] <= ring_q_pos2_next[ring_i];
               ring_q_pos1_r[ring_i] <= ring_q_pos1_next[ring_i];
               ring_q_neg1_r[ring_i] <= ring_q_neg1_next[ring_i];
               ring_q_neg2_r[ring_i] <= ring_q_neg2_next[ring_i];
             end
+`endif
           end else begin
             for (ring_i = 1; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
             ring_rounds_r[ring_i] <= ring_rounds_next[ring_i-1];
@@ -438,9 +530,17 @@ module edge_32_div_srt4_native (
             end
           end
         end
-        STATE_COMBINE: begin
-          quotient_binary_r <= $signed(quotient_binary_next);
-          partial_binary_r <= $signed(partial_binary_next);
+        STATE_COMBINE_LOW: begin
+          quotient_combine_low_r <= quotient_combine_low[17:0];
+          remainder_combine_low_r <= remainder_combine_low[17:0];
+          quotient_combine_carry_r <= quotient_combine_low[18];
+          remainder_combine_carry_r <= remainder_combine_low[18];
+        end
+        STATE_COMBINE_HIGH: begin
+          quotient_binary_r <= $signed({quotient_combine_high[16:0],
+                                        quotient_combine_low_r});
+          partial_binary_r <= $signed({remainder_combine_high[16:0],
+                                       remainder_combine_low_r});
         end
         STATE_SCALE_LOW: begin
           case (scale_r[1:0])
@@ -466,16 +566,21 @@ module edge_32_div_srt4_native (
           endcase
         end
         STATE_DECIDE: begin
-          if (remainder_scaled_r < 0)
-            correction_r <= -2'sd1;
-          else if (remainder_ge_divisor)
-            correction_r <= 2'sd1;
-          else
-            correction_r <= 2'sd0;
+          correction_negative_r <= remainder_scaled_r < 0;
+          correction_positive_r <= remainder_scaled_r >= 0 &&
+                                   remainder_ge_divisor;
         end
-        STATE_CORRECT: begin
-          quotient_mag_r <= corrected_quotient[31:0];
-          remainder_mag_r <= corrected_remainder[31:0];
+        STATE_CORRECT_LOW: begin
+          quotient_correction_low_r <= quotient_correction_low[17:0];
+          remainder_correction_low_r <= remainder_correction_low[17:0];
+          quotient_correction_carry_r <= quotient_correction_low[18];
+          remainder_correction_carry_r <= remainder_correction_low[18];
+        end
+        STATE_CORRECT_HIGH: begin
+          quotient_mag_r <= {quotient_correction_high[13:0],
+                             quotient_correction_low_r};
+          remainder_mag_r <= {remainder_correction_high[13:0],
+                              remainder_correction_low_r};
         end
         STATE_SIGN: begin
           result_value <= selected_result;

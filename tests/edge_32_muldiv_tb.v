@@ -49,10 +49,10 @@ module edge_32_muldiv_tb;
     run_op(3'b001,32'hffff_fffe,32'd3,32'hffff_ffff,10);
     run_op(3'b010,32'hffff_fffe,32'h8000_0000,32'hffff_ffff,10);
     run_op(3'b011,32'hffff_ffff,32'd2,32'd1,10);
-    run_op(3'b100,-32'd7,32'd3,-32'd2,40);
-    run_op(3'b101,32'hffff_fff9,32'd3,32'h5555_5553,40);
-    run_op(3'b110,-32'd7,32'd3,32'hffff_ffff,40);
-    run_op(3'b111,32'hffff_fff9,32'd3,32'd0,40);
+    run_op(3'b100,-32'd7,32'd3,-32'd2,48);
+    run_op(3'b101,32'hffff_fff9,32'd3,32'h5555_5553,48);
+    run_op(3'b110,-32'd7,32'd3,32'hffff_ffff,48);
+    run_op(3'b111,32'hffff_fff9,32'd3,32'd0,48);
     run_op(3'b100,32'd9,32'd0,32'hffff_ffff,10);
     run_op(3'b110,32'hffff_fff7,32'd0,32'hffff_fff7,10);
     run_op(3'b100,32'h8000_0000,32'hffff_ffff,32'h8000_0000,10);
@@ -62,11 +62,11 @@ module edge_32_muldiv_tb;
       random_lhs=$urandom;
       random_rhs=$urandom | 32'd1;
       run_op(3'b100,random_lhs,random_rhs,
-             $signed(random_lhs)/$signed(random_rhs),40);
-      run_op(3'b101,random_lhs,random_rhs,random_lhs/random_rhs,40);
+             $signed(random_lhs)/$signed(random_rhs),48);
+      run_op(3'b101,random_lhs,random_rhs,random_lhs/random_rhs,48);
       run_op(3'b110,random_lhs,random_rhs,
-             $signed(random_lhs)%$signed(random_rhs),40);
-      run_op(3'b111,random_lhs,random_rhs,random_lhs%random_rhs,40);
+             $signed(random_lhs)%$signed(random_rhs),48);
+      run_op(3'b111,random_lhs,random_rhs,random_lhs%random_rhs,48);
     end
 
     @(negedge clk); funct3=3'b101; src0=32'hffff_ffff; src1=7; op_valid=1;

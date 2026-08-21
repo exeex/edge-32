@@ -47,10 +47,14 @@ edge-rv-lite arithmetic structure, while division is native RV32:
 
 - a pipelined radix-4 Booth 32x32 lane for all four multiply variants;
 - magnitude conversion plus a 64-bit sign correction for `MULH`/`MULHSU`;
-- two radix-4 restoring slices separated by a register boundary;
+- two native radix-4 SRT slices in a folded ring, with separate registered QDS
+  and carry-save update phases;
 - 35-bit partial remainder paths (32 data bits plus three guard bits);
-- 16-cycle normal division, with architectural divide-by-zero and overflow
-  fast paths.
+- variable normal-division latency of
+  `4 * ceil(srt_rounds / 2) + 9` cycles (up to 41 cycles), with architectural
+  divide-by-zero and overflow fast paths;
+- two-cycle low/high combine and correction stages using 9+9 carry-select
+  arithmetic for the 500 ps target.
 
 The generic unit remains the default core implementation. The ASAP7 leaf is a
 separate physical-model boundary until its routed timing/area baseline is
@@ -71,14 +75,18 @@ detailed route:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `edge_32_mul_asap7` | 500 ps | 60 x 60 um | 973 um2 | 31% | +10.02 / +40.25 ps | 35,442 um | 0 |
 | `edge_32_div_asap7` native32 parallel-subtract | 1,000 ps | 105 x 105 um | 396 um2 | 4% | -404.01 / +51.71 ps | 15,697 um | 0 |
+| `edge_32_div_asap7` native SRT pipelined | 1,000 ps | 105 x 105 um | 800 um2 | 8% | +80.57 / +47.53 ps | 34,387 um | 0 |
+| `edge_32_div_asap7` native SRT pipelined target | 500 ps | 105 x 105 um | 823 um2 | 8% | -87.37 / +47.53 ps | 34,988 um | 0 |
 
 The old RV64-derived divider used 67-bit arithmetic, occupied 2,942 um2, routed
 131,812 um of wire, and inserted about 1,008 `BUFx2` cells. Native RV32 reduces
 those figures to 396 um2, 15,697 um, and 194 `BUFx2` cells respectively.
 
-The native divider is not timing-closed yet. Computing all three candidate
-remainders in parallel improved 1 ns WNS from -732.59 ps to -404.01 ps by
-removing the serial compare-then-subtract dependency. The remaining worst path
-is inside the `slice1` candidate subtract/result-selection cone. A 5x7-bit
-carry-select experiment regressed WNS to -659.61 ps and was rejected.
+The current native SRT divider closes the 1 ns global-route proxy. Algebraic
+normalization cleanup, tree MSB detection, true low/high combine and correction
+pipelines, and 9+9 carry-select arithmetic reduce the 500 ps proxy to -87.37 ps
+WNS with 29 remaining violating endpoints. The 500 ps target is not closed yet;
+its reports remain an optimization probe rather than a hardened result. A QDS
+latch experiment consumed nearly the full 500 ps transparent phase and was
+rejected for the default implementation.
 Detailed-route DRC/LVS remains required before hard-macro signoff.
