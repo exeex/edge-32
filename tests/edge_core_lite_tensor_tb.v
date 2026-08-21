@@ -150,7 +150,9 @@ module edge_core_lite_tensor_tb;
       @(posedge clk);
       cycles = cycles + 1;
     end
-    if (!halted) $fatal(1, "lite Tensor timeout instret=%0d", instret_count);
+    if (!halted) $fatal(1, "lite Tensor timeout instret=%0d pc=%h inst=%h",
+                        instret_count, dut.core.cached_core.core.ex_pc,
+                        dut.core.cached_core.core.ex_inst);
     if (illegal)
       $fatal(1, "lite Tensor illegal pc=%h inst=%h is64=%0d class=%0d legal=%0d ex_error=%0d resp_error=%0d",
              dut.core.cached_core.core.ex_pc,

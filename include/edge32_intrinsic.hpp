@@ -3,6 +3,31 @@
 
 #include <stdint.h>
 
+#ifndef EDGE_ADDR_T_DEFINED
+typedef uint64_t addr_t;
+#define EDGE_ADDR_T_DEFINED 1
+#endif
+
+#define EDGE_DCACHE_LINE_SIZE 64u
+#define EDGE_CSR_BREAK_ID 0x7e0u
+#define EDGE_CSR_SIM_PUTCHAR_ID 0x7e1u
+#define EDGE_TENSOR_WTYPE_BF16 1
+#define EDGE_TENSOR_WTYPE_INT8 2
+#define EDGE_TENSOR_LOAD_OPT_REUSE (1u << 1)
+#define EDGE_TENSOR_LOAD_OPT_KNOWN_MASK EDGE_TENSOR_LOAD_OPT_REUSE
+#define EDGE_TENSOR_START_OPT_USE_SCALE (1u << 0)
+#define EDGE_TENSOR_START_OPT_PSUM_ONCE (1u << 1)
+#define EDGE_TENSOR_START_OPT_NO_PSUM (1u << 2)
+#define EDGE_TENSOR_START_OPT_SCALE_STREAM (1u << 3)
+#define EDGE_TENSOR_START_OPT_RSUM (1u << 4)
+#define EDGE_TENSOR_START_OPT_COPY (1u << 5)
+#define EDGE_TENSOR_START_OPT_PSUM_MASK \
+    (EDGE_TENSOR_START_OPT_PSUM_ONCE | EDGE_TENSOR_START_OPT_NO_PSUM)
+#define EDGE_TENSOR_START_OPT_KNOWN_MASK \
+    (EDGE_TENSOR_START_OPT_USE_SCALE | EDGE_TENSOR_START_OPT_PSUM_MASK | \
+     EDGE_TENSOR_START_OPT_SCALE_STREAM | EDGE_TENSOR_START_OPT_RSUM | \
+     EDGE_TENSOR_START_OPT_COPY)
+
 // Edge-32 fixed instruction layout:
 //   [31:25] funct7/subop
 //   [24:20] imm8[7:3]
@@ -146,14 +171,114 @@ static_assert((asic_word(0x7f, 31, 0xff) & 0x00000f80u) == 0,
 
 // Drop-in Edge API names for edge-32. Addresses are integer values rather
 // than pointers because the scalar ABI is RV32 while DMA addresses are 64-bit.
-static inline void edge_dma_setsrc(uint64_t src) { edge32::dma_setsrc(src); }
-static inline void edge_dma_settar(uint64_t dst) { edge32::dma_settar(dst); }
-static inline void edge_dma_start(uint64_t src, uint64_t dst, uint32_t len)
+static inline uintptr_t edge_get_cycle(void)
+{
+    uintptr_t cycle;
+    __asm__ volatile("csrr %0, cycle" : "=r"(cycle) : : "memory");
+    return cycle;
+}
+
+static inline void edge_sim_putchar(char ch)
+{
+    uintptr_t value = static_cast<uintptr_t>(static_cast<unsigned char>(ch));
+    __asm__ volatile("csrw 0x7e1, %0" : : "r"(value) : "memory");
+}
+
+[[noreturn]] static inline void edge_exit(uintptr_t value)
+{
+    __asm__ volatile("csrw 0x7e0, %0" : : "r"(value) : "memory");
+    for (;;) __asm__ volatile("wfi" ::: "memory");
+}
+
+// The Edge32 D-cache is write-through. A fence is the required ordering point;
+// there are no dirty cache lines to clean before DMA observes memory.
+static inline void edge_dcache_clean_range(addr_t, uintptr_t)
+{
+    __asm__ volatile("fence rw, rw" ::: "memory");
+}
+static inline void edge_dcache_invalidate_range(addr_t, uintptr_t)
+{
+    __asm__ volatile("fence rw, rw" ::: "memory");
+}
+static inline void edge_dcache_clean_invalidate_range(addr_t, uintptr_t)
+{
+    __asm__ volatile("fence rw, rw" ::: "memory");
+}
+
+static inline void edge_asic_power(unsigned enable)
+{
+    if (enable) edge32::emit<edge32::command::asic_power, 1>();
+    else edge32::emit<edge32::command::asic_power, 0>();
+}
+static inline void edge_asic_on(void) { edge_asic_power(1); }
+static inline void edge_asic_off(void) { edge_asic_power(0); }
+
+static inline void edge_dma_setsrc(addr_t src) { edge32::dma_setsrc(src); }
+static inline void edge_dma_settar(addr_t dst) { edge32::dma_settar(dst); }
+static inline void edge_dma_start(addr_t src, addr_t dst, uintptr_t len)
 {
     edge_dma_setsrc(src);
     edge_dma_settar(dst);
-    edge32::dma_start(len);
+    edge32::dma_start(static_cast<uint32_t>(len));
 }
 static inline void edge_dma_sync(void) { edge32::dma_sync(); }
+
+template <int dtype, int wtype>
+static inline void edge_tensor_setcsr()
+{
+    static_assert(dtype >= 0 && dtype < 16, "tensor dtype must fit imm4");
+    static_assert(wtype >= 0 && wtype < 16, "tensor wtype must fit imm4");
+    edge32::emit<edge32::command::tensor_setcsr,
+                 static_cast<uint8_t>((dtype << 4) | wtype)>();
+}
+
+template <unsigned Options = 0>
+static inline void edge_tensor_wld(addr_t weight_addr = 0)
+{
+    static_assert((Options & ~EDGE_TENSOR_LOAD_OPT_KNOWN_MASK) == 0,
+                  "unknown tensor.wld option");
+    if constexpr (Options & EDGE_TENSOR_LOAD_OPT_REUSE)
+        edge32::emit<edge32::command::tensor_wld,
+                     static_cast<uint8_t>(Options)>();
+    else
+        edge32::emit<edge32::command::tensor_wld>(
+            static_cast<uint32_t>(weight_addr));
+}
+
+template <unsigned Options = 0>
+static inline void edge_tensor_wld_t(addr_t weight_addr = 0)
+{
+    static_assert((Options & ~EDGE_TENSOR_LOAD_OPT_KNOWN_MASK) == 0,
+                  "unknown tensor.wld_t option");
+    if constexpr (Options & EDGE_TENSOR_LOAD_OPT_REUSE)
+        edge32::emit<edge32::command::tensor_wld_t,
+                     static_cast<uint8_t>(Options)>();
+    else
+        edge32::emit<edge32::command::tensor_wld_t>(
+            static_cast<uint32_t>(weight_addr));
+}
+
+static inline void edge_tensor_setin(addr_t addr)
+{ edge32::tensor_setin(static_cast<uint32_t>(addr)); }
+static inline void edge_tensor_setout(addr_t addr)
+{ edge32::tensor_setout(static_cast<uint32_t>(addr)); }
+static inline void edge_tensor_setpsum(addr_t addr)
+{ edge32::tensor_setpsum(static_cast<uint32_t>(addr)); }
+static inline void edge_tensor_setn(uintptr_t n)
+{ edge32::tensor_setn(static_cast<uint32_t>(n)); }
+
+template <unsigned Options = 0>
+static inline void edge_tensor_start()
+{
+    static_assert((Options & ~EDGE_TENSOR_START_OPT_KNOWN_MASK) == 0,
+                  "unknown tensor.start option");
+    static_assert((Options & EDGE_TENSOR_START_OPT_PSUM_MASK) !=
+                      EDGE_TENSOR_START_OPT_PSUM_MASK,
+                  "tensor.start psum modes are mutually exclusive");
+    edge32::emit<edge32::command::tensor_start,
+                 static_cast<uint8_t>(Options)>();
+}
+
+static inline void edge_tensor_sync(void) { edge32::tensor_sync(); }
 
 #endif
