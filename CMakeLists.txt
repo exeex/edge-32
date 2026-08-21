@@ -408,7 +408,8 @@ add_custom_command(
   WORKING_DIRECTORY ${EDGE32_E3_ROOT}
   DEPENDS
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge_core_lite_tensor_tb.v
-          ${EDGE32_E3_ROOT}/edge_core/filelists/edge_core_edge32_top_verilator.fl)
+          ${EDGE32_E3_ROOT}/edge_core/filelists/edge_core_edge32_top_verilator.fl
+          ${EDGE_RV_ROOT}/edge_accel_pipe/edge_accel_pipe.v)
 add_custom_target(edge32_tensor_bf16_matmul8x8_vvp
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/edge32_tensor_top_obj/Vedge_core_lite_tensor_tb
           ${EDGE32_TENSOR_BF16_MEMH})
@@ -417,6 +418,50 @@ add_test(NAME edge32_tensor_bf16_matmul8x8
           +mem128=${EDGE32_TENSOR_BF16_MEMH} +mem128_words=116 +return_only)
 set_tests_properties(edge32_tensor_bf16_matmul8x8 PROPERTIES
   REQUIRED_FILES "${EDGE32_TENSOR_BF16_MEMH}" TIMEOUT 60)
+
+function(edge32_add_tensor_benchmark name source words check_arg)
+  set(case_dir "${CMAKE_CURRENT_BINARY_DIR}/software/${name}")
+  set(case_memh "${case_dir}/${name}.memh")
+  add_custom_command(
+    OUTPUT ${case_memh}
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_LIST_DIR}/../../tools/build_rv64im_rom.py
+            ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/tensor/${source}
+            --name ${name} --out-dir ${case_dir}
+            --build-dir ${CMAKE_CURRENT_BINARY_DIR}
+            --crt0 ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_crt0.s
+            --linker ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_flat.ld
+            --clang ${EDGE32_CLANG} --objdump ${EDGE32_OBJDUMP}
+            --objcopy ${EDGE32_OBJCOPY} --lld-prefix ${EDGE32_LLD_PREFIX}
+            --target ${EDGE32_RISCV_TARGET} --march ${EDGE32_RISCV_MARCH}
+            --abi ${EDGE32_RISCV_ABI}
+            --include-dir ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/include
+            --size 0x200000
+    DEPENDS
+            ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/tensor/${source}
+            ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/tensor/matmul.hpp
+            ${CMAKE_CURRENT_LIST_DIR}/../../tests/software/include/edge_intrinsic.hpp
+            ${CMAKE_CURRENT_LIST_DIR}/include/edge32_intrinsic.hpp
+            ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_crt0.s
+            ${CMAKE_CURRENT_LIST_DIR}/tests/software/rv32imf_flat.ld
+    VERBATIM)
+  add_custom_target(${name}_vvp
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/edge32_tensor_top_obj/Vedge_core_lite_tensor_tb
+            ${case_memh})
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/edge32_tensor_top_obj/Vedge_core_lite_tensor_tb
+            +mem128=${case_memh} +mem128_words=${words}
+            +return_only +${check_arg})
+  set_tests_properties(${name} PROPERTIES
+    REQUIRED_FILES "${case_memh}" TIMEOUT 60)
+endfunction()
+
+edge32_add_tensor_benchmark(
+  edge32_matmul64x64_64tokens_circular
+  matmul64x64_runtime_shape_64tokens.cpp 1106 check_matmul64)
+edge32_add_tensor_benchmark(
+  edge32_matmul64x64_128tokens_circular
+  matmul64x64_runtime_shape_128tokens.cpp 1622 check_matmul128)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb

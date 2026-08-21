@@ -7,6 +7,7 @@ MEMORY
 }
 
 __stack_top = ORIGIN(ROM) + LENGTH(ROM);
+__edge_stack_top = __stack_top;
 __edge_dtcm_base = 0x40000000;
 __edge_dtcm_size = 0x00010000;
 __edge_dtcm_mask = 0xffff0000;

@@ -22,6 +22,52 @@ by the Edge product protocol.
 - Documentation, filelists, CMake targets, and synthesis tops use `edge-32`
   names once their corresponding RTL boundary has migrated.
 
+## Current Edge32 Tensor checkpoint
+
+The following checkpoint records the first same-source 64x64 Tensor runs on
+Edge32. Both Edge32 images use `rv32imf_zba` with the `ilp32f` ABI and include
+the target-neutral `edge_intrinsic.hpp`; that header selects the Edge32
+intrinsic implementation from `__riscv_xlen`. The edge-rv and edge-rv-lite
+columns are the previously recorded LLVM 22.1.8 reference values from the
+edge-rv-lite experiment and were not rerun for this checkpoint.
+
+The primary metric is the software-published `X30` Tensor window. It excludes
+boot, input packing, and output scatter, and includes weight production plus
+Tensor execution. Every BF16 output was checked after DTCM-to-AXI DMA.
+
+| 64x64 case | `edge-rv@e3` X30 | `edge-rv-lite@e3` X30 | `edge32@e3` X30 | Edge32 vs RV | Edge32 vs RV64-lite |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 64 tokens | 4,660 | 4,699 | **4,664** | +4 (+0.09%) | -35 (-0.74%) |
+| 128 tokens | 8,772 | 8,785 | **8,700** | -72 (-0.82%) | -85 (-0.97%) |
+
+| 64x64 case | Ideal Tensor cycles | `edge32@e3` X30 | Edge32 MAC utilization | Whole-harness cycles | Retired instructions |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 64 tokens | 4,096 | 4,664 | 87.82% | 326,853 | 110,169 |
+| 128 tokens | 8,192 | 8,700 | 94.16% | 526,492 | 173,288 |
+
+This is a native-configuration product comparison rather than a strict
+common-ISA compiler comparison: Edge32 uses RV32/ILP32F and fixed 32-bit ASIC
+commands, while the two recorded baselines use RV64 and Edge64 commands. The
+Tensor engine, DTCM, DMA, AXI memory model, benchmark source, expected output,
+and X30 timing boundary are shared. The results show no throughput regression
+for these coarse-grained Tensor windows; the small differences are scalar
+command-generation and cache/DMA setup effects around the shared ASIC work.
+
+The Edge32 runs were measured on 2026-08-21 with LLVM 22.1.8 and Verilator
+5.050. The implementation checkpoint was based on parent commit `75aa901f`
+and edge-32 commit `654ddab`, with the Edge32 Tensor/DMA changes committed in
+the following revision. Reproduce the checked cases from the parent build:
+
+```sh
+cmake --build build/cmake-harness --target \
+  edge32_matmul64x64_64tokens_circular_vvp \
+  edge32_matmul64x64_128tokens_circular_vvp -j4
+
+ctest --test-dir build/cmake-harness \
+  -R '^edge32_matmul64x64_(64|128)tokens_circular$' \
+  --output-on-failure -V
+```
+
 ## Imported design rationale
 
 ## Abstract

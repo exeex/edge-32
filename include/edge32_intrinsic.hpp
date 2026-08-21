@@ -28,6 +28,13 @@ typedef uint64_t addr_t;
      EDGE_TENSOR_START_OPT_SCALE_STREAM | EDGE_TENSOR_START_OPT_RSUM | \
      EDGE_TENSOR_START_OPT_COPY)
 
+#define EDGE_RV_CORE_ID_EDGE_RV 1u
+#define EDGE_RV_CORE_ID_EDGE_RV_LITE 2u
+#define EDGE_WEIGHT_SPEC_BF16 (1u << 0)
+#define EDGE_WEIGHT_SPEC_INT8 (1u << 1)
+#define EDGE_SCALE_SPEC_BF16 (1u << 0)
+#define EDGE_TENSOR_SPEC_V1 (1u << 0)
+
 // Edge-32 fixed instruction layout:
 //   [31:25] funct7/subop
 //   [24:20] imm8[7:3]
@@ -190,19 +197,66 @@ static inline void edge_sim_putchar(char ch)
     for (;;) __asm__ volatile("wfi" ::: "memory");
 }
 
-// The Edge32 D-cache is write-through. A fence is the required ordering point;
-// there are no dirty cache lines to clean before DMA observes memory.
-static inline void edge_dcache_clean_range(addr_t, uintptr_t)
+static inline uintptr_t edge_dcache_line_floor(uintptr_t addr)
 {
-    __asm__ volatile("fence rw, rw" ::: "memory");
+    return addr & ~(uintptr_t)(EDGE_DCACHE_LINE_SIZE - 1u);
 }
-static inline void edge_dcache_invalidate_range(addr_t, uintptr_t)
+
+static inline uintptr_t edge_dcache_line_ceil(uintptr_t addr)
 {
-    __asm__ volatile("fence rw, rw" ::: "memory");
+    return (addr + EDGE_DCACHE_LINE_SIZE - 1u) &
+           ~(uintptr_t)(EDGE_DCACHE_LINE_SIZE - 1u);
 }
-static inline void edge_dcache_clean_invalidate_range(addr_t, uintptr_t)
+
+static inline void edge_dcache_clean_va(addr_t addr)
 {
-    __asm__ volatile("fence rw, rw" ::: "memory");
+    register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
+    __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x5"
+                     : : "r"(edge_addr) : "memory");
+}
+
+static inline void edge_dcache_invalidate_va(addr_t addr)
+{
+    register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
+    __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x6"
+                     : : "r"(edge_addr) : "memory");
+}
+
+static inline void edge_dcache_clean_invalidate_va(addr_t addr)
+{
+    register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
+    __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x7"
+                     : : "r"(edge_addr) : "memory");
+}
+
+static inline void edge_dcache_clean_range(addr_t addr, uintptr_t len)
+{
+    uintptr_t cur = edge_dcache_line_floor((uintptr_t)addr);
+    const uintptr_t end = edge_dcache_line_ceil((uintptr_t)addr + len);
+    while (cur < end) {
+        edge_dcache_clean_va((addr_t)cur);
+        cur += EDGE_DCACHE_LINE_SIZE;
+    }
+}
+
+static inline void edge_dcache_invalidate_range(addr_t addr, uintptr_t len)
+{
+    uintptr_t cur = edge_dcache_line_floor((uintptr_t)addr);
+    const uintptr_t end = edge_dcache_line_ceil((uintptr_t)addr + len);
+    while (cur < end) {
+        edge_dcache_invalidate_va((addr_t)cur);
+        cur += EDGE_DCACHE_LINE_SIZE;
+    }
+}
+
+static inline void edge_dcache_clean_invalidate_range(addr_t addr, uintptr_t len)
+{
+    uintptr_t cur = edge_dcache_line_floor((uintptr_t)addr);
+    const uintptr_t end = edge_dcache_line_ceil((uintptr_t)addr + len);
+    while (cur < end) {
+        edge_dcache_clean_invalidate_va((addr_t)cur);
+        cur += EDGE_DCACHE_LINE_SIZE;
+    }
 }
 
 static inline void edge_asic_power(unsigned enable)
@@ -222,6 +276,56 @@ static inline void edge_dma_start(addr_t src, addr_t dst, uintptr_t len)
     edge32::dma_start(static_cast<uint32_t>(len));
 }
 static inline void edge_dma_sync(void) { edge32::dma_sync(); }
+static inline void edge_dma_setn(uintptr_t bytes)
+{ edge32::dma_setn(static_cast<uint32_t>(bytes)); }
+static inline void edge_dma_setentry(uintptr_t bytes)
+{ edge32::dma_setentry(static_cast<uint32_t>(bytes)); }
+static inline void edge_dma_setx(uintptr_t stride, uintptr_t count)
+{
+    // Compact DMA XY uses imm8 for the axis count and rs1 for the stride.
+    // Current public Tensor shapes are bounded to 255 entries per axis.
+    switch (count) {
+    case 1: edge32::emit<edge32::command::dma_setx, 1>(stride); break;
+    case 8: edge32::emit<edge32::command::dma_setx, 8>(stride); break;
+    case 64: edge32::emit<edge32::command::dma_setx, 64>(stride); break;
+    case 128: edge32::emit<edge32::command::dma_setx, 128>(stride); break;
+    default: edge32::emit<edge32::command::dma_setx>(stride); break;
+    }
+}
+static inline void edge_dma_sety(uintptr_t stride, uintptr_t count)
+{
+    switch (count) {
+    case 1: edge32::emit<edge32::command::dma_sety, 1>(stride); break;
+    case 8: edge32::emit<edge32::command::dma_sety, 8>(stride); break;
+    case 64: edge32::emit<edge32::command::dma_sety, 64>(stride); break;
+    case 128: edge32::emit<edge32::command::dma_sety, 128>(stride); break;
+    default: edge32::emit<edge32::command::dma_sety>(stride); break;
+    }
+}
+static inline void edge_dma_start_strided(
+    addr_t src, addr_t dst, uintptr_t bytes, uintptr_t stride,
+    uintptr_t count)
+{
+    edge_dma_setn(bytes);
+    edge_dma_setx(stride, count);
+    edge_dma_sety(0, 1);
+    edge_dma_setsrc(src);
+    edge_dma_settar(dst);
+    edge32::dma_start(static_cast<uint32_t>(bytes), 1);
+}
+static inline void edge_dma_start_strided_circular(
+    addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
+    uintptr_t entry_bytes, uintptr_t ring_entries)
+{
+    edge_dma_setn(bytes);
+    edge_dma_setentry(entry_bytes);
+    edge_dma_setx(x_stride, x_max);
+    edge_dma_sety(y_stride, y_max);
+    edge_dma_setsrc(src);
+    edge_dma_settar(ring);
+    edge32::dma_start(static_cast<uint32_t>(ring_entries), 3);
+}
 
 template <int dtype, int wtype>
 static inline void edge_tensor_setcsr()
@@ -280,5 +384,54 @@ static inline void edge_tensor_start()
 }
 
 static inline void edge_tensor_sync(void) { edge32::tensor_sync(); }
+
+static inline void edge_tensor_wld_t_circular(void)
+{ edge32::emit<edge32::command::tensor_wld_t_circular>(); }
+
+struct edge_hardware_info {
+    uint16_t rv_core_id;
+    uint16_t product_id;
+    uint8_t fpu_ver;
+    uint8_t vpu_ver;
+    uint8_t tensor_p;
+    uint8_t tensor_q;
+    uint8_t weight_spec;
+    uint8_t scale_spec;
+    uint8_t tensor_spec;
+};
+
+struct edge_tensor_engine_spec {
+    uint32_t rows;
+    uint32_t columns;
+};
+
+static inline uint64_t edge_get_hardware_id()
+{
+    uintptr_t low;
+    __asm__ volatile("csrr %0, 0xfc0" : "=r"(low));
+    return static_cast<uint64_t>(low);
+}
+
+static inline edge_hardware_info edge_decode_hardware_id(uint64_t value)
+{
+    return {
+        static_cast<uint16_t>((value >> 55) & 0x1ffu),
+        static_cast<uint16_t>((value >> 40) & 0x7fffu),
+        static_cast<uint8_t>((value >> 36) & 0x0fu),
+        static_cast<uint8_t>((value >> 32) & 0x0fu),
+        static_cast<uint8_t>((value >> 28) & 0x0fu),
+        static_cast<uint8_t>((value >> 24) & 0x0fu),
+        static_cast<uint8_t>((value >> 16) & 0xffu),
+        static_cast<uint8_t>((value >> 8) & 0xffu),
+        static_cast<uint8_t>(value & 0xffu),
+    };
+}
+
+static inline edge_tensor_engine_spec edge_get_tensor_engine_spec()
+{
+    const edge_hardware_info hardware =
+        edge_decode_hardware_id(edge_get_hardware_id());
+    return {1u << hardware.tensor_p, 1u << hardware.tensor_q};
+}
 
 #endif
