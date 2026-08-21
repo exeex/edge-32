@@ -73,6 +73,26 @@ module edge_32_div_srt4_ring_slice (
   assign quotient_neg_out = iterate ? iter_qneg : quotient_neg_in;
 endmodule
 
+// A shallow 35-bit carry-select adder for the non-iterative COMBINE stage.
+// The upper 17 bits are speculated in parallel; the lower 18-bit carry drives
+// one final mux instead of rippling through the complete word.
+(* keep_hierarchy = "yes" *)
+module edge_32_add35_csel18 (
+  input wire [34:0] lhs,
+  input wire [34:0] rhs,
+  input wire carry_in,
+  output wire [34:0] sum
+);
+  wire [18:0] low = {1'b0, lhs[17:0]} +
+                    {1'b0, rhs[17:0]} + carry_in;
+  wire [17:0] high_c0 = {1'b0, lhs[34:18]} +
+                        {1'b0, rhs[34:18]};
+  wire [17:0] high_c1 = {1'b0, lhs[34:18]} +
+                        {1'b0, rhs[34:18]} + 18'd1;
+  wire [16:0] high = low[18] ? high_c1[16:0] : high_c0[16:0];
+  assign sum = {high, low[17:0]};
+endmodule
+
 // ASAP7-oriented radix-4 SRT integer divider.  The partial remainder may be
 // negative and quotient digits are selected from {-2,-1,0,+1,+2}.  Positive
 // and negative digits accumulate separately so the iterative feedback path
@@ -222,8 +242,16 @@ module edge_32_div_srt4_native (
 
   // Slot zero owns the final carry-save remainder and signed-digit quotient.
   // Reusing it for COMBINE avoids a second 140-bit register bank.
-  wire [34:0] quotient_binary_next = ring_qpos_r[0] - ring_qneg_r[0];
-  wire [34:0] partial_binary_next = ring_sum_r[0] + ring_carry_r[0];
+  wire [34:0] quotient_binary_next;
+  wire [34:0] partial_binary_next;
+  edge_32_add35_csel18 quotient_combine (
+    .lhs(ring_qpos_r[0]), .rhs(~ring_qneg_r[0]), .carry_in(1'b1),
+    .sum(quotient_binary_next)
+  );
+  edge_32_add35_csel18 remainder_combine (
+    .lhs(ring_sum_r[0]), .rhs(ring_carry_r[0]), .carry_in(1'b0),
+    .sum(partial_binary_next)
+  );
 
   // Truncated digit selection can leave one signed correction in either
   // direction. DECIDE isolates the comparison from these carry-select adders.
@@ -231,12 +259,22 @@ module edge_32_div_srt4_native (
   wire [34:0] quotient_plus_one;
   wire [34:0] remainder_plus_divisor;
   wire [34:0] remainder_minus_divisor;
-  assign quotient_minus_one = quotient_binary_r - 35'd1;
-  assign remainder_plus_divisor = remainder_scaled_r +
-                                  {3'b000, divisor_mag_r};
-  assign quotient_plus_one = quotient_binary_r + 35'd1;
-  assign remainder_minus_divisor = remainder_scaled_r -
-                                   {3'b000, divisor_mag_r};
+  edge_32_add35_csel18 quotient_decrement (
+    .lhs(quotient_binary_r), .rhs({35{1'b1}}), .carry_in(1'b0),
+    .sum(quotient_minus_one)
+  );
+  edge_32_add35_csel18 remainder_add_divisor (
+    .lhs(remainder_scaled_r), .rhs({3'b000, divisor_mag_r}),
+    .carry_in(1'b0), .sum(remainder_plus_divisor)
+  );
+  edge_32_add35_csel18 quotient_increment (
+    .lhs(quotient_binary_r), .rhs(35'd0), .carry_in(1'b1),
+    .sum(quotient_plus_one)
+  );
+  edge_32_add35_csel18 remainder_sub_divisor (
+    .lhs(remainder_scaled_r), .rhs(~{3'b000, divisor_mag_r}),
+    .carry_in(1'b1), .sum(remainder_minus_divisor)
+  );
   wire [34:0] corrected_quotient = correction_r < 0 ? quotient_minus_one :
                                    correction_r > 0 ? quotient_plus_one :
                                                       quotient_binary_r;
