@@ -89,17 +89,17 @@ add_test(NAME edge_rv_lite_instruction_assembler
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/assembler_obj/Vedge_rv_lite_instruction_assembler_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lsu_obj/Vedge_rv_lite_lsu_tb
-  COMMAND ${VERILATOR} --binary --timing --top-module edge_rv_lite_lsu_tb
-          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/lsu_obj
-          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_lsu.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_lsu_tb.v
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_lsu.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_lsu_tb.v)
-add_custom_target(edge_rv_lite_lsu_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lsu_obj/Vedge_rv_lite_lsu_tb)
-add_test(NAME edge_rv_lite_lsu
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lsu_obj/Vedge_rv_lite_lsu_tb)
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lsu32_obj/Vedge_32_lsu_tb
+  COMMAND ${VERILATOR} --binary --timing --top-module edge_32_lsu_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/lsu32_obj
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_lsu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_lsu_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_lsu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_lsu_tb.v)
+add_custom_target(edge_32_lsu_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lsu32_obj/Vedge_32_lsu_tb)
+add_test(NAME edge_32_lsu
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lsu32_obj/Vedge_32_lsu_tb)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_rv_lite_dtcm_router_tb
@@ -142,7 +142,7 @@ set(CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_frontend.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_instruction_assembler.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_lsu.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_lsu.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_fp_mem_format.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_core.v)
 

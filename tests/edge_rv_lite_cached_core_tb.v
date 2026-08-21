@@ -144,9 +144,9 @@ module edge_rv_lite_cached_core_tb;
 
     // Exercise D-cache load/store, call code at 0x40, modify that backing
     // instruction while FENCE.I waits, then call 0x40 again after the sweep.
-    mem[0] = {32'h0000_b103, 32'h1000_0093};
-    mem[1] = {32'h0020_b023, 32'h0011_0113};
-    mem[2] = {32'h02c0_036f, 32'h0000_bf03};
+    mem[0] = {32'h0000_a103, 32'h1000_0093};
+    mem[1] = {32'h0020_a023, 32'h0011_0113};
+    mem[2] = {32'h02c0_036f, 32'h0000_af03};
     mem[3] = {32'h0240_036f, 32'h0000_100f};
     mem[4] = {32'h0010_0073, 32'h0002_8f93};
     mem[8] = {32'h0003_0067, 32'h0010_0293};
@@ -161,7 +161,7 @@ module edge_rv_lite_cached_core_tb;
     end
     if (!halted) $fatal(1, "cached lite core timeout");
     if (illegal) $fatal(1, "cached lite core reported illegal instruction");
-    if (dut.core.gpr[30] != 64'd42)
+    if (dut.core.gpr[30] != 32'd42)
       $fatal(1, "cached load/store result mismatch x30=%0d", dut.core.gpr[30]);
     if (debug_x31 != 64'd2)
       $fatal(1, "FENCE.I did not expose modified code x31=%0d", debug_x31);

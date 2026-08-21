@@ -168,29 +168,30 @@ module edge_rv_lite_core #(
     .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
     .op_latency(mul_latency));
 
-  wire lsu_ready,lsu_done,lsu_error,lsu_busy; wire [63:0] lsu_value;
+  wire lsu_ready,lsu_done,lsu_error,lsu_busy; wire [31:0] lsu_value;
+  wire [31:0] lsu_mem_addr;
   wire lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
   wire [31:0] fpu_store_value;
   wire [31:0] fp_load_value;
   wire [63:0] fp_store_value;
   edge_rv_lite_fp_mem_format fp_mem_format(
-    .funct3(f3),.load_value(lsu_value),.store_fp32(fpu_store_value),
+    .funct3(f3),.load_value({32'd0,lsu_value}),.store_fp32(fpu_store_value),
     .load_fp32(fp_load_value),.store_value(fp_store_value));
-  edge_rv_lite_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
+  edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
     .clk(clk),.reset_n(reset_n),.op_valid(lsu_start),
     .op_ready(lsu_ready),.op_store(is_store||is_fp_store),
     .op_fp(is_fp_load||is_fp_store),.op_funct3(f3),
-    .op_base({32'd0,ex_rs1_value}),
-    .op_offset({{32{(is_store||is_fp_store)?imm_s[31]:imm_i[31]}},
-                (is_store||is_fp_store)?imm_s:imm_i}),
-    .op_store_data(is_fp_store?fp_store_value:{32'd0,ex_rs2_value}),
+    .op_base(ex_rs1_value),
+    .op_offset((is_store||is_fp_store)?imm_s:imm_i),
+    .op_store_data(is_fp_store?fp_store_value[31:0]:ex_rs2_value),
     .mem_req_valid(dmem_req_valid),
     .mem_req_ready(dmem_req_ready),.mem_req_write(dmem_req_write),
-    .mem_req_addr(dmem_req_addr),.mem_req_wdata(dmem_req_wdata),
+    .mem_req_addr(lsu_mem_addr),.mem_req_wdata(dmem_req_wdata),
     .mem_req_wstrb(dmem_req_wstrb),.mem_req_size(dmem_req_size),
     .mem_req_signed(dmem_req_signed),.mem_resp_valid(dmem_resp_valid),
     .mem_resp_error(dmem_resp_error),.mem_resp_rdata(dmem_resp_rdata),
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy(lsu_busy));
+  assign dmem_req_addr={32'd0,lsu_mem_addr};
 
   wire fpu_ready, fpu_done, fpu_gpr_write;
   wire [4:0] fpu_rd; wire [63:0] fpu_value; wire [4:0] fpu_fflags;

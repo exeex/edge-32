@@ -746,7 +746,7 @@ the implementation:
 
 - `docs/edge_rv_lite_pipeline.v.md`: scalar serialization, redirects, faults,
   halt, and Edge64 acceptance ownership;
-- `docs/edge_rv_lite_lsu.v.md`: scalar memory request and completion;
+- `docs/edge_32_lsu.v.md`: RV32 scalar memory request and completion;
 - `docs/edge_rv_lite_fp_mem_format.v.md`: FP memory normalization;
 - `docs/edge_rv_lite_cache_adapters.v.md`: one-owner cache adaptation;
 - `docs/edge_rv_lite_cached_core.v.md`: bootable cache composition and

@@ -10,6 +10,10 @@ one-owner 32-bit fetch and scalar LSU handshakes into the existing cache
 contracts. No testbench memory may connect directly to the core-side request
 ports at this boundary.
 
+Scalar effective addresses originate as 32-bit values in `edge_32_lsu` and
+are zero-extended before the existing 64-bit D-cache/DTCM address contracts.
+DMA addressing is independent of this scalar path and remains natively 64-bit.
+
 The external instruction interface is one aligned 16-byte refill. The external
 data interface is the maintained 64-byte D-cache refill protocol carried as
 four 128-bit beats, plus the 128-bit dirty-line writeback stream and completion
@@ -24,7 +28,9 @@ an executable cache hit.
 `FENCE.I` is a serialized execute-stage operation. The core stops advancing
 younger instructions and requests a full I-cache valid-bit sweep after any
 already accepted instruction refill has drained. The cached wrapper blocks new
-fetch requests from racing that handshake. When the 1024-line 16 KiB sweep (or
+fetch requests while invalidate request, inflight, or cache-busy state is set;
+the direct busy gate also covers the wrapper/cache state transition cycle. When
+the 1024-line 16 KiB sweep (or
 2048-line 32 KiB sweep) completes, the pipeline discards all younger IF/ID
 state and restarts at `fence_pc + 4`, so the next access refills modified code.
 Software must first make code bytes visible in backing instruction memory—for

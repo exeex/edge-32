@@ -222,7 +222,8 @@ module edge_rv_lite_cached_core #(
   ) icache (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .fetch_req_valid(icache_req_valid && !icache_invalidate_valid &&
-                     !icache_invalidate_inflight_q),
+                     !icache_invalidate_inflight_q &&
+                     !icache_invalidate_busy),
     .fetch_req_ready(icache_array_req_ready),
     .fetch_req_addr(icache_req_addr),
     .invalidate_valid(icache_invalidate_valid),
@@ -243,7 +244,8 @@ module edge_rv_lite_cached_core #(
   );
 
   assign icache_req_ready=icache_array_req_ready&&
-    !icache_invalidate_valid&&!icache_invalidate_inflight_q;
+    !icache_invalidate_valid&&!icache_invalidate_inflight_q&&
+    !icache_invalidate_busy;
   assign icache_invalidate_complete=
     icache_invalidate_inflight_q&&!icache_invalidate_busy;
 
