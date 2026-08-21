@@ -10,6 +10,12 @@ one-owner 32-bit fetch and scalar LSU handshakes into the existing cache
 contracts. No testbench memory may connect directly to the core-side request
 ports at this boundary.
 
+Product integration sets `AUTO_START=0` and forwards the edge-rv-compatible
+`boot_pc`, `core_start`, and `core_force_stop` controls to the scalar frontend.
+Reset alone cannot issue an instruction refill in that configuration. The
+default `AUTO_START=1` is retained only for focused legacy leaf tests that
+instantiate the core below the product boundary.
+
 Scalar effective addresses originate as 32-bit values in `edge_32_lsu` and
 are zero-extended before the existing 64-bit D-cache/DTCM address contracts.
 DMA addressing is independent of this scalar path and remains natively 64-bit.

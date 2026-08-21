@@ -5,9 +5,12 @@ module edge_rv_lite_core #(
   parameter DMEM_RESP_FORMATTED = 0,
   parameter ENABLE_FPU = 0,
   parameter MULDIV_ASAP7 = 0,
+  parameter AUTO_START = 1,
   parameter [46:0] EDGE_ASIC_ID = 47'd0
 ) (
   input wire clk, input wire reset_n,
+  input wire [PC_WIDTH-1:0] boot_pc,
+  input wire core_start,input wire core_force_stop,
   output wire imem_req_valid, input wire imem_req_ready,
   output wire [PC_WIDTH-1:0] imem_req_addr,
   input wire imem_resp_valid, input wire [31:0] imem_resp_data,
@@ -43,6 +46,8 @@ module edge_rv_lite_core #(
   reg mem_started_q, mul_started_q, fpu_started_q, accel_started_q;
   reg cache_started_q, icache_invalidate_started_q;
   integer ri;
+  wire core_start_i = AUTO_START ? 1'b0 : core_start;
+  wire core_force_stop_i = AUTO_START ? 1'b0 : core_force_stop;
 
   wire parcel_valid, parcel_ready, parcel_error;
   wire [PC_WIDTH-1:0] parcel_pc; wire [31:0] parcel_inst;
@@ -273,7 +278,9 @@ module edge_rv_lite_core #(
                 (!is_accel||decoded_writes_gpr)&&
                 (!is_fp_compute||fpu_gpr_write);
 
-  edge_rv_lite_frontend frontend(.clk(clk),.reset_n(reset_n),
+  edge_rv_lite_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
+    .clk(clk),.reset_n(reset_n),.boot_pc(boot_pc),
+    .fetch_start(core_start_i),.fetch_stop(core_force_stop_i),
     .imem_req_valid(imem_req_valid),.imem_req_ready(imem_req_ready),
     .imem_req_addr(imem_req_addr),.imem_resp_valid(imem_resp_valid),
     .imem_resp_data(imem_resp_data),.imem_resp_error(imem_resp_error),
@@ -286,7 +293,7 @@ module edge_rv_lite_core #(
     .parcel_data(parcel_inst), .parcel_error(parcel_error),
     .op_valid(if_valid), .op_ready(if_ready), .op_pc(if_pc),
     .op_inst(if_inst), .op_is_64b(if_is_64b), .op_error(if_error),
-    .flush(redirect||frontend_stop));
+    .flush(redirect||frontend_stop||core_start_i||core_force_stop_i));
   edge_rv_lite_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
     .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
@@ -301,7 +308,8 @@ module edge_rv_lite_core #(
     .ex_op_class(decoded_class),.ex_legal(decoded_legal),
     .ex_writes_gpr(decoded_writes_gpr),
     .ex_write_valid(wb_valid),.ex_write_rd(rd),.ex_write_value(wb_value),
-    .ex_redirect_valid(redirect||terminal_complete||halted));
+    .ex_redirect_valid(redirect||terminal_complete||halted||core_start_i||
+                       core_force_stop_i));
 
   assign debug_x31={32'd0,gpr[31]};
   assign cycle_count=cycle_q; assign instret_count=instret_q;
@@ -316,13 +324,19 @@ module edge_rv_lite_core #(
       halted<=0; illegal<=0;
     end else begin
       cycle_q<=cycle_q+1; gpr[0]<=0;
+      if(core_start_i) begin halted<=0; illegal<=0; end
+      if(core_start_i||core_force_stop_i) begin
+        mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0;
+        accel_started_q<=0; cache_started_q<=0;
+        icache_invalidate_started_q<=0;
+      end
       if(lsu_start&&lsu_ready) mem_started_q<=1;
       if(mul_start&&mul_ready) mul_started_q<=1;
       if(fpu_start) fpu_started_q<=1;
       if(accel_req_fire) accel_started_q<=1;
       if(cache_req_fire) cache_started_q<=1;
       if(icache_invalidate_fire) icache_invalidate_started_q<=1;
-      if(ex_done&&!halted) begin
+      if(ex_done&&!halted&&!core_start_i&&!core_force_stop_i) begin
         mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0; accel_started_q<=0;
         cache_started_q<=0;
         icache_invalidate_started_q<=0;

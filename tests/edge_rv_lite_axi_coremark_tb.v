@@ -4,12 +4,14 @@ module edge_rv_lite_axi_coremark_tb;
   localparam integer MEM_BYTES = 1024 * 1024;
   localparam integer MEM_WORDS = MEM_BYTES / 8;
   localparam integer TIMEOUT_CYCLES = 10_000_000;
-  // Linux LLVM 19.1.1 baseline for the parent-produced CoreMark image.
-  // The LLVM 22.1.8 image is a separate checkpoint at 616228 instructions.
-  localparam [63:0] LLVM19_COREMARK_INSTRET = 64'd743510;
+  // Edge32 RV32IMF_Zba / ILP32F LLVM 22.1.8 image built by this project.
+  localparam [63:0] EDGE32_COREMARK_INSTRET = 64'd587409;
 
   reg clk = 1'b0;
   reg reset_n = 1'b0;
+  reg core_start = 1'b0;
+  reg core_force_stop = 1'b0;
+  reg [31:0] boot_pc = 32'd0;
   always #5 clk = ~clk;
 
   reg [63:0] mem [0:MEM_WORDS-1];
@@ -81,6 +83,8 @@ module edge_rv_lite_axi_coremark_tb;
 
   edge32_axi_core dut (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
+    .core_start(core_start),.core_force_stop(core_force_stop),
+    .boot_pc(boot_pc),
     .biu_pad_araddr(araddr), .biu_pad_arburst(arburst),
     .biu_pad_arcache(arcache), .biu_pad_arid(arid),
     .biu_pad_arlen(arlen), .biu_pad_arlock(arlock),
@@ -99,6 +103,11 @@ module edge_rv_lite_axi_coremark_tb;
     .biu_pad_wdata(wdata), .biu_pad_wlast(wlast),
     .biu_pad_wstrb(wstrb), .biu_pad_wvalid(wvalid),
     .pad_biu_wready(wready), .halted(halted), .illegal(illegal),
+    .dtcm_base(64'd0), .dtcm_mask(64'd0), .dtcm_enable(1'b0),
+    .dtcm_lsu_ready(1'b0), .dtcm_lsu_rvalid(1'b0),
+    .dtcm_lsu_rdata(64'd0), .accel_req_ready(1'b0),
+    .accel_resp_valid(1'b0), .accel_resp_error(1'b0),
+    .accel_resp_value(64'd0),
     .debug_x31(debug_x31), .cycle_count(cycle_count),
     .instret_count(instret_count)
   );
@@ -170,6 +179,10 @@ module edge_rv_lite_axi_coremark_tb;
 
     repeat (4) @(posedge clk);
     reset_n <= 1'b1;
+    repeat (3) @(posedge clk);
+    if (arvalid) $fatal(1, "AXI fetch escaped before core_start");
+    core_start <= 1'b1;
+    @(posedge clk); core_start <= 1'b0;
     cycles = 0;
     while (!halted && cycles < TIMEOUT_CYCLES) begin
       @(posedge clk);
@@ -178,7 +191,7 @@ module edge_rv_lite_axi_coremark_tb;
     if (!halted) $fatal(1, "AXI CoreMark timeout instret=%0d", instret_count);
     if (illegal) $fatal(1, "AXI CoreMark reported illegal instruction");
     if (debug_x31 == 0) $fatal(1, "AXI CoreMark returned zero");
-    if (instret_count != LLVM19_COREMARK_INSTRET)
+    if (instret_count != EDGE32_COREMARK_INSTRET)
       $fatal(1, "AXI CoreMark instret mismatch=%0d", instret_count);
     if (icache_reads == 0 || dcache_reads == 0)
       $fatal(1, "AXI CoreMark did not use both cache read IDs");

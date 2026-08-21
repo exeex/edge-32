@@ -22,6 +22,9 @@ module edge32_axi_core #(
 ) (
   input  wire                         forever_cpuclk,
   input  wire                         cpurst_b,
+  input  wire                         core_start,
+  input  wire                         core_force_stop,
+  input  wire [PC_WIDTH-1:0]          boot_pc,
 
   output wire [AXI_ADDR_WIDTH-1:0]    biu_pad_araddr,
   output wire [1:0]                   biu_pad_arburst,
@@ -87,6 +90,19 @@ module edge32_axi_core #(
   output wire [63:0]                  cycle_count,
   output wire [63:0]                  instret_count
 );
+  // Keep external reset assertion asynchronous, but release every internal
+  // state element on a forever_cpuclk edge.  This avoids recovery/removal
+  // skew between the core, cache arrays/controllers, and AXI state machines
+  // when cpurst_b is released by an FPGA board-level reset source.
+  (* ASYNC_REG = "TRUE" *) reg [1:0] reset_sync_q;
+  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+    if (!cpurst_b)
+      reset_sync_q <= 2'b00;
+    else
+      reset_sync_q <= {reset_sync_q[0], 1'b1};
+  end
+  wire core_reset_n = reset_sync_q[1];
+
   wire imem_refill_req_valid;
   wire imem_refill_req_ready;
   wire [PC_WIDTH-1:0] imem_refill_req_addr;
@@ -116,9 +132,12 @@ module edge32_axi_core #(
     .DCACHE_BYTES(DCACHE_BYTES),.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH),
     .ENABLE_DTCM_PORT(ENABLE_DTCM_PORT),.ENABLE_FPU(ENABLE_FPU),
     .MULDIV_ASAP7(MULDIV_ASAP7),
+    .AUTO_START(0),
     .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) cached_core (
-    .clk(forever_cpuclk), .reset_n(cpurst_b),
+    .clk(forever_cpuclk), .reset_n(core_reset_n),
+    .boot_pc(boot_pc),.core_start(core_start),
+    .core_force_stop(core_force_stop),
     .imem_refill_req_valid(imem_refill_req_valid),
     .imem_refill_req_ready(imem_refill_req_ready),
     .imem_refill_req_addr(imem_refill_req_addr),
@@ -159,7 +178,7 @@ module edge32_axi_core #(
     .ADDR_WIDTH(AXI_ADDR_WIDTH), .DATA_WIDTH(AXI_DATA_WIDTH),
     .ID_WIDTH(AXI_ID_WIDTH), .LEN_WIDTH(AXI_LEN_WIDTH)
   ) cache_biu (
-    .clk(forever_cpuclk), .reset_n(cpurst_b),
+    .clk(forever_cpuclk), .reset_n(core_reset_n),
     .icache_req_valid(imem_refill_req_valid),
     .icache_req_ready(imem_refill_req_ready),
     .icache_req_addr(imem_refill_req_axi_addr),

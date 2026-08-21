@@ -5,6 +5,9 @@ module edge_core_lite_tensor_tb;
 
   reg clk = 1'b0;
   reg reset_n = 1'b0;
+  reg core_start = 1'b0;
+  reg core_force_stop = 1'b0;
+  reg [39:0] boot_pc = 40'd0;
   always #5 clk = ~clk;
 
   wire [39:0] araddr, awaddr;
@@ -103,6 +106,8 @@ module edge_core_lite_tensor_tb;
 
   edge_core_lite_top dut (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
+    .core_start(core_start),.core_force_stop(core_force_stop),
+    .boot_pc(boot_pc),
     .mem_region_base(40'h0040000000),
     .mem_region_mask(40'hfffffe0000), .mem_region_enable(1'b1),
     .dma_araddr(araddr), .dma_arburst(arburst), .dma_arcache(arcache),
@@ -145,6 +150,9 @@ module edge_core_lite_tensor_tb;
     check_matmul128 = $test$plusargs("check_matmul128");
     repeat (4) @(posedge clk);
     reset_n <= 1'b1;
+    repeat (3) @(posedge clk);
+    core_start <= 1'b1;
+    @(posedge clk); core_start <= 1'b0;
     cycles = 0;
     while (!halted && cycles < TIMEOUT_CYCLES) begin
       @(posedge clk);
