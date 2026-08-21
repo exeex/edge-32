@@ -242,7 +242,7 @@ module edge_32_div_asap7 (
 );
   edge_32_div_srt4_native srt4 (
     .clk(clk), .reset_n(reset_n), .op_valid(op_valid), .op_ready(op_ready),
-    .op(4'd1), .src0(src0), .src1(src1), .funct3(funct3),
+    .src0(src0), .src1(src1), .funct3(funct3),
     .result_valid(result_valid), .result_value(result_value),
     .busy(busy), .op_latency(op_latency)
   );

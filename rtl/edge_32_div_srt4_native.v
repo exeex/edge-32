@@ -78,24 +78,19 @@ endmodule
 // and negative digits accumulate separately so the iterative feedback path
 // does not contain a wide quotient add/subtract.
 (* keep_hierarchy = "yes" *)
-module edge_32_div_srt4_native #(
-  parameter VALUE_WIDTH = 32,
-  parameter OP_WIDTH = 4
-) (
+module edge_32_div_srt4_native (
   input  wire                   clk,
   input  wire                   reset_n,
   input  wire                   op_valid,
   output wire                   op_ready,
-  input  wire [OP_WIDTH-1:0]    op,
-  input  wire [VALUE_WIDTH-1:0] src0,
-  input  wire [VALUE_WIDTH-1:0] src1,
+  input  wire [31:0]            src0,
+  input  wire [31:0]            src1,
   input  wire [2:0]             funct3,
   output reg                    result_valid,
-  output reg  [VALUE_WIDTH-1:0] result_value,
+  output reg  [31:0]            result_value,
   output wire                   busy,
   output wire [6:0]             op_latency
 );
-  localparam [OP_WIDTH-1:0] ALU_OP_OP = 4'd1;
   localparam [3:0] STATE_IDLE = 4'd0;
   localparam [3:0] STATE_FAST = 4'd1;
   localparam [3:0] STATE_ITER = 4'd2;
@@ -119,16 +114,11 @@ module edge_32_div_srt4_native #(
   endfunction
 
   reg [3:0] state_r;
-  reg [4:0] rounds_r;
   reg [5:0] scale_r;
-  reg [34:0] partial_sum_r;
-  reg [34:0] partial_carry_r;
   reg [34:0] aligned_divisor_r;
   reg signed [10:0] divisor_select_r;
   reg signed [10:0] divisor_x3_select_r;
   reg [31:0] divisor_mag_r;
-  reg [34:0] quotient_pos_r;
-  reg [34:0] quotient_neg_r;
   reg signed [34:0] quotient_binary_r;
   reg signed [34:0] partial_binary_r;
   reg signed [34:0] partial_scale_r;
@@ -136,7 +126,6 @@ module edge_32_div_srt4_native #(
   reg signed [1:0] correction_r;
   reg [31:0] quotient_mag_r;
   reg [31:0] remainder_mag_r;
-  reg word_r;
   reg rem_r;
   reg quotient_negative_r;
   reg remainder_negative_r;
@@ -190,15 +179,10 @@ module edge_32_div_srt4_native #(
     end
   endgenerate
 
-  wire is_word = 1'b0;
   wire signed_op = !funct3[0];
   wire is_remainder = funct3[1];
   wire src0_sign = src0[31];
   wire src1_sign = src1[31];
-  wire [31:0] src0_word_abs = signed_op && src0_sign ?
-                               (~src0[31:0] + 32'd1) : src0[31:0];
-  wire [31:0] src1_word_abs = signed_op && src1_sign ?
-                               (~src1[31:0] + 32'd1) : src1[31:0];
   wire [31:0] src0_full_abs = signed_op && src0_sign ?
                                (~src0 + 32'd1) : src0;
   wire [31:0] src1_full_abs = signed_op && src1_sign ?
@@ -236,70 +220,10 @@ module edge_32_div_srt4_native #(
   wire signed [34:0] normalized_initial_partial =
     initial_partial <<< normalize_shift;
 
-  // Estimate P=S+C from only the normalized high window.  The discarded low
-  // carry can perturb only the window LSB, well inside the redundant digit
-  // overlap; no full-width CPA is present in the iterative feedback path.
-  // Seven high bits are sufficient for the redundant selection interval.
-  // The omitted low carry changes the estimate by at most one window LSB;
-  // adjacent SRT digits intentionally overlap by more than that amount.
-  wire [6:0] partial_select_bits = partial_sum_r[34:28] +
-                                   partial_carry_r[34:28];
-  wire signed [7:0] partial_select =
-    $signed({partial_select_bits[6], partial_select_bits});
-  wire signed [10:0] partial_select_x8 = partial_select <<< 3;
-  reg q_pos2;
-  reg q_pos1;
-  reg q_zero;
-  reg q_neg1;
-  reg q_neg2;
-  always @* begin
-    q_pos2 = 1'b0;
-    q_pos1 = 1'b0;
-    q_zero = 1'b0;
-    q_neg1 = 1'b0;
-    q_neg2 = 1'b0;
-    if (partial_select_x8 >= divisor_x3_select_r)
-      q_pos2 = 1'b1;
-    else if (partial_select_x8 >= divisor_select_r)
-      q_pos1 = 1'b1;
-    else if (partial_select_x8 > -divisor_select_r)
-      q_zero = 1'b1;
-    else if (partial_select_x8 > -divisor_x3_select_r)
-      q_neg1 = 1'b1;
-    else
-      q_neg2 = 1'b1;
-  end
-
-  wire [34:0] partial_sum_shift = partial_sum_r << 2;
-  wire [34:0] partial_carry_shift = partial_carry_r << 2;
-  wire [34:0] digit_operand = q_pos2 ?
-    ~(aligned_divisor_r << 1) : q_pos1 ?
-    ~aligned_divisor_r : q_neg1 ?
-    aligned_divisor_r : q_neg2 ?
-    (aligned_divisor_r << 1) : 35'd0;
-  wire subtract_carry_in = q_pos1 || q_pos2;
-  wire [34:0] csa_sum0 = partial_sum_shift ^ partial_carry_shift ^
-                         digit_operand;
-  wire [34:0] csa_carry0 =
-    ((partial_sum_shift & partial_carry_shift) |
-     (partial_sum_shift & digit_operand) |
-     (partial_carry_shift & digit_operand)) << 1;
-  wire [34:0] carry_in_vector = {{34{1'b0}}, subtract_carry_in};
-  wire [34:0] partial_sum_next = csa_sum0 ^ csa_carry0 ^
-                                 carry_in_vector;
-  wire [34:0] partial_carry_next =
-    ((csa_sum0 & csa_carry0) |
-     (csa_sum0 & carry_in_vector) |
-     (csa_carry0 & carry_in_vector)) << 1;
-  wire [34:0] quotient_pos_shift = quotient_pos_r << 2;
-  wire [34:0] quotient_neg_shift = quotient_neg_r << 2;
-  wire [34:0] quotient_pos_next = quotient_pos_shift |
-    (q_pos1 ? 35'd1 : q_pos2 ? 35'd2 : 35'd0);
-  wire [34:0] quotient_neg_next = quotient_neg_shift |
-    (q_neg1 ? 35'd1 : q_neg2 ? 35'd2 : 35'd0);
-
-  wire [34:0] quotient_binary_next = quotient_pos_r - quotient_neg_r;
-  wire [34:0] partial_binary_next = partial_sum_r + partial_carry_r;
+  // Slot zero owns the final carry-save remainder and signed-digit quotient.
+  // Reusing it for COMBINE avoids a second 140-bit register bank.
+  wire [34:0] quotient_binary_next = ring_qpos_r[0] - ring_qneg_r[0];
+  wire [34:0] partial_binary_next = ring_sum_r[0] + ring_carry_r[0];
 
   // Truncated digit selection can leave one signed correction in either
   // direction. DECIDE isolates the comparison from these carry-select adders.
@@ -332,7 +256,6 @@ module edge_32_div_srt4_native #(
   wire [31:0] signed_remainder = remainder_negative_r ?
                                  negative_remainder_wide[31:0] : remainder_mag_r;
   wire [31:0] selected_result = rem_r ? signed_remainder : signed_quotient;
-  wire [31:0] word_result = selected_result;
 
   reg [31:0] fast_value;
   always @* begin
@@ -350,68 +273,86 @@ module edge_32_div_srt4_native #(
   assign busy = (state_r != STATE_IDLE) || result_valid;
   // Each pass through the two-slice ring consumes two radix-4 digits.  Exit
   // at the first pass boundary after all requested digits have completed.
-  wire [3:0] ring_passes = (srt_rounds + 5'd1) >> 1;
+  wire [3:0] ring_passes = srt_rounds[4:1] + srt_rounds[0];
   wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd7;
   assign op_latency = fast_case ? 7'd1 :
                       srt_rounds == 5'd0 ? 7'd7 : ring_latency;
 
-  integer ring_i;
+  reg [3:0] state_next;
+  reg [RING_STAGES-1:0] ring_valid_next;
+  reg ring_qds_phase_next;
+  reg result_valid_next;
+
+  always @* begin
+    state_next = state_r;
+    ring_valid_next = ring_valid_r;
+    ring_qds_phase_next = ring_qds_phase_r;
+    result_valid_next = 1'b0;
+    case (state_r)
+      STATE_IDLE: if (op_valid) begin
+        if (fast_case)
+          state_next = STATE_FAST;
+        else if (srt_rounds == 0)
+          state_next = STATE_COMBINE;
+        else begin
+          state_next = STATE_ITER;
+          ring_valid_next = {{(RING_STAGES-1){1'b0}}, 1'b1};
+          ring_qds_phase_next = 1'b1;
+        end
+      end
+      STATE_FAST: begin
+        state_next = STATE_IDLE;
+        result_valid_next = 1'b1;
+      end
+      STATE_ITER: if (ring_qds_phase_r) begin
+        ring_qds_phase_next = 1'b0;
+      end else begin
+        ring_qds_phase_next = 1'b1;
+        ring_valid_next[1] = ring_valid_r[0];
+        ring_valid_next[0] = ring_valid_r[1] &&
+                             (ring_rounds_next[1] != 5'd0);
+        if (ring_valid_r[1] && (ring_rounds_next[1] == 5'd0))
+          state_next = STATE_COMBINE;
+      end
+      STATE_COMBINE: state_next = STATE_SCALE_LOW;
+      STATE_SCALE_LOW: state_next = STATE_SCALE_MID;
+      STATE_SCALE_MID: state_next = STATE_SCALE_HIGH;
+      STATE_SCALE_HIGH: state_next = STATE_DECIDE;
+      STATE_DECIDE: state_next = STATE_CORRECT;
+      STATE_CORRECT: state_next = STATE_SIGN;
+      STATE_SIGN: begin
+        state_next = STATE_IDLE;
+        result_valid_next = 1'b1;
+      end
+      default: state_next = STATE_IDLE;
+    endcase
+  end
+
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       state_r <= STATE_IDLE;
-      rounds_r <= 5'd0;
-      scale_r <= 6'd0;
-      partial_sum_r <= 35'd0;
-      partial_carry_r <= 35'd0;
-      aligned_divisor_r <= 35'd0;
-      divisor_select_r <= 11'sd0;
-      divisor_x3_select_r <= 11'sd0;
-      divisor_mag_r <= 32'd0;
-      quotient_pos_r <= 35'd0;
-      quotient_neg_r <= 35'd0;
-      quotient_binary_r <= 35'sd0;
-      partial_binary_r <= 35'sd0;
-      partial_scale_r <= 35'sd0;
-      remainder_scaled_r <= 35'sd0;
-      correction_r <= 2'sd0;
-      quotient_mag_r <= 32'd0;
-      remainder_mag_r <= 32'd0;
-      word_r <= 1'b0;
-      rem_r <= 1'b0;
-      quotient_negative_r <= 1'b0;
-      remainder_negative_r <= 1'b0;
-      fast_value_r <= 32'd0;
       ring_valid_r <= {RING_STAGES{1'b0}};
       ring_qds_phase_r <= 1'b1;
-      for (ring_i = 0; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
-        ring_rounds_r[ring_i] <= 5'd0;
-        ring_sum_r[ring_i] <= 35'd0;
-        ring_carry_r[ring_i] <= 35'd0;
-        ring_qpos_r[ring_i] <= 35'd0;
-        ring_qneg_r[ring_i] <= 35'd0;
-        ring_q_pos2_r[ring_i] <= 1'b0;
-        ring_q_pos1_r[ring_i] <= 1'b0;
-        ring_q_neg1_r[ring_i] <= 1'b0;
-        ring_q_neg2_r[ring_i] <= 1'b0;
-      end
       result_valid <= 1'b0;
-      result_value <= 32'd0;
     end else begin
-      result_valid <= 1'b0;
+      state_r <= state_next;
+      ring_valid_r <= ring_valid_next;
+      ring_qds_phase_r <= ring_qds_phase_next;
+      result_valid <= result_valid_next;
+    end
+  end
+
+  integer ring_i;
+  always @(posedge clk) begin
       case (state_r)
         STATE_IDLE: if (op_valid) begin
-          word_r <= is_word;
           rem_r <= is_remainder;
           quotient_negative_r <= signed_op && (src0_sign ^ src1_sign);
           remainder_negative_r <= signed_op && src0_sign;
           if (fast_case) begin
             fast_value_r <= fast_value;
-            state_r <= STATE_FAST;
           end else begin
-            rounds_r <= srt_rounds;
             scale_r <= remainder_scale;
-            partial_sum_r <= normalized_initial_partial;
-            partial_carry_r <= 35'd0;
             aligned_divisor_r <= normalized_divisor;
             divisor_select_r <=
               $signed({4'b0000, normalized_divisor[34:28]});
@@ -419,28 +360,22 @@ module edge_32_div_srt4_native #(
               $signed({4'b0000, normalized_divisor[34:28]}) +
               ($signed({4'b0000, normalized_divisor[34:28]}) <<< 1);
             divisor_mag_r <= divisor_mag;
-            quotient_pos_r <= choose_initial_zero ? 35'd0 :
+            ring_rounds_r[0] <= srt_rounds;
+            ring_sum_r[0] <= normalized_initial_partial;
+            ring_carry_r[0] <= 35'd0;
+            ring_qpos_r[0] <= choose_initial_zero ? 35'd0 :
                               choose_initial_two ? 35'd2 : 35'd1;
-            quotient_neg_r <= 35'd0;
-            if (srt_rounds == 0) begin
-              state_r <= STATE_COMBINE;
-            end else begin
-              ring_valid_r <= {{(RING_STAGES-1){1'b0}}, 1'b1};
-              ring_qds_phase_r <= 1'b1;
-              ring_rounds_r[0] <= srt_rounds;
-              ring_sum_r[0] <= normalized_initial_partial;
-              ring_carry_r[0] <= 35'd0;
-              ring_qpos_r[0] <= choose_initial_zero ? 35'd0 :
-                                choose_initial_two ? 35'd2 : 35'd1;
-              ring_qneg_r[0] <= 35'd0;
-              state_r <= STATE_ITER;
+            ring_qneg_r[0] <= 35'd0;
+            if (srt_rounds != 0) begin
+              ring_q_pos2_r[0] <= 1'b0;
+              ring_q_pos1_r[0] <= 1'b0;
+              ring_q_neg1_r[0] <= 1'b0;
+              ring_q_neg2_r[0] <= 1'b0;
             end
           end
         end
         STATE_FAST: begin
           result_value <= fast_value_r;
-          result_valid <= 1'b1;
-          state_r <= STATE_IDLE;
         end
         STATE_ITER: begin
           if (ring_qds_phase_r) begin
@@ -450,19 +385,14 @@ module edge_32_div_srt4_native #(
               ring_q_neg1_r[ring_i] <= ring_q_neg1_next[ring_i];
               ring_q_neg2_r[ring_i] <= ring_q_neg2_next[ring_i];
             end
-            ring_qds_phase_r <= 1'b0;
           end else begin
-            ring_qds_phase_r <= 1'b1;
             for (ring_i = 1; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
-            ring_valid_r[ring_i] <= ring_valid_r[ring_i-1];
             ring_rounds_r[ring_i] <= ring_rounds_next[ring_i-1];
             ring_sum_r[ring_i] <= ring_sum_next[ring_i-1];
             ring_carry_r[ring_i] <= ring_carry_next[ring_i-1];
             ring_qpos_r[ring_i] <= ring_qpos_next[ring_i-1];
             ring_qneg_r[ring_i] <= ring_qneg_next[ring_i-1];
             end
-            ring_valid_r[0] <= ring_valid_r[RING_STAGES-1] &&
-                               (ring_rounds_next[RING_STAGES-1] != 5'd0);
             if (ring_valid_r[RING_STAGES-1] &&
                 (ring_rounds_next[RING_STAGES-1] != 5'd0)) begin
               ring_rounds_r[0] <= ring_rounds_next[RING_STAGES-1];
@@ -473,19 +403,17 @@ module edge_32_div_srt4_native #(
             end
             if (ring_valid_r[RING_STAGES-1] &&
                 (ring_rounds_next[RING_STAGES-1] == 5'd0)) begin
-              partial_sum_r <= ring_sum_next[RING_STAGES-1];
-              partial_carry_r <= ring_carry_next[RING_STAGES-1];
-              quotient_pos_r <= ring_qpos_next[RING_STAGES-1];
-              quotient_neg_r <= ring_qneg_next[RING_STAGES-1];
-              rounds_r <= ring_rounds_next[RING_STAGES-1];
-              state_r <= STATE_COMBINE;
+              ring_rounds_r[0] <= ring_rounds_next[RING_STAGES-1];
+              ring_sum_r[0] <= ring_sum_next[RING_STAGES-1];
+              ring_carry_r[0] <= ring_carry_next[RING_STAGES-1];
+              ring_qpos_r[0] <= ring_qpos_next[RING_STAGES-1];
+              ring_qneg_r[0] <= ring_qneg_next[RING_STAGES-1];
             end
           end
         end
         STATE_COMBINE: begin
           quotient_binary_r <= $signed(quotient_binary_next);
           partial_binary_r <= $signed(partial_binary_next);
-          state_r <= STATE_SCALE_LOW;
         end
         STATE_SCALE_LOW: begin
           case (scale_r[1:0])
@@ -494,7 +422,6 @@ module edge_32_div_srt4_native #(
             2'd3: partial_scale_r <= partial_binary_r >>> 3;
             default: partial_scale_r <= partial_binary_r;
           endcase
-          state_r <= STATE_SCALE_MID;
         end
         STATE_SCALE_MID: begin
           case (scale_r[3:2])
@@ -503,15 +430,13 @@ module edge_32_div_srt4_native #(
             2'd3: partial_scale_r <= partial_scale_r >>> 12;
             default: partial_scale_r <= partial_scale_r;
           endcase
-          state_r <= STATE_SCALE_HIGH;
         end
         STATE_SCALE_HIGH: begin
           case (scale_r[5:4])
-            3'd1: remainder_scaled_r <= partial_scale_r >>> 16;
-            3'd2: remainder_scaled_r <= partial_scale_r >>> 32;
+            2'd1: remainder_scaled_r <= partial_scale_r >>> 16;
+            2'd2: remainder_scaled_r <= partial_scale_r >>> 32;
             default: remainder_scaled_r <= partial_scale_r;
           endcase
-          state_r <= STATE_DECIDE;
         end
         STATE_DECIDE: begin
           if (remainder_scaled_r < 0)
@@ -520,21 +445,16 @@ module edge_32_div_srt4_native #(
             correction_r <= 2'sd1;
           else
             correction_r <= 2'sd0;
-          state_r <= STATE_CORRECT;
         end
         STATE_CORRECT: begin
           quotient_mag_r <= corrected_quotient[31:0];
           remainder_mag_r <= corrected_remainder[31:0];
-          state_r <= STATE_SIGN;
         end
         STATE_SIGN: begin
-          result_value <= word_r ? word_result : selected_result;
-          result_valid <= 1'b1;
-          state_r <= STATE_IDLE;
+          result_value <= selected_result;
         end
-        default: state_r <= STATE_IDLE;
+        default: ;
       endcase
-    end
   end
 endmodule
 

@@ -604,12 +604,13 @@ add_custom_command(
   DEPENDS ${AXI_CORE_RTL}
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_axi_coremark_tb.v)
 add_custom_target(edge_rv_lite_axi_coremark_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb)
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb
+          ${EDGE32_COREMARK_MEM64})
 add_test(NAME edge_rv_lite_axi_coremark
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb
-          +mem64=${EDGE_COREMARK_MEM64})
+          +mem64=${EDGE32_COREMARK_MEM64})
 set_tests_properties(edge_rv_lite_axi_coremark PROPERTIES
-  REQUIRED_FILES "${EDGE_COREMARK_MEM64}" TIMEOUT 60)
+  REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 60)
 
 set(EDGE_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 set(EDGE_LITE_TENSOR_DIR "${CMAKE_CURRENT_BINARY_DIR}/tensor_stream64")
