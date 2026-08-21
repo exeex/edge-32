@@ -67,12 +67,12 @@ module edge_rv_lite_fault_tb;
         imem_resp_error <= imem_req_valid;
       end
       FETCH_STORE_FAULT: begin
-        imem_resp_data <= 32'h0000_3023; // sd x0,0(x0)
+        imem_resp_data <= 32'h0000_2023; // sw x0,0(x0)
         imem_resp_error <= imem_req_valid;
       end
       LOAD_RESP_FAULT: begin
         imem_resp_data <= imem_req_addr == 0 ?
-          32'h0000_3283 : 32'h0010_0073; // ld x5,0(x0); ebreak
+          32'h0000_2283 : 32'h0010_0073; // lw x5,0(x0); ebreak
       end
       ACCEL_RESP_FAULT: begin
         case (imem_req_addr)
@@ -98,10 +98,10 @@ module edge_rv_lite_fault_tb;
         imem_resp_data <= 32'h0000_0287;
       end
       MISALIGNED_LOAD: begin
-        imem_resp_data <= 32'h0010_3283; // ld x5,1(x0)
+        imem_resp_data <= 32'h0010_2283; // lw x5,1(x0)
       end
       MISALIGNED_STORE: begin
-        imem_resp_data <= 32'h0000_30a3; // sd x0,1(x0)
+        imem_resp_data <= 32'h0000_20a3; // sw x0,1(x0)
       end
       default: imem_resp_data <= 32'h0010_0073;
     endcase

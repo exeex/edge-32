@@ -7,16 +7,16 @@ module edge_rv_lite_pipeline_tb;
   wire id_valid; wire [39:0] id_pc; wire [63:0] id_inst; wire id_is_64b;
   wire id_error;
   reg [4:0] id_rs1 = 0, id_rs2 = 0;
-  reg [63:0] id_rs1_raw = 0, id_rs2_raw = 0;
+  reg [31:0] id_rs1_raw = 0, id_rs2_raw = 0;
   reg [3:0] id_op_class = 0;
   reg id_legal = 1, id_writes_gpr = 0;
   wire ex_valid; wire [39:0] ex_pc; wire [63:0] ex_inst; wire ex_is_64b;
   wire ex_error;
-  wire [63:0] ex_rs1_value, ex_rs2_value;
+  wire [31:0] ex_rs1_value, ex_rs2_value;
   wire [3:0] ex_op_class;
   wire ex_legal, ex_writes_gpr;
   reg ex_done = 1, ex_write_valid = 0, ex_redirect_valid = 0;
-  reg [4:0] ex_write_rd = 0; reg [63:0] ex_write_value = 0;
+  reg [4:0] ex_write_rd = 0; reg [31:0] ex_write_value = 0;
   edge_rv_lite_pipeline dut(.*);
 
   task push;
@@ -38,10 +38,10 @@ module edge_rv_lite_pipeline_tb;
       begin $display("three-stage overlap missing"); $finish; end
 
     // Completing EX x1 result forwards into the dependent ID instruction.
-    id_rs1 <= 5'd1; id_rs1_raw <= 64'hdead;
-    ex_write_valid <= 1; ex_write_rd <= 5'd1; ex_write_value <= 64'h55;
+    id_rs1 <= 5'd1; id_rs1_raw <= 32'hdead;
+    ex_write_valid <= 1; ex_write_rd <= 5'd1; ex_write_value <= 32'h55;
     @(posedge clk); ex_write_valid <= 0;
-    if (!ex_valid || ex_pc != 4 || ex_rs1_value != 64'h55)
+    if (!ex_valid || ex_pc != 4 || ex_rs1_value != 32'h55)
       begin $display("EX-to-ID forwarding failed"); $finish; end
 
     // Variable-latency EX freezes both ID and fetch acceptance.

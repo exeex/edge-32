@@ -15,6 +15,16 @@ advance on the same edge. A redirect from EX clears ID and the current EX valid
 after the branch completes; the frontend independently restarts target fetch.
 There are no sequence IDs, epochs, RTU records, completion ports, or snapshots.
 
+The architectural value path is 32 bits: the GPR file, ID operands, EX operand
+registers, completion forwarding, immediates, and GPR writeback all use XLEN=32.
+Wider cache, DTCM, AXI, counter, FPU, and Edge64 command interfaces are system
+boundaries and are explicitly extended or truncated at the containing core.
+
+The `edge32-xlen32` Xilinx synthesis checkpoint maps the complete lite core to
+10,682 cells, including 4 DSP48E1, 2,088 flip-flops, and 5,120 LUT1-LUT6 cells.
+This is the first retained whole-core checkpoint after narrowing the value path,
+so it is a cumulative baseline rather than an adjacent-revision area delta.
+
 The pipeline carries a complete 64-bit instruction plus an explicit
 `is_64b` bit. Scalar instructions keep their upper word zero. The separate
 `edge_rv_lite_instruction_assembler` consumes ordered 32-bit frontend parcels;

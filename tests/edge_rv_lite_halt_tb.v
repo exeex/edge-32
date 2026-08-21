@@ -146,7 +146,7 @@ module edge_rv_lite_halt_tb;
       if (selected_case == FORMER_MAILBOX_STORE_CASE &&
           (!last_dmem_write || last_dmem_addr != FORMER_MAILBOX_ADDR ||
            last_dmem_wdata != 64'd42 || last_dmem_wstrb != 8'h0f ||
-           dut.gpr[7] != 64'd7))
+           dut.gpr[7] != 32'd7))
         $fatal(1, "former mailbox address was not an ordinary store");
     end
   endtask

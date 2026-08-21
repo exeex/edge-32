@@ -43,9 +43,9 @@ module edge_32_muldiv_core_tb;
     repeat(3) @(posedge clk); reset_n=1; timeout=0;
     while(!halted && timeout<150) begin @(posedge clk); timeout=timeout+1; end
     if(!halted||illegal) $fatal(1,"RV32M core did not halt normally");
-    if(dut.gpr[7]!==64'h0000_0000_ffff_fffe)
+    if(dut.gpr[7]!==32'hffff_fffe)
       $fatal(1,"DIV writeback mismatch: %h",dut.gpr[7]);
-    if(dut.gpr[8]!==64'h0000_0000_ffff_ffff)
+    if(dut.gpr[8]!==32'hffff_ffff)
       $fatal(1,"MULH writeback mismatch: %h",dut.gpr[8]);
     $display("TEST PASS: edge_32 core RV32M execute/stall/writeback");
     $finish;

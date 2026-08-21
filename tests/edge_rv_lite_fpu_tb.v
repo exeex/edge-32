@@ -36,7 +36,7 @@ module edge_rv_lite_fpu_tb;
       16: imem_resp_data<=32'h00f00293; // addi x5,x0,15 (E2M1 -6)
       20: imem_resp_data<=32'hf60280d3; // fmv.s.xfp4 f1,x5
       24: imem_resp_data<=32'he6008353; // fmv.xfp4.s x6,f1
-      28: imem_resp_data<=32'h00603823; // sd x6,16(x0)
+      28: imem_resp_data<=32'h00602823; // sw x6,16(x0)
       32: imem_resp_data<=32'h00001387; // fp16 load f7,0(x0)
       36: imem_resp_data<=32'h00701c27; // fp16 store f7,24(x0)
       40: imem_resp_data<=32'h00005407; // bf16 load f8,0(x0)
@@ -61,7 +61,7 @@ module edge_rv_lite_fpu_tb;
           $fatal(1,"bad FP32 store strb=%h data=%h",dmem_req_wstrb,dmem_req_wdata);
         saw_fp32_store<=1;
       end else if(dmem_req_addr==16) begin
-        if(dmem_req_wstrb!=8'hff||dmem_req_wdata!=64'hf)
+        if(dmem_req_wstrb!=8'h0f||dmem_req_wdata[31:0]!=32'hf)
           $fatal(1,"bad FP4 GPR store strb=%h data=%h",dmem_req_wstrb,dmem_req_wdata);
         saw_fp4_store<=1;
       end else if(dmem_req_addr==24) begin

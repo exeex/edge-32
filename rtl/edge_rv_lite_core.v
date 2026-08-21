@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Bootable RV64IM_Zba three-stage core. Variable-latency EX freezes IF/ID.
+// Bootable RV32IM_Zba three-stage core. Variable-latency EX freezes IF/ID.
 module edge_rv_lite_core #(
   parameter PC_WIDTH = 40,
   parameter DMEM_RESP_FORMATTED = 0,
@@ -36,7 +36,7 @@ module edge_rv_lite_core #(
   localparam [3:0] A_IMM=0, A_OP=1, A_IMM32=2, A_OP32=3,
     A_LUI=4, A_AUIPC=5, A_JAL=6, A_JALR=7, A_BRANCH=8,
     A_ZBA=9, A_ZBA_UW=10;
-  reg [63:0] gpr [0:31];
+  reg [31:0] gpr [0:31];
   reg [63:0] cycle_q, instret_q;
   reg [4:0] fflags_q;
   reg [2:0] frm_q;
@@ -52,7 +52,7 @@ module edge_rv_lite_core #(
   wire [PC_WIDTH-1:0] id_pc; wire [63:0] id_inst;
   wire ex_valid, ex_error, ex_is_64b;
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
-  wire [63:0] ex_rs1_value, ex_rs2_value;
+  wire [31:0] ex_rs1_value, ex_rs2_value;
   wire [4:0] id_scalar_rs1=id_inst[19:15], id_scalar_rs2=id_inst[24:20];
   wire [3:0] id_decoded_class;
   wire id_decoded_legal;
@@ -69,8 +69,8 @@ module edge_rv_lite_core #(
   wire [4:0] id_rs1=id_scalar_rs1;
   wire [4:0] id_rs2=id_is_accel ?
     (id_decoded_needs_capture ? id_decoded_capture_src_gpr:5'd0):id_scalar_rs2;
-  wire [63:0] id_rs1_raw=id_rs1==0 ? 0 : gpr[id_rs1];
-  wire [63:0] id_rs2_raw=id_rs2==0 ? 0 : gpr[id_rs2];
+  wire [31:0] id_rs1_raw=id_rs1==0 ? 0 : gpr[id_rs1];
+  wire [31:0] id_rs2_raw=id_rs2==0 ? 0 : gpr[id_rs2];
   wire [3:0] decoded_class;
   wire decoded_legal, decoded_writes_gpr;
 
@@ -123,12 +123,12 @@ module edge_rv_lite_core #(
 
   wire [11:0] i12=ex_inst[31:20];
   wire [11:0] s12={ex_inst[31:25],ex_inst[11:7]};
-  wire [63:0] imm_i={{52{i12[11]}},i12};
-  wire [63:0] imm_s={{52{s12[11]}},s12};
-  wire [63:0] imm_u={{32{ex_inst[31]}},ex_inst[31:12],12'b0};
-  wire [63:0] imm_b={{51{ex_inst[31]}},ex_inst[31],ex_inst[7],
+  wire [31:0] imm_i={{20{i12[11]}},i12};
+  wire [31:0] imm_s={{20{s12[11]}},s12};
+  wire [31:0] imm_u={ex_inst[31:12],12'b0};
+  wire [31:0] imm_b={{19{ex_inst[31]}},ex_inst[31],ex_inst[7],
     ex_inst[30:25],ex_inst[11:8],1'b0};
-  wire [63:0] imm_j={{43{ex_inst[31]}},ex_inst[31],ex_inst[19:12],
+  wire [31:0] imm_j={{11{ex_inst[31]}},ex_inst[31],ex_inst[19:12],
     ex_inst[20],ex_inst[30:21],1'b0};
   reg [3:0] alu_op;
   always @* begin
@@ -143,18 +143,20 @@ module edge_rv_lite_core #(
   wire [31:0] fast_result;
   edge_32_alu #(.PC_WIDTH(PC_WIDTH)) fast_alu(
     .fast_issue_op(alu_op),.fast_issue_pc(ex_pc),
-    .fast_issue_src0_value(ex_rs1_value[31:0]),
-    .fast_issue_src1_value(ex_rs2_value[31:0]),
-    .fast_issue_imm((is_lui||is_auipc)?imm_u[31:0]:imm_i[31:0]),
+    .fast_issue_src0_value(ex_rs1_value),
+    .fast_issue_src1_value(ex_rs2_value),
+    .fast_issue_imm((is_lui||is_auipc)?imm_u:imm_i),
     .fast_issue_funct3(f3),
     .fast_issue_funct7_bit5(ex_inst[30]),.fast_issue_funct7_is_m(1'b0),
     .fast_issue_shamt(ex_inst[24:20]),
     .fast_result(fast_result));
   wire branch_taken; wire [PC_WIDTH-1:0] branch_target;
   edge_scalar_branch branch(.branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
-    .branch_issue_src0_value(ex_rs1_value),.branch_issue_src1_value(ex_rs2_value),
-    .branch_issue_imm(imm_i),.branch_issue_branch_imm(imm_b),
-    .branch_issue_jal_imm(imm_j),.branch_issue_funct3(f3),
+    .branch_issue_src0_value({{32{ex_rs1_value[31]}},ex_rs1_value}),
+    .branch_issue_src1_value({{32{ex_rs2_value[31]}},ex_rs2_value}),
+    .branch_issue_imm({{32{imm_i[31]}},imm_i}),
+    .branch_issue_branch_imm({{32{imm_b[31]}},imm_b}),
+    .branch_issue_jal_imm({{32{imm_j[31]}},imm_j}),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
   wire mul_ready,mul_result_valid,mul_busy; wire [31:0] mul_result;
@@ -162,7 +164,7 @@ module edge_rv_lite_core #(
   wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
   edge_32_muldiv muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
-    .src0(ex_rs1_value[31:0]),.src1(ex_rs2_value[31:0]),.funct3(f3),
+    .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
     .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
     .op_latency(mul_latency));
 
@@ -178,8 +180,11 @@ module edge_rv_lite_core #(
     .clk(clk),.reset_n(reset_n),.op_valid(lsu_start),
     .op_ready(lsu_ready),.op_store(is_store||is_fp_store),
     .op_fp(is_fp_load||is_fp_store),.op_funct3(f3),
-    .op_base(ex_rs1_value),.op_offset((is_store||is_fp_store)?imm_s:imm_i),
-    .op_store_data(is_fp_store?fp_store_value:ex_rs2_value),.mem_req_valid(dmem_req_valid),
+    .op_base({32'd0,ex_rs1_value}),
+    .op_offset({{32{(is_store||is_fp_store)?imm_s[31]:imm_i[31]}},
+                (is_store||is_fp_store)?imm_s:imm_i}),
+    .op_store_data(is_fp_store?fp_store_value:{32'd0,ex_rs2_value}),
+    .mem_req_valid(dmem_req_valid),
     .mem_req_ready(dmem_req_ready),.mem_req_write(dmem_req_write),
     .mem_req_addr(dmem_req_addr),.mem_req_wdata(dmem_req_wdata),
     .mem_req_wstrb(dmem_req_wstrb),.mem_req_size(dmem_req_size),
@@ -194,7 +199,7 @@ module edge_rv_lite_core #(
       .clk(clk),.reset_n(reset_n),
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
       .issue_ready(fpu_ready),.issue_inst(ex_inst[31:0]),
-      .issue_gpr_src(ex_rs1_value),.issue_frm(frm_q),
+      .issue_gpr_src({32'd0,ex_rs1_value}),.issue_frm(frm_q),
       .issue_legal(fpu_legal),
       .complete_valid(fpu_done),.complete_gpr_write(fpu_gpr_write),
       .complete_rd(fpu_rd),.complete_value(fpu_value),
@@ -212,14 +217,14 @@ module edge_rv_lite_core #(
 
   assign accel_req_valid=ex_issue_ok&&is_accel&&!accel_started_q;
   assign accel_req_inst=ex_inst;
-  assign accel_req_src0=ex_rs1_value;
-  assign accel_req_src1=ex_rs2_value;
+  assign accel_req_src0={32'd0,ex_rs1_value};
+  assign accel_req_src1={32'd0,ex_rs2_value};
   wire accel_req_fire=accel_req_valid&&accel_req_ready;
   wire accel_done=is_accel&&accel_started_q&&accel_resp_valid;
   assign cache_op_valid=ex_issue_ok&&is_edge_cache&&!cache_started_q;
   assign cache_op_is_va=f3==3'b001;
   assign cache_op_kind=ex_inst[21:20];
-  assign cache_op_addr=ex_rs1_value;
+  assign cache_op_addr={32'd0,ex_rs1_value};
   wire cache_req_fire=cache_op_valid&&cache_op_ready;
   wire cache_done=is_edge_cache&&cache_started_q&&cache_op_complete_valid;
   assign icache_invalidate_valid=
@@ -245,15 +250,14 @@ module edge_rv_lite_core #(
   wire redirect=branch_redirect||fence_i_done;
   wire [PC_WIDTH-1:0] redirect_pc=fence_i_done ?
     ex_pc+{{(PC_WIDTH-3){1'b0}},3'd4}:branch_target;
-  wire [63:0] wb_value=is_accel?accel_resp_value:is_fp_compute?fpu_value:
-    is_muldiv?{32'd0,mul_result}:is_load?lsu_value:
-    is_cycle?cycle_q:is_instret?instret_q:is_fp_csr?
-    (ex_inst[31:20]==12'h001 ? {59'd0,fflags_q} :
-     ex_inst[31:20]==12'h002 ? {61'd0,frm_q} : {56'd0,frm_q,fflags_q}):
-    is_hardware_id?
-    {9'd2,EDGE_ASIC_ID[46:32],(ENABLE_FPU?4'd1:4'd0),4'd0,
-     EDGE_ASIC_ID[31:0]}:{32'd0,fast_result};
-  wire [63:0] fp_csr_source=f3[2]?{59'd0,ex_inst[19:15]}:ex_rs1_value;
+  wire [31:0] wb_value=is_accel?accel_resp_value[31:0]:
+    is_fp_compute?fpu_value[31:0]:is_muldiv?mul_result:
+    is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
+    is_instret?instret_q[31:0]:is_fp_csr?
+    (ex_inst[31:20]==12'h001 ? {27'd0,fflags_q} :
+     ex_inst[31:20]==12'h002 ? {29'd0,frm_q} : {24'd0,frm_q,fflags_q}):
+    is_hardware_id?EDGE_ASIC_ID[31:0]:fast_result;
+  wire [31:0] fp_csr_source=f3[2]?{27'd0,ex_inst[19:15]}:ex_rs1_value;
   wire [7:0] fp_csr_old=(ex_inst[31:20]==12'h001)?
                         {3'd0,fflags_q}:
                         (ex_inst[31:20]==12'h002)?
@@ -282,7 +286,8 @@ module edge_rv_lite_core #(
     .op_valid(if_valid), .op_ready(if_ready), .op_pc(if_pc),
     .op_inst(if_inst), .op_is_64b(if_is_64b), .op_error(if_error),
     .flush(redirect||frontend_stop));
-  edge_rv_lite_pipeline pipeline(.clk(clk),.reset_n(reset_n),
+  edge_rv_lite_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
+    .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
     .id_valid(id_valid),.id_pc(id_pc), .id_inst(id_inst),
@@ -297,7 +302,8 @@ module edge_rv_lite_core #(
     .ex_write_valid(wb_valid),.ex_write_rd(rd),.ex_write_value(wb_value),
     .ex_redirect_valid(redirect||terminal_complete||halted));
 
-  assign debug_x31=gpr[31]; assign cycle_count=cycle_q; assign instret_count=instret_q;
+  assign debug_x31={32'd0,gpr[31]};
+  assign cycle_count=cycle_q; assign instret_count=instret_q;
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
       for(ri=0;ri<32;ri=ri+1) gpr[ri]<=0;

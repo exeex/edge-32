@@ -45,17 +45,17 @@ module edge_rv_lite_fcsr_tb;
       40'h28: imem_resp_data<=32'h01c02107; // flw f2,28(x0): 0.5
       40'h2c: imem_resp_data<=32'h102081d3; // fmul.s: UF|NX
       40'h30: imem_resp_data<=32'h001022f3; // csrr x5,fflags
-      40'h34: imem_resp_data<=32'h04503023; // sd x5,64(x0)
+      40'h34: imem_resp_data<=32'h04502023; // sw x5,64(x0)
       40'h38: imem_resp_data<=32'h0021d073; // csrwi frm,3 (RUP)
       40'h3c: imem_resp_data<=32'h02002087; // flw f1,32(x0): 1.0
       40'h40: imem_resp_data<=32'h02402107; // flw f2,36(x0): 2^-24
       40'h44: imem_resp_data<=32'h0020f1d3; // fadd.s dynamic
       40'h48: imem_resp_data<=32'h04302427; // fsw f3,72(x0)
       40'h4c: imem_resp_data<=32'h002023f3; // csrr x7,frm
-      40'h50: imem_resp_data<=32'h04703823; // sd x7,80(x0)
+      40'h50: imem_resp_data<=32'h04702823; // sw x7,80(x0)
       40'h54: imem_resp_data<=32'h00101073; // csrw fflags,x0
       40'h58: imem_resp_data<=32'h00102473; // csrr x8,fflags
-      40'h5c: imem_resp_data<=32'h04803c23; // sd x8,88(x0)
+      40'h5c: imem_resp_data<=32'h04802c23; // sw x8,88(x0)
       default: imem_resp_data<=32'h00100073; // ebreak
     endcase
 
@@ -72,7 +72,7 @@ module edge_rv_lite_fcsr_tb;
     if(dmem_req_valid&&dmem_req_write) begin
       case(dmem_req_addr)
         64'd64: begin
-          if(dmem_req_wstrb!=8'hff||dmem_req_wdata!=64'h1f)
+          if(dmem_req_wstrb!=8'h0f||dmem_req_wdata[31:0]!=32'h1f)
             $fatal(1,"fflags did not accumulate all five flags: %h",
                    dmem_req_wdata);
           saw_flags<=1;
@@ -83,12 +83,12 @@ module edge_rv_lite_fcsr_tb;
           saw_dynamic<=1;
         end
         64'd80: begin
-          if(dmem_req_wstrb!=8'hff||dmem_req_wdata!=64'd3)
+          if(dmem_req_wstrb!=8'h0f||dmem_req_wdata[31:0]!=32'd3)
             $fatal(1,"frm CSR read mismatch: %h",dmem_req_wdata);
           saw_frm<=1;
         end
         64'd88: begin
-          if(dmem_req_wstrb!=8'hff||dmem_req_wdata!=64'd0)
+          if(dmem_req_wstrb!=8'h0f||dmem_req_wdata[31:0]!=32'd0)
             $fatal(1,"fflags CSR clear mismatch: %h",dmem_req_wdata);
           saw_clear<=1;
         end
