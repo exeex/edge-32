@@ -157,12 +157,12 @@ module edge_rv_lite_core #(
     .branch_issue_jal_imm(imm_j),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
-  wire mul_ready,mul_result_valid,mul_busy; wire [63:0] mul_result;
-  wire [5:0] mul_latency;
+  wire mul_ready,mul_result_valid,mul_busy; wire [31:0] mul_result;
+  wire [6:0] mul_latency;
   wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
-  edge_scalar_muldiv_kernel #(.ASAP7_IMPLEMENTATION(MULDIV_ASAP7)) muldiv(.clk(clk),.reset_n(reset_n),
-    .op_valid(mul_start),.op_ready(mul_ready),.op(alu_op),
-    .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
+  edge_32_muldiv muldiv(.clk(clk),.reset_n(reset_n),
+    .op_valid(mul_start),.op_ready(mul_ready),
+    .src0(ex_rs1_value[31:0]),.src1(ex_rs2_value[31:0]),.funct3(f3),
     .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
     .op_latency(mul_latency));
 
@@ -246,7 +246,7 @@ module edge_rv_lite_core #(
   wire [PC_WIDTH-1:0] redirect_pc=fence_i_done ?
     ex_pc+{{(PC_WIDTH-3){1'b0}},3'd4}:branch_target;
   wire [63:0] wb_value=is_accel?accel_resp_value:is_fp_compute?fpu_value:
-    is_muldiv?mul_result:is_load?lsu_value:
+    is_muldiv?{32'd0,mul_result}:is_load?lsu_value:
     is_cycle?cycle_q:is_instret?instret_q:is_fp_csr?
     (ex_inst[31:20]==12'h001 ? {59'd0,fflags_q} :
      ex_inst[31:20]==12'h002 ? {61'd0,frm_q} : {56'd0,frm_q,fflags_q}):

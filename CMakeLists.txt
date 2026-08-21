@@ -24,6 +24,19 @@ add_test(NAME edge_32_alu
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb)
 
 add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj/Vedge_32_muldiv_tb
+  COMMAND ${VERILATOR} --binary --timing --top-module edge_32_muldiv_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_tb.v)
+add_custom_target(edge_32_muldiv_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj/Vedge_32_muldiv_tb)
+add_test(NAME edge_32_muldiv
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj/Vedge_32_muldiv_tb)
+
+add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_rv_lite_pipeline_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/obj_dir
@@ -110,19 +123,8 @@ set(CORE_RTL
   ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv.v
   ${EDGE_RV_ROOT}/edge_scalar_branch/edge_scalar_branch.v
-  ${EDGE_RV_ROOT}/edge_scalar_divrem/edge_scalar_divrem.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_code_33.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_compressor.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_add16_carry_select8.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_add64_carry_select16.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_booth_lane.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul32_dual_booth_pipeline.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/rtl/edge_mul64_dual_booth.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_generic.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel_asap7.v
-  ${EDGE_RV_ROOT}/edge_scalar_muldiv/edge_scalar_muldiv_kernel.v
   ${FPU_RTL}
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_frontend.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_instruction_assembler.v
@@ -130,6 +132,20 @@ set(CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_lsu.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_fp_mem_format.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_core.v)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb
+  COMMAND ${VERILATOR} --binary --timing -Wno-fatal
+          --top-module edge_32_muldiv_core_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj
+          ${CORE_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_core_tb.v
+  DEPENDS ${CORE_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_core_tb.v)
+add_custom_target(edge_32_muldiv_core_vvp
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb)
+add_test(NAME edge_32_muldiv_core
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fpu_alu_obj/Vedge_fpu_alu_tb
