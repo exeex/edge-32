@@ -89,6 +89,27 @@ add_custom_target(edge_32_muldiv_vvp ALL
 add_test(NAME edge_32_muldiv
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_obj/Vedge_32_muldiv_tb)
 
+set(EDGE32_ASAP7_MULDIV_RTL
+  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_scalar_muldiv/rtl/edge_mul32_booth_code_33.v
+  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_scalar_muldiv/rtl/edge_mul32_booth_compressor.v
+  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_scalar_muldiv/rtl/edge_add16_carry_select8.v
+  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_scalar_muldiv/rtl/edge_add64_carry_select16.v
+  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_scalar_muldiv/rtl/edge_mul32_booth_lane.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv_asap7.v)
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_asap7_obj/Vedge_32_muldiv_tb
+  COMMAND ${VERILATOR} --binary --timing --Wno-fatal -DEDGE32_ASAP7
+          --top-module edge_32_muldiv_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_asap7_obj
+          ${EDGE32_ASAP7_MULDIV_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_tb.v
+  DEPENDS ${EDGE32_ASAP7_MULDIV_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_muldiv_tb.v)
+add_custom_target(edge_32_muldiv_asap7_vvp
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_asap7_obj/Vedge_32_muldiv_tb)
+add_test(NAME edge_32_muldiv_asap7
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_asap7_obj/Vedge_32_muldiv_tb)
+
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_rv_lite_pipeline_tb

@@ -10,8 +10,14 @@ module edge_32_muldiv_tb;
   wire [31:0] result_value;
   wire [6:0] op_latency;
   integer cycles;
+  integer random_index;
+  reg [31:0] random_lhs, random_rhs;
 
+`ifdef EDGE32_ASAP7
+  edge_32_muldiv_asap7 dut(.*);
+`else
   edge_32_muldiv dut(.*);
+`endif
 
   task run_op;
     input [2:0] selected_funct3;
@@ -25,7 +31,7 @@ module edge_32_muldiv_tb;
       funct3=selected_funct3; src0=lhs; src1=rhs; op_valid=1;
       @(posedge clk); #1; op_valid=0; cycles=0;
       while(!result_valid && cycles<max_cycles) begin
-        if(selected_funct3[2] && cycles<31 && op_ready)
+        if(selected_funct3[2] && busy && op_ready)
           $fatal(1,"divider released ready before completion");
         @(posedge clk); #1; cycles=cycles+1;
       end
@@ -39,18 +45,29 @@ module edge_32_muldiv_tb;
 
   initial begin
     repeat(3) @(posedge clk); reset_n=1;
-    run_op(3'b000,32'hffff_fffe,32'd2,32'hffff_fffc,2);
-    run_op(3'b001,32'hffff_fffe,32'd3,32'hffff_ffff,2);
-    run_op(3'b010,32'hffff_fffe,32'h8000_0000,32'hffff_ffff,2);
-    run_op(3'b011,32'hffff_ffff,32'd2,32'd1,2);
+    run_op(3'b000,32'hffff_fffe,32'd2,32'hffff_fffc,10);
+    run_op(3'b001,32'hffff_fffe,32'd3,32'hffff_ffff,10);
+    run_op(3'b010,32'hffff_fffe,32'h8000_0000,32'hffff_ffff,10);
+    run_op(3'b011,32'hffff_ffff,32'd2,32'd1,10);
     run_op(3'b100,-32'd7,32'd3,-32'd2,40);
     run_op(3'b101,32'hffff_fff9,32'd3,32'h5555_5553,40);
     run_op(3'b110,-32'd7,32'd3,32'hffff_ffff,40);
     run_op(3'b111,32'hffff_fff9,32'd3,32'd0,40);
-    run_op(3'b100,32'd9,32'd0,32'hffff_ffff,2);
-    run_op(3'b110,32'hffff_fff7,32'd0,32'hffff_fff7,2);
-    run_op(3'b100,32'h8000_0000,32'hffff_ffff,32'h8000_0000,2);
-    run_op(3'b110,32'h8000_0000,32'hffff_ffff,32'd0,2);
+    run_op(3'b100,32'd9,32'd0,32'hffff_ffff,10);
+    run_op(3'b110,32'hffff_fff7,32'd0,32'hffff_fff7,10);
+    run_op(3'b100,32'h8000_0000,32'hffff_ffff,32'h8000_0000,10);
+    run_op(3'b110,32'h8000_0000,32'hffff_ffff,32'd0,10);
+
+    for(random_index=0;random_index<64;random_index=random_index+1) begin
+      random_lhs=$urandom;
+      random_rhs=$urandom | 32'd1;
+      run_op(3'b100,random_lhs,random_rhs,
+             $signed(random_lhs)/$signed(random_rhs),40);
+      run_op(3'b101,random_lhs,random_rhs,random_lhs/random_rhs,40);
+      run_op(3'b110,random_lhs,random_rhs,
+             $signed(random_lhs)%$signed(random_rhs),40);
+      run_op(3'b111,random_lhs,random_rhs,random_lhs%random_rhs,40);
+    end
 
     @(negedge clk); funct3=3'b101; src0=32'hffff_ffff; src1=7; op_valid=1;
     @(posedge clk); #1; op_valid=0;

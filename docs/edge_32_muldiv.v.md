@@ -38,3 +38,46 @@ DSP cells for the direct multiply operators.
 With Yosys `synth_xilinx -family xc7`, the current leaf maps to four
 `DSP48E1`, 560 estimated logic cells, and 170 flip-flops. This is FPGA mapping
 evidence only, not an ASIC area claim.
+
+## ASAP7 model
+
+`rtl/edge_32_muldiv_asap7.v` is the first ASIC-oriented alternative. It keeps
+the same RV32M request/result contract. Its multiplier reuses the measured
+edge-rv-lite arithmetic structure, while division is native RV32:
+
+- a pipelined radix-4 Booth 32x32 lane for all four multiply variants;
+- magnitude conversion plus a 64-bit sign correction for `MULH`/`MULHSU`;
+- two radix-4 restoring slices separated by a register boundary;
+- 35-bit partial remainder paths (32 data bits plus three guard bits);
+- 16-cycle normal division, with architectural divide-by-zero and overflow
+  fast paths.
+
+The generic unit remains the default core implementation. The ASAP7 leaf is a
+separate physical-model boundary until its routed timing/area baseline is
+recorded. From the parent project, run its functional test with
+`edge_32_muldiv_asap7_vvp`, and run the physical probes with:
+
+```sh
+./synth/openroad/run_openroad.sh edge_32_mul_asap7 asap7-edge32-mul \
+  synth/filelists/edge_32_muldiv_asap7.fl
+./synth/openroad/run_openroad.sh edge_32_div_asap7 asap7-edge32-div-native32 \
+  synth/filelists/edge_32_muldiv_asap7.fl
+```
+
+The initial ASAP7 RVT/TT global-route baselines use OpenROAD 26Q1 and skip
+detailed route:
+
+| Leaf | Clock | Die | Placed area | Utilization | Setup / hold slack | Wire | Overflow |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `edge_32_mul_asap7` | 500 ps | 60 x 60 um | 973 um2 | 31% | +10.02 / +40.25 ps | 35,442 um | 0 |
+| `edge_32_div_asap7` native32 | 1,000 ps | 105 x 105 um | 358 um2 | 4% | -732.59 / positive | 14,870 um | 0 |
+
+The old RV64-derived divider used 67-bit arithmetic, occupied 2,942 um2, routed
+131,812 um of wire, and inserted about 1,008 `BUFx2` cells. Native RV32 reduces
+those figures to 358 um2, 14,870 um, and 187 `BUFx2` cells respectively.
+
+The native divider is not timing-closed yet. At 1 ns its WNS is -732.59 ps in
+the `slice1` radix-4 digit-select/subtract cone. The next optimization must
+replace inferred wide comparisons/subtractions with parallel borrow or
+carry-select structures. Detailed-route DRC/LVS remains required before
+hard-macro signoff.
