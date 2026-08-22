@@ -466,7 +466,7 @@ The source-level integration boundary is selected by filelist:
 
 `filelists/edge_32.fl` is the canonical Edge-32 source selection. The parent
 project supplies `${EDGE_RV_ROOT}` and `${EDGE32_ROOT}`. A complete Edge-32
-product must instantiate `edge_core_lite_top`; swapping only leaf RTL beneath
+product must instantiate `edge_core_edge32_top`; swapping only leaf RTL beneath
 the normal `edge_core_top` would retain the baseline RTU and queue area.
 
 ## 7. Memory and product integration
@@ -480,7 +480,7 @@ edge_32_core
                     |
                     +-- scalar DTCM port
 
-edge_core_lite_top
+edge_core_edge32_top
         +-- hierarchy above
         +-- shared DTCM and DMA
         +-- shared Tensor, ACTU, and CMPU units
@@ -641,7 +641,7 @@ Two boundaries are reported:
 
 1. **RV layer:** `edge_rv_top` versus `edge_32_cached_core`, excluding
    Tensor, DTCM, DMA, ACTU, and CMPU product logic.
-2. **Complete product:** `edge_core_top` versus `edge_core_lite_top`, retaining
+2. **Complete product:** `edge_core_top` versus `edge_core_edge32_top`, retaining
    the same ASICs, caches, and SRAM-to-BRAM wrappers.
 
 ## 10. Results
@@ -803,7 +803,7 @@ EDGE_YOSYS_VARIANT=xilinx-top-compare-20260811 \
   ./synth/run_yosys.sh edge_core_top xilinx \
   synth/filelists/edge_existing.fl
 EDGE_YOSYS_VARIANT=xilinx-top-compare-20260811 \
-  ./synth/run_yosys.sh edge_core_lite_top xilinx \
+  ./synth/run_yosys.sh edge_core_edge32_top xilinx \
   synth/filelists/edge_lite_top.fl
 ```
 

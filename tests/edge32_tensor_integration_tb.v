@@ -104,7 +104,7 @@ module edge32_tensor_integration_tb;
     end
   endtask
 
-  edge_core_lite_top dut (
+  edge_core_edge32_top dut (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .core_start(core_start),.core_force_stop(core_force_stop),
     .boot_pc(boot_pc),
