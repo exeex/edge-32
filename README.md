@@ -8,6 +8,10 @@ The maintained instruction classifier is now owned here. Legacy edge-rv and
 edge-rv-lite integrations may temporarily consume that leaf for compatibility,
 but Edge32 production targets must not source the old classifier path.
 
+Edge32 also owns the radix-4 Booth and carry-select leaves selected by its
+native ASAP7 mul/div implementation. Its Verilator and OpenROAD targets resolve
+those primitives from `rtl/muldiv` rather than the retiring edge-rv tree.
+
 The imported baseline is still RV64. Until the RV32 migration tests pass, the
 existing `edge_rv_lite_*` RTL names and RV64 behavior are intentionally kept as
 the reference implementation. The migration will change the architectural
