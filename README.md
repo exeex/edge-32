@@ -802,9 +802,8 @@ Complete product:
 EDGE_YOSYS_VARIANT=xilinx-top-compare-20260811 \
   ./synth/run_yosys.sh edge_core_top xilinx \
   synth/filelists/edge_existing.fl
-EDGE_YOSYS_VARIANT=xilinx-top-compare-20260811 \
-  ./synth/run_yosys.sh edge_core_edge32_top xilinx \
-  synth/filelists/edge_lite_top.fl
+cmake -S src/edge-e3 -B build/e3-edge32
+cmake --build build/e3-edge32 --target edge_e3_scalar_top_lint
 ```
 
 RV layer:
