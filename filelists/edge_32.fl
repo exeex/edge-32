@@ -1,5 +1,5 @@
 # Edge-32-owned scalar, FPU, and cache units. Parent defines EDGE32_ROOT.
-${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
+${ROOT_DIR}/synth/rtl/edge32_fpga_ram.v
 ${EDGE32_ROOT}/rtl/edge_32_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_branch.v
 ${EDGE32_ROOT}/rtl/edge_32_muldiv.v
