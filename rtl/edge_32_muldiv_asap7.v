@@ -2,7 +2,7 @@
 
 // ASAP7-oriented RV32M multiplier.  The unsigned Booth lane is shared with
 // edge-rv-lite; signed high-half operations are reduced to magnitude multiply
-// followed by a 64-bit two's-complement correction.
+// followed by an RV32 high-half two's-complement correction.
 (* keep_hierarchy = "yes" *)
 module edge_32_mul_asap7 (
   input wire clk, input wire reset_n,
@@ -26,8 +26,13 @@ module edge_32_mul_asap7 (
   reg [5:0] valid_pipe_q;
   reg [5:0] high_pipe_q;
   reg [5:0] negative_pipe_q;
-  wire [63:0] signed_product = negative_pipe_q[5] ?
-    (~magnitude_product + 64'd1) : magnitude_product;
+  // For -P, the upper half is ~P[63:32] plus the carry generated when
+  // ~P[31:0] is incremented.  That carry is one exactly when P[31:0] is zero.
+  // Computing only the architecturally visible half avoids a 64-bit negate.
+  wire [31:0] negative_high = ~magnitude_product[63:32] +
+                              (magnitude_product[31:0] == 32'd0);
+  wire [31:0] multiply_high = negative_pipe_q[5] ? negative_high :
+                                                       magnitude_product[63:32];
 
   edge_mul32_booth_lane booth_lane (
     .clk(clk), .reset_n(reset_n), .in_valid(accept),
@@ -38,8 +43,8 @@ module edge_32_mul_asap7 (
   assign op_ready = !busy;
   assign busy = |valid_pipe_q;
   assign result_valid = lane_valid && valid_pipe_q[5];
-  assign result_value = high_pipe_q[5] ? signed_product[63:32] :
-                                              signed_product[31:0];
+  assign result_value = high_pipe_q[5] ? multiply_high :
+                                              magnitude_product[31:0];
   assign op_latency = 7'd6;
 
   always @(posedge clk or negedge reset_n) begin

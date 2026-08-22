@@ -46,7 +46,9 @@ the same RV32M request/result contract. Its multiplier reuses the measured
 edge-rv-lite arithmetic structure, while division is native RV32:
 
 - a pipelined radix-4 Booth 32x32 lane for all four multiply variants;
-- magnitude conversion plus a 64-bit sign correction for `MULH`/`MULHSU`;
+- magnitude conversion plus an RV32 high-half-only sign correction for
+  `MULH`/`MULHSU`; the low-half zero detect supplies the carry that a full
+  64-bit two's-complement operation would propagate into the visible half;
 - two native radix-4 SRT slices in a folded ring, with separate registered QDS
   and carry-save update phases;
 - 35-bit partial remainder paths (32 data bits plus three guard bits);
