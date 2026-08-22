@@ -23,6 +23,10 @@ module edge_32_axi_coremark_tb;
   integer write_responses;
   integer return_only;
   integer address_header_smoke;
+  reg address_header_software;
+  reg saw_old_dcache_writeback;
+  reg saw_new_dcache_refill;
+  reg saw_new_icache_refill;
   integer byte_i;
 
   wire [63:0] araddr;
@@ -122,6 +126,14 @@ module edge_32_axi_coremark_tb;
                  arid, araddr);
         $display("PASS: AXI Edge-32 address header=%h", araddr[63:32]);
         $finish;
+      end else if (address_header_software) begin
+        if (arid == 8'hf1 && araddr[63:32] == 32'h1234_5678)
+          saw_new_icache_refill <= 1;
+        else if (arid == 8'hd1 && araddr[63:32] == 32'h9abc_def0)
+          saw_new_dcache_refill <= 1;
+        else if (araddr[63:32] != 0)
+          $fatal(1, "unexpected software header read id=%h addr=%h",
+                 arid, araddr);
       end else if (araddr[63:32] != 0)
         $fatal(1, "scalar cache read escaped the 32-bit address window");
       if (arburst != 2'b01 || arsize != 3'd4 || arcache != 0 || arlock ||
@@ -150,7 +162,9 @@ module edge_32_axi_coremark_tb;
     end
 
     if (awvalid && awready) begin
-      if (awaddr[63:32] != 0)
+      if (address_header_software && awaddr[63:32] == 0)
+        saw_old_dcache_writeback <= 1;
+      else if (awaddr[63:32] != 0)
         $fatal(1, "scalar cache write escaped the 32-bit address window");
       if (awburst != 2'b01 || awsize != 3'd4 || awlen != 0 ||
           awid != 8'hc1 || awcache != 0 || awlock || awprot != 0)
@@ -182,6 +196,10 @@ module edge_32_axi_coremark_tb;
     dcache_reads = 0; write_responses = 0;
     return_only = $test$plusargs("return_only");
     address_header_smoke = $test$plusargs("address_header_smoke");
+    address_header_software = $test$plusargs("address_header_software");
+    saw_old_dcache_writeback = 0;
+    saw_new_dcache_refill = 0;
+    saw_new_icache_refill = 0;
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file))
       $fatal(1, "pass +mem64=<coremark_bench.data64.memh>");
@@ -205,6 +223,12 @@ module edge_32_axi_coremark_tb;
     if (!halted) $fatal(1, "AXI CoreMark timeout instret=%0d", instret_count);
     if (illegal) $fatal(1, "AXI CoreMark reported illegal instruction");
     if (debug_x31 == 0) $fatal(1, "AXI CoreMark returned zero");
+    if (address_header_software &&
+        (!saw_old_dcache_writeback || !saw_new_dcache_refill ||
+         !saw_new_icache_refill))
+      $fatal(1, "software header sequence incomplete old_D_AW=%0d new_D_AR=%0d new_I_AR=%0d",
+             saw_old_dcache_writeback, saw_new_dcache_refill,
+             saw_new_icache_refill);
     if (!return_only && instret_count != EDGE32_COREMARK_INSTRET)
       $fatal(1, "AXI CoreMark instret mismatch=%0d", instret_count);
     if (icache_reads == 0 || dcache_reads == 0)

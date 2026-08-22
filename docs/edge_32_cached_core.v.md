@@ -22,8 +22,8 @@ DMA addressing is independent of this scalar path and remains natively 64-bit.
 
 The frontend, branch targets, I-cache tags, and instruction refill address are
 all 32 bits. Address expansion is deliberately outside this module at the
-64-bit AXI boundary, where a future instruction high-header CSR can be applied
-without widening the RV32 cache internals.
+64-bit AXI boundary. The readable I/D header CSRs are applied there without
+widening the RV32 cache internals.
 
 The external instruction interface is one aligned 16-byte refill. The external
 data interface is the maintained 64-byte D-cache refill protocol carried as
@@ -59,6 +59,13 @@ load/store result `x30=42`, calls a cached code line, modifies its backing
 instruction, executes `FENCE.I`, and calls it again. It requires the invalidate
 sweep to block fetch, exactly two refills of the modified line, and the new
 instruction result `x31=2`.
+
+The AXI software header test boots with both header CSRs at zero, dirties a
+D-cache line, performs clean+invalidate while the old header is active, then
+switches the D header and observes a new refill. It subsequently switches the
+I header and executes `FENCE.I`; the next aligned code target must refill using
+the new instruction header. CSR reset and readback checks are performed by the
+RV32 program rather than testbench backdoor writes.
 
 The cached CoreMark integration test loads the parent harness memory image only
 behind these refill/writeback ports. It services I-cache lines and D-cache

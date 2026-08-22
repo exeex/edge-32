@@ -318,6 +318,63 @@ add_test(NAME edge32_software_rv32imf_zba_smoke
 set_tests_properties(edge32_software_rv32imf_zba_smoke PROPERTIES
   REQUIRED_FILES "${EDGE32_SOFTWARE_MEM64}" TIMEOUT 30)
 
+set(EDGE32_HEADER_SOFTWARE_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/software/address_header_switch")
+set(EDGE32_HEADER_SOFTWARE_SOURCE
+    "${CMAKE_CURRENT_LIST_DIR}/tests/software/address_header_switch.s")
+set(EDGE32_HEADER_SOFTWARE_OBJECT
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.o")
+set(EDGE32_HEADER_SOFTWARE_ELF
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.elf")
+set(EDGE32_HEADER_SOFTWARE_MEM128
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.memh")
+set(EDGE32_HEADER_SOFTWARE_WORDS
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.words")
+set(EDGE32_HEADER_SOFTWARE_MEM64
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.data64.memh")
+set(EDGE32_HEADER_SOFTWARE_MEM64_WORDS
+    "${EDGE32_HEADER_SOFTWARE_DIR}/address_header_switch.data64.words")
+add_custom_command(
+  OUTPUT ${EDGE32_HEADER_SOFTWARE_MEM64}
+         ${EDGE32_HEADER_SOFTWARE_MEM128}
+         ${EDGE32_HEADER_SOFTWARE_ELF}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDGE32_HEADER_SOFTWARE_DIR}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -x assembler-with-cpp
+          -c ${EDGE32_HEADER_SOFTWARE_SOURCE}
+          -o ${EDGE32_HEADER_SOFTWARE_OBJECT}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -fuse-ld=lld -B${EDGE32_LLD_BIN}
+          -nostdlib -nostartfiles
+          -Wl,-T,${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${EDGE32_HEADER_SOFTWARE_OBJECT} -o ${EDGE32_HEADER_SOFTWARE_ELF}
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+          ${EDGE32_HEADER_SOFTWARE_ELF}
+          -o ${EDGE32_HEADER_SOFTWARE_MEM128}
+          --words-file ${EDGE32_HEADER_SOFTWARE_WORDS}
+          --mem64-output ${EDGE32_HEADER_SOFTWARE_MEM64}
+          --mem64-words-file ${EDGE32_HEADER_SOFTWARE_MEM64_WORDS}
+  DEPENDS ${EDGE32_HEADER_SOFTWARE_SOURCE}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+  VERBATIM)
+add_custom_target(edge32_software_address_header_switch
+  DEPENDS ${EDGE32_HEADER_SOFTWARE_MEM64})
+add_custom_target(edge32_software_address_header_switch_verilator
+  DEPENDS edge32_software_address_header_switch
+          ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb)
+add_test(NAME edge32_software_address_header_switch
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
+          +mem64=${EDGE32_HEADER_SOFTWARE_MEM64}
+          +return_only +address_header_software)
+set_tests_properties(edge32_software_address_header_switch PROPERTIES
+  REQUIRED_FILES "${EDGE32_HEADER_SOFTWARE_MEM64}" TIMEOUT 30)
+
 set(EDGE32_COREMARK_DIR "${CMAKE_CURRENT_BINARY_DIR}/software/edge32_coremark")
 set(EDGE32_COREMARK_SOURCE
     "${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench/coremark_bench.c")
