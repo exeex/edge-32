@@ -27,6 +27,9 @@ module edge_32_axi_coremark_tb;
   reg saw_old_dcache_writeback;
   reg saw_new_dcache_refill;
   reg saw_new_icache_refill;
+  reg reboot_phase;
+  reg saw_reboot_icache_refill;
+  reg saw_reboot_dcache_refill;
   integer byte_i;
 
   wire [63:0] araddr;
@@ -127,7 +130,11 @@ module edge_32_axi_coremark_tb;
         $display("PASS: AXI Edge-32 address header=%h", araddr[63:32]);
         $finish;
       end else if (address_header_software) begin
-        if (arid == 8'hf1 && araddr[63:32] == 32'h1234_5678)
+        if (reboot_phase && arid == 8'hf1 && araddr[63:32] == 0)
+          saw_reboot_icache_refill <= 1;
+        else if (reboot_phase && arid == 8'hd1 && araddr[63:32] == 0)
+          saw_reboot_dcache_refill <= 1;
+        else if (arid == 8'hf1 && araddr[63:32] == 32'h1234_5678)
           saw_new_icache_refill <= 1;
         else if (arid == 8'hd1 && araddr[63:32] == 32'h9abc_def0)
           saw_new_dcache_refill <= 1;
@@ -200,6 +207,9 @@ module edge_32_axi_coremark_tb;
     saw_old_dcache_writeback = 0;
     saw_new_dcache_refill = 0;
     saw_new_icache_refill = 0;
+    reboot_phase = 0;
+    saw_reboot_icache_refill = 0;
+    saw_reboot_dcache_refill = 0;
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file))
       $fatal(1, "pass +mem64=<coremark_bench.data64.memh>");
@@ -229,6 +239,28 @@ module edge_32_axi_coremark_tb;
       $fatal(1, "software header sequence incomplete old_D_AW=%0d new_D_AR=%0d new_I_AR=%0d",
              saw_old_dcache_writeback, saw_new_dcache_refill,
              saw_new_icache_refill);
+    if (address_header_software) begin
+      reset_n <= 1'b0;
+      repeat (4) @(posedge clk);
+      if (dut.icache_address_header != 0 || dut.dcache_address_header != 0)
+        $fatal(1, "I/D address headers were not zero during reboot reset");
+      reset_n <= 1'b1;
+      reboot_phase = 1;
+      repeat (3) @(posedge clk);
+      core_start <= 1'b1;
+      @(posedge clk); core_start <= 1'b0;
+      cycles = 0;
+      while (!halted && cycles < TIMEOUT_CYCLES) begin
+        @(posedge clk);
+        cycles = cycles + 1;
+      end
+      if (!halted || illegal || debug_x31 == 0)
+        $fatal(1, "software header reboot failed halted=%0d illegal=%0d x31=%0d",
+               halted, illegal, debug_x31);
+      if (!saw_reboot_icache_refill || !saw_reboot_dcache_refill)
+        $fatal(1, "reset retained cache state I_refill=%0d D_refill=%0d",
+               saw_reboot_icache_refill, saw_reboot_dcache_refill);
+    end
     if (!return_only && instret_count != EDGE32_COREMARK_INSTRET)
       $fatal(1, "AXI CoreMark instret mismatch=%0d", instret_count);
     if (icache_reads == 0 || dcache_reads == 0)

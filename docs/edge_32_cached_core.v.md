@@ -66,6 +66,10 @@ switches the D header and observes a new refill. It subsequently switches the
 I header and executes `FENCE.I`; the next aligned code target must refill using
 the new instruction header. CSR reset and readback checks are performed by the
 RV32 program rather than testbench backdoor writes.
+After the first run has populated both caches, the same test asserts product
+reset and boots the image again. It requires both CSRs to return to zero and
+observes fresh zero-header instruction and data refills, proving stale cache
+metadata cannot survive reset.
 
 The cached CoreMark integration test loads the parent harness memory image only
 behind these refill/writeback ports. It services I-cache lines and D-cache
