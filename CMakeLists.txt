@@ -36,9 +36,9 @@ add_custom_command(
   COMMAND ${VERILATOR} --binary --timing --Wno-fatal
           --top-module edge32_dma_addr_split_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj
-          ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_accel_pipe/edge_accel_pipe.v
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_accel_pipe.v
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_dma_addr_split_tb.v
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_accel_pipe/edge_accel_pipe.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_accel_pipe.v
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_dma_addr_split_tb.v)
 add_custom_target(edge32_dma_addr_split_vvp ALL
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj/Vedge32_dma_addr_split_tb)
@@ -431,7 +431,7 @@ add_custom_command(
   DEPENDS
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge_core_lite_tensor_tb.v
           ${EDGE32_E3_ROOT}/edge_core/filelists/edge_core_edge32_top_verilator.fl
-          ${EDGE_RV_ROOT}/edge_accel_pipe/edge_accel_pipe.v)
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_accel_pipe.v)
 add_custom_target(edge32_tensor_bf16_matmul8x8_vvp
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/edge32_tensor_top_obj/Vedge_core_lite_tensor_tb
           ${EDGE32_TENSOR_BF16_MEMH})
@@ -780,3 +780,10 @@ add_custom_target(edge_instruction_classifier_verilator ALL
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj/Vedge_instruction_classifier_tb)
 add_test(NAME edge_instruction_classifier
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj/Vedge_instruction_classifier_tb)
+
+# The CPU-side accelerator command emitter belongs to edge-32.  Its focused
+# integration proofs need the parent repository's E3 blocks and shared
+# Verilator test helper, so register them only in the parent build.
+if(COMMAND edge_add_verilator_hardware_test AND DEFINED EDGE_ROOT)
+  add_subdirectory(tests/accel_pipe)
+endif()

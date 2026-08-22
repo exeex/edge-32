@@ -12,6 +12,10 @@ Edge32 also owns the radix-4 Booth and carry-select leaves selected by its
 native ASAP7 mul/div implementation. Its Verilator and OpenROAD targets resolve
 those primitives from `rtl/muldiv` rather than the retiring edge-rv tree.
 
+The CPU-side accelerator command emitter, `edge_accel_pipe`, is also owned by
+Edge32. It terminates instruction encoding and scalar snapshot semantics;
+`edge-asic` begins at the emitted accelerator command interface.
+
 The imported baseline is still RV64. Until the RV32 migration tests pass, the
 existing `edge_rv_lite_*` RTL names and RV64 behavior are intentionally kept as
 the reference implementation. The migration will change the architectural
