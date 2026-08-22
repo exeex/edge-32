@@ -810,24 +810,3 @@ EDGE_YOSYS_VARIANT=xilinx-lite-cached \
 
 Use the same revision, Yosys version, target family, filelists, and elaboration
 parameters before comparing cell counts.
-
-## 13. Implementation contracts
-
-This README presents the system argument. Cycle-level contracts remain beside
-the implementation:
-
-- `docs/edge_32_pipeline.v.md`: scalar serialization, redirects, faults,
-  halt, and Edge64 acceptance ownership;
-- `docs/edge_32_lsu.v.md`: RV32 scalar memory request and completion;
-- `docs/edge_32_fp_mem_format.v.md`: FP memory normalization;
-- `docs/edge_rv_lite_cache_adapters.v.md`: one-owner cache adaptation;
-- `docs/edge_32_cached_core.v.md`: bootable cache composition and
-  `FENCE.I`;
-- `docs/edge_32_dtcm_router.v.md`: cache/DTCM ownership and formatting;
-- `docs/edge_32_cache_biu.v.md`: refill, writeback, error, and retry;
-- `docs/edge32_axi_core.v.md`: selectable Edge-32 product AXI boundary;
-- `docs/edge_32_axi_core.v.md`: maintained Edge AXI implementation contract.
-
-Together, these contracts and tests establish that the performance and area
-comparison comes from scalar issue policy—not from silently removing product
-behavior.
