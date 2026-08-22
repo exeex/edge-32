@@ -1,5 +1,4 @@
-# Edge-32-owned scalar/FPU units plus temporarily shared edge-rv caches.
-# Parent defines both roots until cache ownership is extracted.
+# Edge-32-owned scalar, FPU, and cache units. Parent defines EDGE32_ROOT.
 ${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
 ${EDGE32_ROOT}/rtl/edge_32_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_branch.v
@@ -24,19 +23,19 @@ ${EDGE32_ROOT}/rtl/edge_32_fp_mem_format.v
 ${EDGE32_ROOT}/rtl/edge_32_icache_adapter.v
 ${EDGE32_ROOT}/rtl/edge_32_dcache_adapter.v
 ${EDGE32_ROOT}/rtl/edge_32_dtcm_router.v
-${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
-${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
-${EDGE_RV_ROOT}/edge_ifu_icache/edge_ifu_icache.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_mshr.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_hit_queue.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_lookup_buffer.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_registered_lookup_buffer.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_lookup_scheduler.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_pair_predictor.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_banked_data_array.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_tag_array.v
-${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_dirty_array.v
-${EDGE_RV_ROOT}/edge_dcache/edge_dcache.v
+${EDGE32_ROOT}/rtl/cache/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
+${EDGE32_ROOT}/rtl/cache/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
+${EDGE32_ROOT}/rtl/cache/edge_ifu_icache/edge_ifu_icache.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_mshr.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_hit_queue.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_lookup_buffer.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_registered_lookup_buffer.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_lookup_scheduler.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_pair_predictor.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_banked_data_array.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_tag_array.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_dirty_array.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/edge_dcache.v
 ${EDGE32_ROOT}/rtl/edge_32_pipeline.v
 ${EDGE32_ROOT}/rtl/edge_32_core.v
 ${EDGE32_ROOT}/rtl/edge_32_cached_core.v

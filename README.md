@@ -466,8 +466,8 @@ The source-level integration boundary is selected by filelist:
 - compose the result with the same edge-e3 ASIC platform.
 
 `filelists/edge_32.fl` is the canonical Edge-32 source selection. The parent
-project supplies `${EDGE_RV_ROOT}` only for the temporarily shared caches and
-`${EDGE32_ROOT}` for the scalar and FPU implementation. A complete Edge-32
+project supplies `${EDGE32_ROOT}` for the scalar, FPU, and cache
+implementation. A complete Edge-32
 product must instantiate `edge_core_edge32_top`; swapping only leaf RTL beneath
 the normal `edge_core_top` would retain the baseline RTU and queue area.
 

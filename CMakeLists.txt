@@ -177,8 +177,6 @@ add_custom_target(edge_32_dtcm_router_verilator ALL
 add_test(NAME edge_32_dtcm_router
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_32_dtcm_router_tb)
 
-set(EDGE_RV_ROOT "${CMAKE_CURRENT_LIST_DIR}/../edge-rv" CACHE PATH
-    "Path to the temporarily shared edge-rv cache repository")
 set(FPU_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_misc/edge_fpu_misc.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
@@ -526,19 +524,19 @@ set(CACHED_CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_icache_adapter.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dcache_adapter.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dtcm_router.v
-  ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
-  ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
-  ${EDGE_RV_ROOT}/edge_ifu_icache/edge_ifu_icache.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_mshr.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_hit_queue.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_lookup_buffer.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_registered_lookup_buffer.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_lookup_scheduler.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_pair_predictor.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_banked_data_array.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_tag_array.v
-  ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_dirty_array.v
-  ${EDGE_RV_ROOT}/edge_dcache/edge_dcache.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_ifu_icache/edge_ifu_icache.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_mshr.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_hit_queue.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_lookup_buffer.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_registered_lookup_buffer.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_lookup_scheduler.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_pair_predictor.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_banked_data_array.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_tag_array.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl/edge_dcache_dirty_array.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/edge_dcache.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cached_core.v)
 
 add_custom_command(
