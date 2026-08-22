@@ -653,6 +653,32 @@ edge32_add_dcache_leaf_test(
   "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_banked_data_array_tb.v"
   "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_banked_data_array.v")
 
+set(EDGE32_DCACHE_MAINTENANCE_RTL
+  "${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/edge_dcache.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_mshr.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_hit_queue.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_lookup_buffer.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_registered_lookup_buffer.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_lookup_scheduler.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_pair_predictor.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_banked_data_array.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_tag_array.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_dirty_array.v")
+set(EDGE32_DCACHE_MAINTENANCE_TB
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_maintenance_tb.v")
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/edge_32_dcache_maintenance_obj/Vedge_dcache_maintenance_tb"
+  COMMAND ${VERILATOR} --binary --timing --Wno-fatal
+          --top-module edge_dcache_maintenance_tb
+          --Mdir "${CMAKE_CURRENT_BINARY_DIR}/edge_32_dcache_maintenance_obj"
+          ${EDGE32_DCACHE_MAINTENANCE_RTL} "${EDGE32_DCACHE_MAINTENANCE_TB}"
+  DEPENDS ${EDGE32_DCACHE_MAINTENANCE_RTL} "${EDGE32_DCACHE_MAINTENANCE_TB}")
+add_custom_target(edge_32_dcache_maintenance_verilator ALL
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/edge_32_dcache_maintenance_obj/Vedge_dcache_maintenance_tb")
+add_test(NAME edge_32_dcache_maintenance
+  COMMAND "${CMAKE_CURRENT_BINARY_DIR}/edge_32_dcache_maintenance_obj/Vedge_dcache_maintenance_tb")
+set_tests_properties(edge_32_dcache_maintenance PROPERTIES TIMEOUT 30)
+
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/decode_obj/Vedge_32_decode_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_32_decode_tb
