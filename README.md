@@ -798,22 +798,11 @@ ctest --test-dir build/edge-32 \
 
 ### 12.3 Synthesis comparison
 
-Complete product:
+Maintained Edge-32 core:
 
 ```sh
-EDGE_YOSYS_VARIANT=xilinx-top-compare-20260811 \
-  ./synth/run_yosys.sh edge_core_top xilinx \
-  synth/filelists/edge_existing.fl
 cmake -S src/edge-e3 -B build/e3-edge32
 cmake --build build/e3-edge32 --target edge_e3_scalar_top_lint
-```
-
-RV layer:
-
-```sh
-EDGE_YOSYS_VARIANT=xilinx-clean \
-  ./synth/run_yosys.sh edge_rv_top xilinx \
-  synth/filelists/edge_rv.fl
 EDGE_YOSYS_VARIANT=xilinx-lite-cached \
   ./synth/run_yosys.sh edge_32_cached_core xilinx \
   src/edge-32/filelists/edge_32.fl
