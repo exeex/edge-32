@@ -430,6 +430,62 @@ add_test(NAME edge32_software_control_flow_redirect
 set_tests_properties(edge32_software_control_flow_redirect PROPERTIES
   REQUIRED_FILES "${EDGE32_CONTROL_FLOW_MEM64}" TIMEOUT 30)
 
+set(EDGE32_FORCE_STOP_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/software/force_stop_restart")
+set(EDGE32_FORCE_STOP_SOURCE
+    "${CMAKE_CURRENT_LIST_DIR}/tests/software/force_stop_restart.s")
+set(EDGE32_FORCE_STOP_OBJECT
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.o")
+set(EDGE32_FORCE_STOP_ELF
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.elf")
+set(EDGE32_FORCE_STOP_MEM128
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.memh")
+set(EDGE32_FORCE_STOP_WORDS
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.words")
+set(EDGE32_FORCE_STOP_MEM64
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.data64.memh")
+set(EDGE32_FORCE_STOP_MEM64_WORDS
+    "${EDGE32_FORCE_STOP_DIR}/force_stop_restart.data64.words")
+add_custom_command(
+  OUTPUT ${EDGE32_FORCE_STOP_MEM64}
+         ${EDGE32_FORCE_STOP_MEM128}
+         ${EDGE32_FORCE_STOP_ELF}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDGE32_FORCE_STOP_DIR}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -x assembler-with-cpp
+          -c ${EDGE32_FORCE_STOP_SOURCE} -o ${EDGE32_FORCE_STOP_OBJECT}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -fuse-ld=lld -B${EDGE32_LLD_BIN}
+          -nostdlib -nostartfiles
+          -Wl,-T,${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${EDGE32_FORCE_STOP_OBJECT} -o ${EDGE32_FORCE_STOP_ELF}
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+          ${EDGE32_FORCE_STOP_ELF}
+          -o ${EDGE32_FORCE_STOP_MEM128}
+          --words-file ${EDGE32_FORCE_STOP_WORDS}
+          --mem64-output ${EDGE32_FORCE_STOP_MEM64}
+          --mem64-words-file ${EDGE32_FORCE_STOP_MEM64_WORDS}
+  DEPENDS ${EDGE32_FORCE_STOP_SOURCE}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+  VERBATIM)
+add_custom_target(edge32_software_force_stop_restart
+  DEPENDS ${EDGE32_FORCE_STOP_MEM64})
+add_custom_target(edge32_software_force_stop_restart_verilator
+  DEPENDS edge32_software_force_stop_restart
+          ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb)
+add_test(NAME edge32_software_force_stop_restart
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
+          +mem64=${EDGE32_FORCE_STOP_MEM64}
+          +return_only +force_stop_pending)
+set_tests_properties(edge32_software_force_stop_restart PROPERTIES
+  REQUIRED_FILES "${EDGE32_FORCE_STOP_MEM64}" TIMEOUT 30)
+
 set(EDGE32_COREMARK_DIR "${CMAKE_CURRENT_BINARY_DIR}/software/edge32_coremark")
 set(EDGE32_COREMARK_SOURCE
     "${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench/coremark_bench.c")

@@ -36,6 +36,9 @@ flushes stale frontend/pipeline contents, and begins fetching. A
 without resetting GPR, CSR, cache, or AXI state. An already accepted cache/AXI
 transaction is drained rather than electrically cancelled. The wrapper also
 exposes halt, illegal, x31, cycle, and instret status for bring-up.
+The focused force-stop test holds the first AXI instruction response, stops
+the core after its request is accepted, drains the late response without
+retiring it, and restarts from a different `boot_pc`.
 
 `AXI_DATA_WIDTH` is fixed architecturally to 128 bits because both maintained
 caches exchange 16-byte beats. Reads and dirty writebacks may progress

@@ -30,6 +30,12 @@ module edge_32_axi_coremark_tb;
   reg reboot_phase;
   reg saw_reboot_icache_refill;
   reg saw_reboot_dcache_refill;
+  reg force_stop_pending;
+  reg held_ifetch;
+  reg held_ifetch_once;
+  reg release_held_ifetch;
+  reg [127:0] held_ifetch_data;
+  reg [7:0] held_ifetch_id;
   integer byte_i;
 
   wire [63:0] araddr;
@@ -147,15 +153,28 @@ module edge_32_axi_coremark_tb;
           arprot != 0 || (arid == 8'hf1 && arlen != 0) ||
           (arid == 8'hd1 && arlen != 3))
         $fatal(1, "invalid lite AXI read attributes");
-      rdata_q <= read128(araddr);
-      rid_q <= arid;
-      rlast_q <= arlen == 0;
-      rvalid_q <= 1'b1;
-      raddr_q <= araddr + 64'd16;
-      rbeats_left_q <= arlen;
+      if (force_stop_pending && arid == 8'hf1 && !held_ifetch_once) begin
+        held_ifetch <= 1'b1;
+        held_ifetch_once <= 1'b1;
+        held_ifetch_data <= read128(araddr);
+        held_ifetch_id <= arid;
+      end else begin
+        rdata_q <= read128(araddr);
+        rid_q <= arid;
+        rlast_q <= arlen == 0;
+        rvalid_q <= 1'b1;
+        raddr_q <= araddr + 64'd16;
+        rbeats_left_q <= arlen;
+      end
       if (arid == 8'hf1) icache_reads <= icache_reads + 1;
       else if (arid == 8'hd1) dcache_reads <= dcache_reads + 1;
       else $fatal(1, "unexpected lite AXI read ID=%h", arid);
+    end else if (release_held_ifetch && held_ifetch && !rvalid_q) begin
+      rdata_q <= held_ifetch_data;
+      rid_q <= held_ifetch_id;
+      rlast_q <= 1'b1;
+      rvalid_q <= 1'b1;
+      held_ifetch <= 1'b0;
     end else if (rvalid_q && rready) begin
       if (rbeats_left_q != 0) begin
         rdata_q <= read128(raddr_q);
@@ -210,6 +229,12 @@ module edge_32_axi_coremark_tb;
     reboot_phase = 0;
     saw_reboot_icache_refill = 0;
     saw_reboot_dcache_refill = 0;
+    force_stop_pending = $test$plusargs("force_stop_pending");
+    held_ifetch = 0;
+    held_ifetch_once = 0;
+    release_held_ifetch = 0;
+    held_ifetch_data = 0;
+    held_ifetch_id = 0;
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file))
       $fatal(1, "pass +mem64=<coremark_bench.data64.memh>");
@@ -225,12 +250,31 @@ module edge_32_axi_coremark_tb;
     if (arvalid) $fatal(1, "AXI fetch escaped before core_start");
     core_start <= 1'b1;
     @(posedge clk); core_start <= 1'b0;
+    if (force_stop_pending) begin
+      wait (held_ifetch);
+      core_force_stop <= 1'b1;
+      @(posedge clk); core_force_stop <= 1'b0;
+      repeat (2) @(posedge clk);
+      if (instret_count != 0 || debug_x31 != 0)
+        $fatal(1, "force-stop allowed pending fetch to retire");
+      release_held_ifetch <= 1'b1;
+      wait (!held_ifetch && !rvalid_q);
+      release_held_ifetch <= 1'b0;
+      boot_pc <= 32'h0000_0080;
+      core_start <= 1'b1;
+      @(posedge clk); core_start <= 1'b0;
+    end
     cycles = 0;
     while (!halted && cycles < TIMEOUT_CYCLES) begin
       @(posedge clk);
       cycles = cycles + 1;
     end
-    if (!halted) $fatal(1, "AXI CoreMark timeout instret=%0d", instret_count);
+    if (!halted)
+      $fatal(1, "AXI software timeout instret=%0d AR=%0d R=%0d held=%0d I_miss=%0d core_req=%0d front_pending=%0d",
+             instret_count, arvalid, rvalid_q, held_ifetch,
+             dut.cached_core.debug_icache_miss_pending,
+             dut.cached_core.core_imem_req_valid,
+             dut.cached_core.core.frontend.request_pending_q);
     if (illegal) $fatal(1, "AXI CoreMark reported illegal instruction");
     if (debug_x31 == 0) $fatal(1, "AXI CoreMark returned zero");
     if (address_header_software &&

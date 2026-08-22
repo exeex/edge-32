@@ -77,19 +77,29 @@ module edge_32_frontend #(
       fifo_inst_q[1] <= 32'h0000_0013;
       fifo_error_q[0] <= 1'b0;
       fifo_error_q[1] <= 1'b0;
-    end else if (fetch_stop_i || halt) begin
-      running_q <= 1'b0;
-      fifo_count_q <= 2'd0;
-      fifo_read_q <= 1'b0;
-      fifo_write_q <= 1'b0;
-      if (request_pending_q) request_killed_q <= 1'b1;
     end else if (fetch_start_i) begin
       running_q <= 1'b1;
       fetch_pc_q <= boot_pc;
       fifo_count_q <= 2'd0;
       fifo_read_q <= 1'b0;
       fifo_write_q <= 1'b0;
-      if (request_pending_q) request_killed_q <= 1'b1;
+      if (response_fire) begin
+        request_pending_q <= 1'b0;
+        request_killed_q <= 1'b0;
+      end else if (request_pending_q) begin
+        request_killed_q <= 1'b1;
+      end
+    end else if (fetch_stop_i || halt) begin
+      running_q <= 1'b0;
+      fifo_count_q <= 2'd0;
+      fifo_read_q <= 1'b0;
+      fifo_write_q <= 1'b0;
+      if (response_fire) begin
+        request_pending_q <= 1'b0;
+        request_killed_q <= 1'b0;
+      end else if (request_pending_q) begin
+        request_killed_q <= 1'b1;
+      end
     end else begin
       if (request_fire) begin
         request_pending_q <= 1'b1;

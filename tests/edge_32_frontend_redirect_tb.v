@@ -59,15 +59,17 @@ module edge_32_frontend_redirect_tb;
     if (imem_req_valid || op_valid)
       $fatal(1, "frontend remained active after core_force_stop");
     // A request accepted before stop is not electrically cancelled. Return
-    // and discard it before the next start, matching the cache/AXI contract.
+    // it in the same cycle as restart: start wins over the old halt state and
+    // the killed response must be drained without entering the IF FIFO.
+    boot_pc <= 32'h100;
+    fetch_start <= 1;
     if (dut.request_pending_q) begin
       imem_resp_data <= 32'hdead_c0de;
       imem_resp_valid <= 1;
-      @(posedge clk); imem_resp_valid <= 0;
     end
-    boot_pc <= 32'h100;
-    fetch_start <= 1;
-    @(posedge clk); fetch_start <= 0;
+    @(posedge clk);
+    fetch_start <= 0;
+    imem_resp_valid <= 0;
     wait (imem_req_valid);
     if (imem_req_addr != 32'h100)
       $fatal(1, "restart boot_pc lost");
