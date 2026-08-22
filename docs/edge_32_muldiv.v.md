@@ -66,6 +66,10 @@ recorded. From the parent project, run its functional test with
   synth/filelists/edge_32_muldiv_asap7.fl
 ./synth/openroad/run_openroad.sh edge_32_div_asap7 asap7-edge32-div-native32 \
   synth/filelists/edge_32_muldiv_asap7.fl
+# Closed 500 ps detailed-route/RCX profile:
+./synth/openroad/run_openroad.sh edge_32_div_asap7 \
+  asap7-edge32-div-native32-srt4-pipsign-tdp-cts8-lvt-drt-pin120-2g \
+  synth/filelists/edge_32_muldiv_asap7.fl
 ```
 
 The initial ASAP7 RVT/TT global-route baselines use OpenROAD 26Q1 and skip
@@ -80,19 +84,31 @@ detailed route:
 | `edge_32_div_asap7` native SRT pipelined sign | 500 ps | 105 x 105 um | 832 um2 | 8% | -27.76 / +48.11 ps | 34,728 um | 0 |
 | `edge_32_div_asap7` sign + TDP/x8 CTS/LVT repair | 500 ps | 105 x 105 um | 804 um2 | 8% | +11.14 / +45.70 ps | 34,401 um | 0 |
 
+The closed divider profile also completes detailed routing and ASAP7 RCX:
+
+| Leaf | Clock | Placed area | Setup / hold slack | DRT wire | Vias | DRC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `edge_32_div_asap7` sign + TDP/x8 CTS/LVT repair | 500 ps | 808 um2 | +11.14 / +45.70 ps | 24,090 um | 73,299 | 0 |
+
 The two-cycle sign pipeline removes the former 32-bit architectural negate
 from the worst path and recovers 59.61 ps of routed setup slack. It adds 34
-clock sinks (733 to 767); routed `BUFx2` count rises from 235 to 358 while
-global-route overflow remains zero. The new worst path is the low 18-bit
-remainder-correction adder, not the sign or initialization logic.
+clock sinks (733 to 767); the sign-only profile's routed `BUFx2` count rises
+from 235 to 358 while global-route overflow remains zero. The final TDP/x8
+CTS/LVT detailed-route profile contains no `BUFx2`; its dominant buffer classes
+are 255 `BUFx3`, 22 `BUFx8`, and 73 `BUFx24` cells. The new worst path is the
+low 18-bit remainder-correction adder, not the sign or initialization logic.
 
 The closed 500 ps backend profile keeps Yosys synthesis RVT-only, applies
 timing-driven placement to the worst 5% of nets, uses an x24 CTS root with x8
 branch buffers, and exposes matching LVT physical/timing views only to
 OpenROAD. Routed repair swaps 73 critical instances to LVT and reaches
 +11.14 ps setup and +45.70 ps hold slack with zero TNS and zero global-route
-overflow. This is a global-route proxy result; detailed routing remains
-disabled for early ASAP7 model exploration.
+overflow. The detailed-route profile uses routing-direction-aligned top pins
+(0.12 x 0.024 um on M4 and 0.024 x 0.12 um on M5), replaces constant drivers
+with local tie cells, and converges to zero TritonRoute violations. Extraction
+with the ASAP7 RCX rules writes a SPEF containing 63,465 RC segments and
+108,670 coupling capacitors; the extracted timing reports retain +11.14 ps
+setup and +45.70 ps hold slack.
 
 The old RV64-derived divider used 67-bit arithmetic, occupied 2,942 um2, routed
 131,812 um of wire, and inserted about 1,008 `BUFx2` cells. Native RV32 reduces
@@ -100,9 +116,9 @@ those figures to 396 um2, 15,697 um, and 194 `BUFx2` cells respectively.
 
 The current native SRT divider closes the 1 ns global-route proxy. Algebraic
 normalization cleanup, tree MSB detection, true low/high combine and correction
-pipelines, and 9+9 carry-select arithmetic reduce the 500 ps proxy to -87.37 ps
-WNS with 29 remaining violating endpoints. The 500 ps target is not closed yet;
-its reports remain an optimization probe rather than a hardened result. A QDS
-latch experiment consumed nearly the full 500 ps transparent phase and was
-rejected for the default implementation.
-Detailed-route DRC/LVS remains required before hard-macro signoff.
+pipelines, and 9+9 carry-select arithmetic first reduced the 500 ps proxy to
+-87.37 ps WNS with 29 remaining violating endpoints. Sign pipelining and the
+backend TDP/x8 CTS/LVT profile then close 500 ps through detailed route and
+extracted timing. A QDS latch experiment consumed nearly the full 500 ps
+transparent phase and was rejected for the default implementation. LVS and
+final stream-out checks remain required before hard-macro signoff.
