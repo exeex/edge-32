@@ -1,20 +1,21 @@
-# Edge-32 units plus shared edge-rv units. Parent defines both roots.
+# Edge-32-owned scalar/FPU units plus temporarily shared edge-rv caches.
+# Parent defines both roots until cache ownership is extracted.
 ${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
 ${EDGE32_ROOT}/rtl/edge_32_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_branch.v
 ${EDGE32_ROOT}/rtl/edge_32_muldiv.v
 ${EDGE32_ROOT}/rtl/edge_instruction_classifier.v
-${EDGE_RV_ROOT}/edge_fpu_misc/edge_fpu_misc.v
-${EDGE_RV_ROOT}/edge_fpu_cvt/edge_fpu_cvt.v
-${EDGE_RV_ROOT}/edge_fpu_slow/edge_fpu_slow.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_round_pack.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_shift_sticky_2stage.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
-${EDGE_RV_ROOT}/edge_fpu_fmac/edge_fpu_fmac.v
-${EDGE_RV_ROOT}/edge_fpu_alu/edge_fpu_alu.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_misc/edge_fpu_misc.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_slow/edge_fpu_slow.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_round_pack.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_shift_sticky_2stage.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/edge_fpu_fmac.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_alu/edge_fpu_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_decode.v
 ${EDGE32_ROOT}/rtl/edge_32_frontend.v
 ${EDGE32_ROOT}/rtl/edge_32_instruction_assembler.v

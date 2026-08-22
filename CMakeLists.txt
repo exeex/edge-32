@@ -178,19 +178,19 @@ add_test(NAME edge_32_dtcm_router
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_32_dtcm_router_tb)
 
 set(EDGE_RV_ROOT "${CMAKE_CURRENT_LIST_DIR}/../edge-rv" CACHE PATH
-    "Path to the shared edge-rv execution-unit repository")
+    "Path to the temporarily shared edge-rv cache repository")
 set(FPU_RTL
-  ${EDGE_RV_ROOT}/edge_fpu_misc/edge_fpu_misc.v
-  ${EDGE_RV_ROOT}/edge_fpu_cvt/edge_fpu_cvt.v
-  ${EDGE_RV_ROOT}/edge_fpu_slow/edge_fpu_slow.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_round_pack.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_shift_sticky_2stage.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
-  ${EDGE_RV_ROOT}/edge_fpu_fmac/edge_fpu_fmac.v
-  ${EDGE_RV_ROOT}/edge_fpu_alu/edge_fpu_alu.v)
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_misc/edge_fpu_misc.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_slow/edge_fpu_slow.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_round_pack.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_shift_sticky_2stage.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_fmac/edge_fpu_fmac.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/fpu/edge_fpu_alu/edge_fpu_alu.v)
 set(CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v

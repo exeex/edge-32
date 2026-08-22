@@ -458,14 +458,16 @@ command queue.
 The source-level integration boundary is selected by filelist:
 
 - preserve the Edge SoC-facing IFU, BIU/D-cache/DTCM, and ASIC command signals;
-- preserve the shared `edge-rv` ALU/FPU implementations and interfaces;
+- preserve the scalar interfaces while owning the FPU implementation under
+  `rtl/fpu`;
 - replace the dual-issue scalar pipe, RTU, snapshots, and command queues with
   the lite top and its single-owner controller;
 - tie compatibility lane 1 permanently invalid;
 - compose the result with the same edge-e3 ASIC platform.
 
 `filelists/edge_32.fl` is the canonical Edge-32 source selection. The parent
-project supplies `${EDGE_RV_ROOT}` and `${EDGE32_ROOT}`. A complete Edge-32
+project supplies `${EDGE_RV_ROOT}` only for the temporarily shared caches and
+`${EDGE32_ROOT}` for the scalar and FPU implementation. A complete Edge-32
 product must instantiate `edge_core_edge32_top`; swapping only leaf RTL beneath
 the normal `edge_core_top` would retain the baseline RTU and queue area.
 
