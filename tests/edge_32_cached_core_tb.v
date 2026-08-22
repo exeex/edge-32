@@ -12,6 +12,8 @@ module edge_32_cached_core_tb;
   integer dmem_refill_count;
   integer icache_hit_count;
   integer target_refill_count;
+  integer clean_wb_count;
+  integer clean_complete_delay;
   reg saw_dcache_miss;
   reg code_modified;
   reg saw_icache_invalidate_busy;
@@ -112,7 +114,22 @@ module edge_32_cached_core_tb;
       else dmem_refill_beat_q <= dmem_refill_beat_q + 1'b1;
     end
 
-    dmem_clean_wb_complete <= dmem_clean_wb_valid && dmem_clean_wb_last;
+    dmem_clean_wb_complete <= 1'b0;
+    if (dmem_clean_wb_valid) begin
+      if (dmem_clean_wb_addr != 64'h100 + clean_wb_count * 16)
+        $fatal(1, "D-cache clean writeback address mismatch beat=%0d addr=%h",
+               clean_wb_count, dmem_clean_wb_addr);
+      if (clean_wb_count == 0 && dmem_clean_wb_data[63:0] != 64'd42)
+        $fatal(1, "D-cache clean writeback data mismatch data=%h",
+               dmem_clean_wb_data);
+      mem[dmem_clean_wb_addr[9:3]] <= dmem_clean_wb_data[63:0];
+      mem[dmem_clean_wb_addr[9:3] + 1] <= dmem_clean_wb_data[127:64];
+      clean_wb_count <= clean_wb_count + 1;
+      if (dmem_clean_wb_last) clean_complete_delay <= 3;
+    end else if (clean_complete_delay != 0) begin
+      clean_complete_delay <= clean_complete_delay - 1;
+      if (clean_complete_delay == 1) dmem_clean_wb_complete <= 1'b1;
+    end
     if (debug_icache_hit) icache_hit_count <= icache_hit_count + 1;
     if (debug_dcache_load_miss_pending) saw_dcache_miss <= 1'b1;
     if (dut.icache_invalidate_valid && !code_modified) begin
@@ -133,6 +150,8 @@ module edge_32_cached_core_tb;
     dmem_refill_base_q = 64'd0;
     dmem_refill_beat_q = 2'd0;
     dmem_clean_wb_complete = 1'b0;
+    clean_wb_count = 0;
+    clean_complete_delay = 0;
     imem_refill_count = 0;
     dmem_refill_count = 0;
     icache_hit_count = 0;
@@ -146,9 +165,10 @@ module edge_32_cached_core_tb;
     // instruction while FENCE.I waits, then call 0x40 again after the sweep.
     mem[0] = {32'h0000_a103, 32'h1000_0093};
     mem[1] = {32'h0020_a023, 32'h0011_0113};
-    mem[2] = {32'h02c0_036f, 32'h0000_af03};
-    mem[3] = {32'h0240_036f, 32'h0000_100f};
-    mem[4] = {32'h0010_0073, 32'h0002_8f93};
+    mem[2] = {32'h0050_900b, 32'h0000_af03};
+    mem[3] = {32'h0000_100f, 32'h0280_036f};
+    mem[4] = {32'h0002_8f93, 32'h0200_036f};
+    mem[5] = {32'h0000_0013, 32'h0010_0073};
     mem[8] = {32'h0003_0067, 32'h0010_0293};
     mem[32] = 64'd41;
 
@@ -174,11 +194,12 @@ module edge_32_cached_core_tb;
         target_refill_count != 2)
       $fatal(1, "FENCE.I invalidate/refetch missing modified=%0d busy=%0d target_refills=%0d",
              code_modified, saw_icache_invalidate_busy, target_refill_count);
-    if (dmem_clean_wb_valid)
-      $fatal(1, "unexpected D-cache writeback in no-eviction test");
-    $display("TEST PASS: cached lite core I$refill=%0d I$hit=%0d D$refill=%0d cycles=%0d instret=%0d",
+    if (clean_wb_count != 4 || mem[32] != 64'd42)
+      $fatal(1, "D-cache clean/writeback missing beats=%0d memory=%0d",
+             clean_wb_count, mem[32]);
+    $display("TEST PASS: cached Edge-32 core I$refill=%0d I$hit=%0d D$refill=%0d clean_wb=%0d cycles=%0d instret=%0d",
              imem_refill_count, icache_hit_count, dmem_refill_count,
-             cycle_count, instret_count);
+             clean_wb_count, cycle_count, instret_count);
     $finish;
   end
 endmodule
