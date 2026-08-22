@@ -2,7 +2,7 @@
 
 // Fixed-width RV32 instruction adapter. ASIC opcode 7'h3f is a complete
 // 32-bit command; no second parcel is fetched or buffered.
-module edge_rv_lite_instruction_assembler #(
+module edge_32_instruction_assembler #(
   parameter PC_WIDTH = 32
 ) (
   input  wire                 clk,

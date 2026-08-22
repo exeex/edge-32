@@ -278,7 +278,7 @@ module edge_rv_lite_core #(
                 (!is_accel||decoded_writes_gpr)&&
                 (!is_fp_compute||fpu_gpr_write);
 
-  edge_rv_lite_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
+  edge_32_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
     .clk(clk),.reset_n(reset_n),.boot_pc(boot_pc),
     .fetch_start(core_start_i),.fetch_stop(core_force_stop_i),
     .imem_req_valid(imem_req_valid),.imem_req_ready(imem_req_ready),
@@ -287,7 +287,7 @@ module edge_rv_lite_core #(
     .op_valid(parcel_valid),.op_ready(parcel_ready),.op_pc(parcel_pc),
     .op_inst(parcel_inst), .op_error(parcel_error), .halt(frontend_stop),
     .redirect_valid(redirect),.redirect_pc(redirect_pc));
-  edge_rv_lite_instruction_assembler assembler(
+  edge_32_instruction_assembler assembler(
     .clk(clk), .reset_n(reset_n), .parcel_valid(parcel_valid),
     .parcel_ready(parcel_ready), .parcel_pc(parcel_pc),
     .parcel_data(parcel_inst), .parcel_error(parcel_error),

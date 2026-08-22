@@ -1,11 +1,11 @@
 `timescale 1ns/1ps
-module edge_rv_lite_instruction_assembler_tb;
+module edge_32_instruction_assembler_tb;
   reg clk=0; always #5 clk=~clk;
   reg reset_n=0, parcel_valid=0, parcel_error=0, op_ready=1, flush=0;
   reg [31:0] parcel_pc=0; reg [31:0] parcel_data=0;
   wire parcel_ready, op_valid, op_is_64b, op_error;
   wire [31:0] op_pc; wire [63:0] op_inst;
-  edge_rv_lite_instruction_assembler dut(.*);
+  edge_32_instruction_assembler dut(.*);
 
   task send;
     input [31:0] pc; input [31:0] data;

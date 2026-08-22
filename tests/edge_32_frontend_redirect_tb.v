@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module edge_rv_lite_frontend_redirect_tb;
+module edge_32_frontend_redirect_tb;
   reg clk = 0; always #5 clk = ~clk;
   reg reset_n = 0;
   reg [31:0] boot_pc = 32'h40;
@@ -11,7 +11,7 @@ module edge_rv_lite_frontend_redirect_tb;
   wire op_valid; reg op_ready = 1;
   wire [31:0] op_pc; wire [31:0] op_inst; wire op_error;
   reg halt = 0, redirect_valid = 0; reg [31:0] redirect_pc = 0;
-  edge_rv_lite_frontend #(.AUTO_START(0)) dut(.*);
+  edge_32_frontend #(.AUTO_START(0)) dut(.*);
 
   task respond;
     input [31:0] data;

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Single-outstanding fetch frontend. A resolved control transfer discards the
 // F/D contents and restarts at redirect_pc; no epoch or prediction is needed.
-module edge_rv_lite_frontend #(
+module edge_32_frontend #(
   parameter PC_WIDTH = 32,
   parameter [PC_WIDTH-1:0] RESET_PC = {PC_WIDTH{1'b0}},
   parameter AUTO_START = 1

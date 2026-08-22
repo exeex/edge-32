@@ -263,7 +263,7 @@ scalar work toward `edge_scalar_pipe`, and sends accelerator work through the
 snapshot/command-queue path to `edge_accel_pipe`.
 
 Lite implements the same architectural split with less policy. Ordered 32-bit
-fetch parcels first pass through `edge_rv_lite_instruction_assembler`; the
+fetch parcels first pass through `edge_32_instruction_assembler`; the
 shared `edge_instruction_classifier` then identifies scalar versus ASIC
 operation classes. Scalar instructions enter the three-stage RV64 pipe. Edge64
 instructions use the lite accelerator owner and the same maintained
