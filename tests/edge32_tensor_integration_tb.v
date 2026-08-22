@@ -21,6 +21,11 @@ module edge32_tensor_integration_tb;
   wire awvalid, awready, bready, bvalid, wlast, wready, wvalid;
   wire [15:0] wstrb;
   wire halted, illegal, tensor_busy, actu_busy, cmpu_busy, accel_dma_busy;
+  wire asic_power_enable, asic_ready;
+  // FPGA and Verilator have no switched physical domain. Echo the requested
+  // enable as physical ready; the product synchronizer still defines the
+  // architectural ready latency seen by edge.asic.power.
+  wire asic_power_ready = asic_power_enable;
   wire [63:0] debug_x31, cycle_count, instret_count;
   integer cycles;
   integer word_i;
@@ -108,6 +113,8 @@ module edge32_tensor_integration_tb;
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .core_start(core_start),.core_force_stop(core_force_stop),
     .boot_pc(boot_pc),
+    .asic_power_enable(asic_power_enable),
+    .asic_power_ready(asic_power_ready),.asic_ready(asic_ready),
     .mem_region_base(40'h0040000000),
     .mem_region_mask(40'hfffffe0000), .mem_region_enable(1'b1),
     .dma_araddr(araddr), .dma_arburst(arburst), .dma_arcache(arcache),
