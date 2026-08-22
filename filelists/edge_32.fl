@@ -1,9 +1,9 @@
-# Local RV32 units plus shared edge-rv units. Parent defines both roots.
+# Edge-32 units plus shared edge-rv units. Parent defines both roots.
 ${ROOT_DIR}/synth/rtl/edge_rv_fpga_ram.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_alu.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_branch.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_muldiv.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_instruction_classifier.v
+${EDGE32_ROOT}/rtl/edge_32_alu.v
+${EDGE32_ROOT}/rtl/edge_32_branch.v
+${EDGE32_ROOT}/rtl/edge_32_muldiv.v
+${EDGE32_ROOT}/rtl/edge_instruction_classifier.v
 ${EDGE_RV_ROOT}/edge_fpu_misc/edge_fpu_misc.v
 ${EDGE_RV_ROOT}/edge_fpu_cvt/edge_fpu_cvt.v
 ${EDGE_RV_ROOT}/edge_fpu_slow/edge_fpu_slow.v
@@ -15,14 +15,14 @@ ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
 ${EDGE_RV_ROOT}/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
 ${EDGE_RV_ROOT}/edge_fpu_fmac/edge_fpu_fmac.v
 ${EDGE_RV_ROOT}/edge_fpu_alu/edge_fpu_alu.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_decode.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_frontend.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_instruction_assembler.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_lsu.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_fp_mem_format.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_icache_adapter.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_dcache_adapter.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_dtcm_router.v
+${EDGE32_ROOT}/rtl/edge_32_decode.v
+${EDGE32_ROOT}/rtl/edge_32_frontend.v
+${EDGE32_ROOT}/rtl/edge_32_instruction_assembler.v
+${EDGE32_ROOT}/rtl/edge_32_lsu.v
+${EDGE32_ROOT}/rtl/edge_32_fp_mem_format.v
+${EDGE32_ROOT}/rtl/edge_32_icache_adapter.v
+${EDGE32_ROOT}/rtl/edge_32_dcache_adapter.v
+${EDGE32_ROOT}/rtl/edge_32_dtcm_router.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/edge_ifu_icache.v
@@ -36,8 +36,8 @@ ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_banked_data_array.v
 ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_tag_array.v
 ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_dirty_array.v
 ${EDGE_RV_ROOT}/edge_dcache/edge_dcache.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_pipeline.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_core.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_cached_core.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_cache_biu.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_32_axi_core.v
+${EDGE32_ROOT}/rtl/edge_32_pipeline.v
+${EDGE32_ROOT}/rtl/edge_32_core.v
+${EDGE32_ROOT}/rtl/edge_32_cached_core.v
+${EDGE32_ROOT}/rtl/edge_32_cache_biu.v
+${EDGE32_ROOT}/rtl/edge_32_axi_core.v

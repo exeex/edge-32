@@ -464,8 +464,8 @@ The source-level integration boundary is selected by filelist:
 - tie compatibility lane 1 permanently invalid;
 - compose the result with the same edge-e3 ASIC platform.
 
-`filelists/edge_rv_lite.fl` is the canonical lite source selection. The parent
-project supplies `${EDGE_RV_ROOT}` and `${EDGE_RV_LITE_ROOT}`. A complete lite
+`filelists/edge_32.fl` is the canonical Edge-32 source selection. The parent
+project supplies `${EDGE_RV_ROOT}` and `${EDGE32_ROOT}`. A complete Edge-32
 product must instantiate `edge_core_lite_top`; swapping only leaf RTL beneath
 the normal `edge_core_top` would retain the baseline RTU and queue area.
 
@@ -816,7 +816,7 @@ EDGE_YOSYS_VARIANT=xilinx-clean \
   synth/filelists/edge_rv.fl
 EDGE_YOSYS_VARIANT=xilinx-lite-cached \
   ./synth/run_yosys.sh edge_32_cached_core xilinx \
-  src/edge-32/filelists/edge_rv_lite.fl
+  src/edge-32/filelists/edge_32.fl
 ```
 
 Use the same revision, Yosys version, target family, filelists, and elaboration
