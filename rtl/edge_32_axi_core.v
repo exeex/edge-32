@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-// Bootable edge-rv-lite cache hierarchy with the Edge 128-bit AXI boundary.
+// Bootable Edge-32 cache hierarchy with the Edge 128-bit AXI boundary.
 module edge32_axi_core #(
   parameter PC_WIDTH = 32,
   parameter AXI_ADDR_WIDTH = 64,
@@ -222,6 +222,6 @@ module edge32_axi_core #(
   );
 
   initial begin
-    if (AXI_DATA_WIDTH != 128) $error("edge-rv-lite requires 128-bit AXI");
+    if (AXI_DATA_WIDTH != 128) $error("Edge-32 requires 128-bit AXI");
   end
 endmodule

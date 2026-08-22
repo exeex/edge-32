@@ -50,6 +50,6 @@ module edge_32_dtcm_router_tb;
     if(!core_resp_valid||core_resp_error) $fatal(1,"dtcm store ack");
     @(posedge clk); #1;
     if(core_resp_valid) $fatal(1,"duplicate store ack");
-    $display("EDGE_RV_LITE_DTCM_ROUTER TEST PASS"); $finish;
+    $display("EDGE32_DTCM_ROUTER TEST PASS"); $finish;
   end
 endmodule

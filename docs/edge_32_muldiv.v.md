@@ -61,7 +61,7 @@ edge-rv-lite arithmetic structure, while division is native RV32:
 The generic unit remains the default core implementation. The ASAP7 leaf is a
 separate physical-model boundary until its routed timing/area baseline is
 recorded. From the parent project, run its functional test with
-`edge_32_muldiv_asap7_vvp`, and run the physical probes with:
+`edge_32_muldiv_asap7_verilator`, and run the physical probes with:
 
 ```sh
 ./synth/openroad/run_openroad.sh edge_32_mul_asap7 asap7-edge32-mul \

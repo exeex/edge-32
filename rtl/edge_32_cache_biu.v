@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-// Serial cache-to-AXI bridge for edge-rv-lite. One read burst and one dirty
+// Serial cache-to-AXI bridge for Edge-32. One read burst and one dirty
 // writeback beat may be in flight independently; no transaction IDs are kept
 // inside the scalar core.
 module edge_32_cache_biu #(

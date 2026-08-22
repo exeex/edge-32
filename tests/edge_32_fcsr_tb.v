@@ -105,6 +105,6 @@ module edge_32_fcsr_tb;
       $fatal(1,"FCSR integration failed halt=%0d illegal=%0d flags=%0d dyn=%0d frm=%0d clear=%0d pc=%h inst=%h fflags=%h",
              halted,illegal,saw_flags,saw_dynamic,saw_frm,saw_clear,
              dut.ex_pc,dut.ex_inst,dut.fflags_q);
-    $display("EDGE_RV_LITE_FCSR TEST PASS"); $finish;
+    $display("EDGE32_FCSR TEST PASS"); $finish;
   end
 endmodule

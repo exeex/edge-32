@@ -72,8 +72,8 @@ the following revision. Reproduce the checked cases from the parent build:
 
 ```sh
 cmake --build build/cmake-harness --target \
-  edge32_matmul64x64_64tokens_circular_vvp \
-  edge32_matmul64x64_128tokens_circular_vvp -j4
+  edge32_matmul64x64_64tokens_circular_verilator \
+  edge32_matmul64x64_128tokens_circular_verilator -j4
 
 ctest --test-dir build/cmake-harness \
   -R '^edge32_matmul64x64_(64|128)tokens_circular$' \
@@ -321,11 +321,11 @@ templates, and named DMA/Tensor/ACTU/CMPU wrappers which emit exactly one
 
 The native Edge-32 software profile is `riscv32-unknown-elf` with
 `-march=rv32imf_zba -mabi=ilp32f`. Atomic instructions are intentionally not
-part of this profile. The `edge32_software_rv32imf_zba_smoke_vvp` target builds
+part of this profile. The `edge32_software_rv32imf_zba_smoke_verilator` target builds
 and runs a bare-metal image covering integer, M, Zba, and single-precision F
 instructions on the core RTL.
 
-The `edge32_software_coremark_vvp` target builds the checked-in two-iteration
+The `edge32_software_coremark_verilator` target builds the checked-in two-iteration
 CoreMark workload with the same RV32 profile and runs it on the direct-memory
 core testbench. The RV32 startup and linker files initialize `gp`, `sp`, and
 `.bss`, then return the validated average cycle count through `x31` before
@@ -761,16 +761,16 @@ is enough and the extra scheduling machinery becomes product overhead.
 ## 12. Reproducing the experiments
 
 These commands assume a configured checkout of the complete `edge-cores`
-parent project. This directory explains and tests the lite RTL, but it is not a
+parent project. This directory explains and tests the Edge-32 RTL, but it is not a
 standalone package for the CoreMark, Tensor, or full-product results.
 
-### 12.1 Lite RTL and scalar integration
+### 12.1 Edge-32 RTL and scalar integration
 
 ```sh
-cmake -S src/edge-rv-lite -B build/edge-rv-lite
-cmake --build build/edge-rv-lite --target edge_32_coremark_vvp
-ctest --test-dir build/edge-rv-lite \
-  -R '^edge_32_coremark$' --output-on-failure
+cmake -S src/edge-32 -B build/edge-32
+cmake --build build/edge-32 --target edge32_software_coremark_verilator
+ctest --test-dir build/edge-32 \
+  -R '^edge32_software_coremark$' --output-on-failure
 ```
 
 The local CMake harness also registers focused tests for pipeline, redirects,
@@ -784,14 +784,13 @@ These tests require the complete edge-e3 Tensor, DTCM, DMA, cache, AXI, and
 product-top composition supplied by the parent project:
 
 ```sh
-cmake --build build/edge-rv-lite --target edge_rv_lite_tensor_stream64_vvp -j2
-cmake --build build/edge-rv-lite --target edge_rv_lite_tensor_circular_vvp -j2
-cmake --build build/edge-rv-lite --target \
-  edge_rv_lite_matmul64x64_64tokens_circular_vvp \
-  edge_rv_lite_matmul64x64_128tokens_circular_vvp -j2
+cmake --build build/edge-32 --target \
+  edge32_tensor_bf16_matmul8x8_verilator \
+  edge32_matmul64x64_64tokens_circular_verilator \
+  edge32_matmul64x64_128tokens_circular_verilator -j2
 
-ctest --test-dir build/edge-rv-lite \
-  -R '^edge_rv_lite_(tensor_(stream64|circular)|matmul64x64_(64|128)tokens_circular)$' \
+ctest --test-dir build/edge-32 \
+  -R '^edge32_(tensor_bf16_matmul8x8|matmul64x64_(64|128)tokens_circular)$' \
   --output-on-failure
 ```
 

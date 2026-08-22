@@ -1,6 +1,6 @@
 # edge_32_cache_biu.v
 
-This leaf owns the edge-rv-lite cache-to-AXI protocol boundary. It converts
+This leaf owns the Edge-32 cache-to-AXI protocol boundary. It converts
 one 16-byte I-cache refill, one four-beat/64-byte D-cache refill, and the
 D-cache 16-byte dirty writeback stream into the same 128-bit AXI channel shape
 used by `edge_core_top`.

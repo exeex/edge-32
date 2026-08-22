@@ -1,4 +1,4 @@
-# edge-rv-lite cache adapters
+# Edge-32 cache adapters
 
 `edge_32_icache_adapter` converts one 32-bit lite fetch into the existing
 Edge I-cache request and 128-bit response interface. It records only the

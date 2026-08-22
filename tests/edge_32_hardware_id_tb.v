@@ -42,7 +42,7 @@ module edge_32_hardware_id_tb;
     if(illegal) $fatal(1,"hardware ID CSR decoded as illegal");
     if(debug_x31!==64'h0000_0000_3303_0101)
       $fatal(1,"lite hardware ID mismatch: %h",debug_x31);
-    $display("EDGE_RV_LITE_HARDWARE_ID TEST PASS id=%h",debug_x31);
+    $display("EDGE32_HARDWARE_ID TEST PASS id=%h",debug_x31);
     $finish;
   end
 endmodule

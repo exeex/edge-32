@@ -21,6 +21,7 @@ module edge_32_axi_coremark_tb;
   integer icache_reads;
   integer dcache_reads;
   integer write_responses;
+  integer return_only;
   integer byte_i;
 
   wire [63:0] araddr;
@@ -81,7 +82,7 @@ module edge_32_axi_coremark_tb;
   assign awready = !aw_pending_q && !bvalid_q;
   assign wready = aw_pending_q && !bvalid_q;
 
-  edge32_axi_core dut (
+  edge32_axi_core #(.ENABLE_FPU(1)) dut (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .core_start(core_start),.core_force_stop(core_force_stop),
     .boot_pc(boot_pc),
@@ -172,6 +173,7 @@ module edge_32_axi_coremark_tb;
     raddr_q = 0; rbeats_left_q = 0; aw_pending_q = 0; awaddr_q = 0;
     awid_q = 0; bvalid_q = 0; bid_q = 0; icache_reads = 0;
     dcache_reads = 0; write_responses = 0;
+    return_only = $test$plusargs("return_only");
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file))
       $fatal(1, "pass +mem64=<coremark_bench.data64.memh>");
@@ -191,11 +193,11 @@ module edge_32_axi_coremark_tb;
     if (!halted) $fatal(1, "AXI CoreMark timeout instret=%0d", instret_count);
     if (illegal) $fatal(1, "AXI CoreMark reported illegal instruction");
     if (debug_x31 == 0) $fatal(1, "AXI CoreMark returned zero");
-    if (instret_count != EDGE32_COREMARK_INSTRET)
+    if (!return_only && instret_count != EDGE32_COREMARK_INSTRET)
       $fatal(1, "AXI CoreMark instret mismatch=%0d", instret_count);
     if (icache_reads == 0 || dcache_reads == 0)
       $fatal(1, "AXI CoreMark did not use both cache read IDs");
-    $display("PASS: AXI edge-rv-lite CoreMark x31=%0d cycles=%0d instret=%0d I$AR=%0d D$AR=%0d B=%0d",
+    $display("PASS: AXI Edge-32 software x31=%0d cycles=%0d instret=%0d I$AR=%0d D$AR=%0d B=%0d",
              debug_x31, cycle_count, instret_count, icache_reads,
              dcache_reads, write_responses);
     $finish;

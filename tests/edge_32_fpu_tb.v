@@ -88,6 +88,6 @@ module edge_32_fpu_tb;
     if(illegal||!saw_fp32_store||!saw_fp4_store||!saw_fp16_store||
        !saw_bf16_store||!saw_fp8_e5m2_store||!saw_fp8_e4m3_store)
       $fatal(1,"enabled lite FPU did not complete");
-    $display("EDGE_RV_LITE_FPU TEST PASS"); $finish;
+    $display("EDGE32_FPU TEST PASS"); $finish;
   end
 endmodule

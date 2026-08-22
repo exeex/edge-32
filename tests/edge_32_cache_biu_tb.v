@@ -270,7 +270,7 @@ module edge_32_cache_biu_tb;
     bvalid = 1'b0;
     if (!wb_ready) fail("writeback buffer did not release");
 
-    $display("EDGE_RV_LITE_CACHE_BIU TEST PASS");
+    $display("EDGE32_CACHE_BIU TEST PASS");
     $finish;
   end
 endmodule

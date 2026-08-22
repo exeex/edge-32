@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_core_lite_tensor_tb;
+module edge32_tensor_integration_tb;
   localparam integer TIMEOUT_CYCLES = 2_500_000;
 
   reg clk = 1'b0;
@@ -186,7 +186,7 @@ module edge_core_lite_tensor_tb;
                  word_i, ram.mem[17'h10000 + word_i],
                  expected_word(word_i));
     end
-    $display("PASS: edge-rv-lite Tensor x30=%0d x31=%0d cycles=%0d instret=%0d",
+    $display("PASS: Edge-32 Tensor x30=%0d x31=%0d cycles=%0d instret=%0d",
              dut.core.cached_core.core.gpr[30], debug_x31, cycle_count,
              instret_count);
     $finish;

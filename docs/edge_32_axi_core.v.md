@@ -40,3 +40,6 @@ The integration CoreMark test places the project-built RV32IMF_Zba/ILP32F
 image behind an AXI slave model, checks the `0xf1` and `0xd1` refill IDs and
 burst attributes, and requires the current LLVM 22.1.8 Edge32 signature
 `instret=587409`.
+The same maintained harness accepts `+return_only` for shorter software smoke
+images. That mode still checks architectural return state and instruction/data
+cache traffic without imposing the CoreMark-specific retire signature.
