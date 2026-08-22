@@ -46,7 +46,7 @@ add_test(NAME edge32_dma_addr_split
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dma_addr_split_obj/Vedge32_dma_addr_split_tb)
 
 set(RTL
-  ${CMAKE_CURRENT_LIST_DIR}/../edge-rv/edge_instruction_classifier/edge_instruction_classifier.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v)
 
@@ -195,7 +195,7 @@ set(FPU_RTL
   ${EDGE_RV_ROOT}/edge_fpu_fmac/edge_fpu_fmac.v
   ${EDGE_RV_ROOT}/edge_fpu_alu/edge_fpu_alu.v)
 set(CORE_RTL
-  ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_alu.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_muldiv.v
@@ -756,13 +756,27 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/decode_obj/Vedge_32_decode_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_32_decode_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/decode_obj
-          ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
           ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_decode_tb.v
-  DEPENDS ${EDGE_RV_ROOT}/edge_instruction_classifier/edge_instruction_classifier.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
           ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
           ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_decode_tb.v)
 add_custom_target(edge_32_decode_vvp ALL
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/decode_obj/Vedge_32_decode_tb)
 add_test(NAME edge_32_decode
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/decode_obj/Vedge_32_decode_tb)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj/Vedge_instruction_classifier_tb
+  COMMAND ${VERILATOR} --binary --timing --Wno-fatal
+          --top-module edge_instruction_classifier_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_instruction_classifier_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_instruction_classifier_tb.v)
+add_custom_target(edge_instruction_classifier_verilator ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj/Vedge_instruction_classifier_tb)
+add_test(NAME edge_instruction_classifier
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/classifier_obj/Vedge_instruction_classifier_tb)

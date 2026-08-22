@@ -4,6 +4,10 @@
 the lite core history so the width and ISA migration can proceed in reviewable,
 bit-true steps instead of starting from an unrelated implementation.
 
+The maintained instruction classifier is now owned here. Legacy edge-rv and
+edge-rv-lite integrations may temporarily consume that leaf for compatibility,
+but Edge32 production targets must not source the old classifier path.
+
 The imported baseline is still RV64. Until the RV32 migration tests pass, the
 existing `edge_rv_lite_*` RTL names and RV64 behavior are intentionally kept as
 the reference implementation. The migration will change the architectural
