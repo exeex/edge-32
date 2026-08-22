@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module edge_rv_lite_pipeline_tb;
+module edge_32_pipeline_tb;
   reg clk = 0; always #5 clk = ~clk;
   reg reset_n = 0, fetch_valid = 0, fetch_error = 0;
   wire fetch_ready; reg [31:0] fetch_pc = 0; reg [63:0] fetch_inst = 0;
@@ -17,7 +17,7 @@ module edge_rv_lite_pipeline_tb;
   wire ex_legal, ex_writes_gpr;
   reg ex_done = 1, ex_write_valid = 0, ex_redirect_valid = 0;
   reg [4:0] ex_write_rd = 0; reg [31:0] ex_write_value = 0;
-  edge_rv_lite_pipeline dut(.*);
+  edge_32_pipeline dut(.*);
 
   task push;
     input [31:0] pc; input [31:0] inst;

@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_coremark_tb;
+module edge_32_coremark_tb;
   localparam integer MEM_BYTES = 1024 * 1024;
   localparam integer MEM_WORDS = MEM_BYTES / 8;
   localparam integer TIMEOUT_CYCLES = 10_000_000;
@@ -35,7 +35,7 @@ module edge_rv_lite_coremark_tb;
   wire [63:0] cycle_count;
   wire [63:0] instret_count;
 
-  edge_rv_lite_core #(.ENABLE_FPU(1)) dut (
+  edge_32_core #(.ENABLE_FPU(1)) dut (
     .clk(clk), .reset_n(reset_n),
     .imem_req_valid(imem_req_valid), .imem_req_ready(1'b1),
     .imem_req_addr(imem_req_addr), .imem_resp_valid(imem_resp_valid),

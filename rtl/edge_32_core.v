@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 // Bootable RV32IM_Zba three-stage core. Variable-latency EX freezes IF/ID.
-module edge_rv_lite_core #(
+module edge_32_core #(
   parameter PC_WIDTH = 32,
   parameter DMEM_RESP_FORMATTED = 0,
   parameter ENABLE_FPU = 0,
@@ -294,7 +294,7 @@ module edge_rv_lite_core #(
     .op_valid(if_valid), .op_ready(if_ready), .op_pc(if_pc),
     .op_inst(if_inst), .op_is_64b(if_is_64b), .op_error(if_error),
     .flush(redirect||frontend_stop||core_start_i||core_force_stop_i));
-  edge_rv_lite_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
+  edge_32_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
     .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),

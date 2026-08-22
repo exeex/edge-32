@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module edge_rv_lite_fpu_tb;
+module edge_32_fpu_tb;
   reg clk=0, reset_n=0; always #5 clk=~clk;
   wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
@@ -9,7 +9,7 @@ module edge_rv_lite_fpu_tb;
   reg saw_fp32_store=0, saw_fp4_store=0;
   reg saw_fp16_store=0, saw_bf16_store=0;
   reg saw_fp8_e5m2_store=0, saw_fp8_e4m3_store=0;
-  edge_rv_lite_core #(.ENABLE_FPU(1)) dut(
+  edge_32_core #(.ENABLE_FPU(1)) dut(
     .clk(clk),.reset_n(reset_n),.imem_req_valid(imem_req_valid),
     .imem_req_ready(1'b1),.imem_req_addr(imem_req_addr),
     .imem_resp_valid(imem_resp_valid),.imem_resp_data(imem_resp_data),

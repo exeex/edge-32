@@ -1,12 +1,12 @@
 `timescale 1ns/1ps
-module edge_rv_lite_hardware_id_tb;
+module edge_32_hardware_id_tb;
   reg clk=0; always #5 clk=~clk;
   reg reset_n=0;
   wire imem_req_valid; wire [31:0] imem_req_addr;
   reg imem_resp_valid=0; reg [31:0] imem_resp_data=0;
   wire halted,illegal; wire [63:0] debug_x31;
 
-  edge_rv_lite_core #(
+  edge_32_core #(
     .ENABLE_FPU(1),
     .EDGE_ASIC_ID({15'd3,4'd3,4'd3,8'h03,8'h01,8'h01})
   ) dut(

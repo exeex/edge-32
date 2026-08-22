@@ -1,6 +1,6 @@
-# edge_rv_lite_pipeline
+# edge_32_pipeline
 
-The containing `edge_rv_lite_core` handles the read-only hardware-ID CSR
+The containing `edge_32_core` handles the read-only hardware-ID CSR
 `0xfc0` as a local single-cycle system operation. Its core fields are constants
 owned by lite; its product fields come from the elaboration-time
 `EDGE_ASIC_ID` parameter. No runtime ID interface crosses this pipeline.

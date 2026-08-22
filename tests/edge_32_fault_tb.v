@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_fault_tb;
+module edge_32_fault_tb;
   localparam integer FETCH_ALU_FAULT = 1;
   localparam integer FETCH_STORE_FAULT = 2;
   localparam integer LOAD_RESP_FAULT = 3;
@@ -36,7 +36,7 @@ module edge_rv_lite_fault_tb;
   wire halted, illegal;
   wire [63:0] instret_count;
 
-  edge_rv_lite_core #(.ENABLE_FPU(1)) dut(
+  edge_32_core #(.ENABLE_FPU(1)) dut(
     .clk(clk), .reset_n(reset_n),
     .imem_req_valid(imem_req_valid), .imem_req_ready(1'b1),
     .imem_req_addr(imem_req_addr), .imem_resp_valid(imem_resp_valid),
@@ -75,11 +75,8 @@ module edge_rv_lite_fault_tb;
           32'h0000_2283 : 32'h0010_0073; // lw x5,0(x0); ebreak
       end
       ACCEL_RESP_FAULT: begin
-        case (imem_req_addr)
-          32'h0: imem_resp_data <= 32'h0000_02bf; // tensor.getcsr rd=x5 low
-          32'h4: imem_resp_data <= 32'h0000_00af; // tensor.getcsr high
-          default: imem_resp_data <= 32'h0010_0073;
-        endcase
+        imem_resp_data <= imem_req_addr == 0 ?
+          32'h5e00_02bf : 32'h0010_0073; // ASIC32 getcsr subop=0x2f
       end
       RESERVED_OP32_M: begin
         // funct7=1/funct3=1 is reserved in RV64 OP-32 (not MULW/DIVW/REMW).

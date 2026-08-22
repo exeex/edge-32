@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_halt_tb;
+module edge_32_halt_tb;
   localparam integer EBREAK_CASE = 1;
   localparam integer ILLEGAL_CASE = 2;
   localparam integer FORMER_MAILBOX_STORE_CASE = 3;
@@ -35,7 +35,7 @@ module edge_rv_lite_halt_tb;
   wire halted, illegal;
   wire [63:0] instret_count;
 
-  edge_rv_lite_core dut(
+  edge_32_core dut(
     .clk(clk), .reset_n(reset_n),
     .imem_req_valid(imem_req_valid), .imem_req_ready(1'b1),
     .imem_req_addr(imem_req_addr), .imem_resp_valid(imem_resp_valid),

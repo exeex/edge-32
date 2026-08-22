@@ -135,7 +135,7 @@ module edge_rv_lite_cached_core #(
   wire [63:0] cache_op_addr;
   wire cache_op_complete_valid;
 
-  edge_rv_lite_core #(
+  edge_32_core #(
     .PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(1),
     .ENABLE_FPU(ENABLE_FPU), .MULDIV_ASAP7(MULDIV_ASAP7),
     .AUTO_START(AUTO_START),

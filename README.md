@@ -472,7 +472,7 @@ the normal `edge_core_top` would retain the baseline RTU and queue area.
 ## 7. Memory and product integration
 
 ```text
-edge_rv_lite_core
+edge_32_core
         |
         +-- instruction adapter -- I-cache --------+
         |                                          |
@@ -768,9 +768,9 @@ standalone package for the CoreMark, Tensor, or full-product results.
 
 ```sh
 cmake -S src/edge-rv-lite -B build/edge-rv-lite
-cmake --build build/edge-rv-lite --target edge_rv_lite_coremark_vvp
+cmake --build build/edge-rv-lite --target edge_32_coremark_vvp
 ctest --test-dir build/edge-rv-lite \
-  -R '^edge_rv_lite_coremark$' --output-on-failure
+  -R '^edge_32_coremark$' --output-on-failure
 ```
 
 The local CMake harness also registers focused tests for pipeline, redirects,
@@ -827,7 +827,7 @@ parameters before comparing cell counts.
 This README presents the system argument. Cycle-level contracts remain beside
 the implementation:
 
-- `docs/edge_rv_lite_pipeline.v.md`: scalar serialization, redirects, faults,
+- `docs/edge_32_pipeline.v.md`: scalar serialization, redirects, faults,
   halt, and Edge64 acceptance ownership;
 - `docs/edge_32_lsu.v.md`: RV32 scalar memory request and completion;
 - `docs/edge_32_fp_mem_format.v.md`: FP memory normalization;

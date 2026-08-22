@@ -48,7 +48,7 @@ add_test(NAME edge32_dma_addr_split
 set(RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_instruction_classifier.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_decode.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v)
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_pipeline.v)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/alu32_obj/Vedge_32_alu_tb
@@ -112,15 +112,15 @@ add_test(NAME edge_32_muldiv_asap7
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_asap7_obj/Vedge_32_muldiv_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb
-  COMMAND ${VERILATOR} --binary --timing --top-module edge_rv_lite_pipeline_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_32_pipeline_tb
+  COMMAND ${VERILATOR} --binary --timing --top-module edge_32_pipeline_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/obj_dir
-          ${RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_pipeline_tb.v
-  DEPENDS ${RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_pipeline_tb.v)
-add_custom_target(edge_rv_lite_pipeline_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb)
-add_test(NAME edge_rv_lite_pipeline
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_rv_lite_pipeline_tb)
+          ${RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_pipeline_tb.v
+  DEPENDS ${RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_pipeline_tb.v)
+add_custom_target(edge_32_pipeline_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_32_pipeline_tb)
+add_test(NAME edge_32_pipeline
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/obj_dir/Vedge_32_pipeline_tb)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/redirect_obj/Vedge_32_frontend_redirect_tb
@@ -203,10 +203,10 @@ set(CORE_RTL
   ${FPU_RTL}
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_frontend.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_instruction_assembler.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_pipeline.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_lsu.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_fp_mem_format.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_core.v)
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_core.v)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/muldiv32_core_obj/Vedge_32_muldiv_core_tb
@@ -249,42 +249,42 @@ add_test(NAME edge_fpu_alu
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/fpu_alu_obj/Vedge_fpu_alu_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_rv_lite_fpu_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_32_fpu_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_fpu_tb
+          --top-module edge_32_fpu_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fpu_tb.v
-  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fpu_tb.v)
-add_custom_target(edge_rv_lite_fpu_vvp
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_rv_lite_fpu_tb)
-add_test(NAME edge_rv_lite_fpu
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_rv_lite_fpu_tb)
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fpu_tb.v
+  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fpu_tb.v)
+add_custom_target(edge_32_fpu_vvp
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_32_fpu_tb)
+add_test(NAME edge_32_fpu
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lite_fpu_obj/Vedge_32_fpu_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_rv_lite_fcsr_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_32_fcsr_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_fcsr_tb
+          --top-module edge_32_fcsr_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fcsr_tb.v
-  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fcsr_tb.v)
-add_custom_target(edge_rv_lite_fcsr_vvp
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_rv_lite_fcsr_tb)
-add_test(NAME edge_rv_lite_fcsr
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_rv_lite_fcsr_tb)
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fcsr_tb.v
+  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fcsr_tb.v)
+add_custom_target(edge_32_fcsr_vvp
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_32_fcsr_tb)
+add_test(NAME edge_32_fcsr
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lite_fcsr_obj/Vedge_32_fcsr_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_coremark_tb
+          --top-module edge_32_coremark_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_coremark_tb.v
-  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_coremark_tb.v)
-add_custom_target(edge_rv_lite_coremark_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb)
-add_test(NAME edge_rv_lite_coremark
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_coremark_tb.v
+  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_coremark_tb.v)
+add_custom_target(edge_32_coremark_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb)
+add_test(NAME edge_32_coremark
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb
           +mem64=${EDGE_COREMARK_MEM64})
-set_tests_properties(edge_rv_lite_coremark PROPERTIES
+set_tests_properties(edge_32_coremark PROPERTIES
   REQUIRED_FILES "${EDGE_COREMARK_MEM64}" TIMEOUT 30)
 
 set(EDGE32_SOFTWARE_DIR
@@ -331,9 +331,9 @@ add_custom_target(edge32_software_rv32imf_zba_smoke
   DEPENDS ${EDGE32_SOFTWARE_MEM64})
 add_custom_target(edge32_software_rv32imf_zba_smoke_vvp
   DEPENDS edge32_software_rv32imf_zba_smoke
-          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb)
+          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb)
 add_test(NAME edge32_software_rv32imf_zba_smoke
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb
           +mem64=${EDGE32_SOFTWARE_MEM64})
 set_tests_properties(edge32_software_rv32imf_zba_smoke PROPERTIES
   REQUIRED_FILES "${EDGE32_SOFTWARE_MEM64}" TIMEOUT 30)
@@ -380,9 +380,9 @@ add_custom_target(edge32_software_coremark
   DEPENDS ${EDGE32_COREMARK_MEM64})
 add_custom_target(edge32_software_coremark_vvp
   DEPENDS edge32_software_coremark
-          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb)
+          ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb)
 add_test(NAME edge32_software_coremark
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_rv_lite_coremark_tb
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/coremark_obj/Vedge_32_coremark_tb
           +mem64=${EDGE32_COREMARK_MEM64})
 set_tests_properties(edge32_software_coremark PROPERTIES
   REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 60)
@@ -486,58 +486,58 @@ edge32_add_tensor_benchmark(
   matmul64x64_runtime_shape_128tokens.cpp 1622 check_matmul128)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_32_accel_serial_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_accel_serial_tb
+          --top-module edge_32_accel_serial_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_accel_serial_tb.v
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_accel_serial_tb.v
   DEPENDS ${CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_accel_serial_tb.v)
-add_custom_target(edge_rv_lite_accel_serial_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb)
-add_test(NAME edge_rv_lite_accel_serial
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_rv_lite_accel_serial_tb)
-set_tests_properties(edge_rv_lite_accel_serial PROPERTIES TIMEOUT 30)
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_accel_serial_tb.v)
+add_custom_target(edge_32_accel_serial_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_32_accel_serial_tb)
+add_test(NAME edge_32_accel_serial
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/accel_serial_obj/Vedge_32_accel_serial_tb)
+set_tests_properties(edge_32_accel_serial PROPERTIES TIMEOUT 30)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_rv_lite_fault_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_32_fault_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_fault_tb
+          --top-module edge_32_fault_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/fault_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fault_tb.v
-  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_fault_tb.v)
-add_custom_target(edge_rv_lite_fault_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_rv_lite_fault_tb)
-add_test(NAME edge_rv_lite_fault
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_rv_lite_fault_tb)
-set_tests_properties(edge_rv_lite_fault PROPERTIES TIMEOUT 30)
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fault_tb.v
+  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_fault_tb.v)
+add_custom_target(edge_32_fault_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_32_fault_tb)
+add_test(NAME edge_32_fault
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/fault_obj/Vedge_32_fault_tb)
+set_tests_properties(edge_32_fault PROPERTIES TIMEOUT 30)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_rv_lite_halt_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_32_halt_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_halt_tb
+          --top-module edge_32_halt_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/halt_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_halt_tb.v
-  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_halt_tb.v)
-add_custom_target(edge_rv_lite_halt_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_rv_lite_halt_tb)
-add_test(NAME edge_rv_lite_halt
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_rv_lite_halt_tb)
-set_tests_properties(edge_rv_lite_halt PROPERTIES TIMEOUT 30)
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_halt_tb.v
+  DEPENDS ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_halt_tb.v)
+add_custom_target(edge_32_halt_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_32_halt_tb)
+add_test(NAME edge_32_halt
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/halt_obj/Vedge_32_halt_tb)
+set_tests_properties(edge_32_halt PROPERTIES TIMEOUT 30)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_rv_lite_hardware_id_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_32_hardware_id_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_hardware_id_tb
+          --top-module edge_32_hardware_id_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj
-          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_hardware_id_tb.v
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_hardware_id_tb.v
   DEPENDS ${CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_hardware_id_tb.v)
-add_custom_target(edge_rv_lite_hardware_id_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_rv_lite_hardware_id_tb)
-add_test(NAME edge_rv_lite_hardware_id
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_rv_lite_hardware_id_tb)
-set_tests_properties(edge_rv_lite_hardware_id PROPERTIES TIMEOUT 30)
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_hardware_id_tb.v)
+add_custom_target(edge_32_hardware_id_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_32_hardware_id_tb)
+add_test(NAME edge_32_hardware_id
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/hardware_id_obj/Vedge_32_hardware_id_tb)
+set_tests_properties(edge_32_hardware_id PROPERTIES TIMEOUT 30)
 
 set(CACHED_CORE_RTL
   ${CORE_RTL}
