@@ -1,4 +1,4 @@
-# edge_rv_lite_cached_core.v
+# edge_32_cached_core.v
 
 `DTCM_ADDR_WIDTH` is passed to the DTCM router and sizes the exported DTCM
 word address. The no-DTCM configuration ties off the complete parameterized

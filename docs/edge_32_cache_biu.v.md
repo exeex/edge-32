@@ -1,4 +1,4 @@
-# edge_rv_lite_cache_biu.v
+# edge_32_cache_biu.v
 
 This leaf owns the edge-rv-lite cache-to-AXI protocol boundary. It converts
 one 16-byte I-cache refill, one four-beat/64-byte D-cache refill, and the

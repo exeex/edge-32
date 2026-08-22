@@ -2,7 +2,7 @@
 
 Product-facing module name for the Edge-32 cached AXI core. It preserves the existing
 AXI128, 64-bit AXI address, 64-bit scalar-DTCM compatibility, accelerator
-request, and debug ports of `edge_rv_lite_axi_core`, while fixing the scalar PC
+request, and debug ports of `edge_32_axi_core`, while fixing the scalar PC
 width to 32 bits at product instantiation sites.
 
 The product boundary owns a two-flop reset-release synchronizer. External
@@ -17,6 +17,6 @@ The architectural boot PC remains a low 32-bit address; future I-cache high
 header state is concatenated separately and resets to zero.
 
 Apart from reset synchronization, the renamed top adds no protocol state.
-E3/E4 select the Edge-32 or RV64-lite filelist at build time instead of
-compiling both internal module sets together, whose historical
-`edge_rv_lite_*` names overlap.
+E3/E4 select the Edge-32 or RV64-lite filelist at build time. Edge-32 internal
+modules use the distinct `edge_32_*` namespace, so ownership remains visible
+even when a legacy RV64-lite configuration is still available.

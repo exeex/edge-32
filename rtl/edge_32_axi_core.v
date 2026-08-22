@@ -127,7 +127,7 @@ module edge32_axi_core #(
   wire dmem_clean_wb_last;
   wire dmem_clean_wb_complete;
 
-  edge_rv_lite_cached_core #(
+  edge_32_cached_core #(
     .PC_WIDTH(PC_WIDTH), .ICACHE_BYTES(ICACHE_BYTES),
     .DCACHE_BYTES(DCACHE_BYTES),.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH),
     .ENABLE_DTCM_PORT(ENABLE_DTCM_PORT),.ENABLE_FPU(ENABLE_FPU),
@@ -174,7 +174,7 @@ module edge32_axi_core #(
     .debug_dcache_load_miss_pending()
   );
 
-  edge_rv_lite_cache_biu #(
+  edge_32_cache_biu #(
     .ADDR_WIDTH(AXI_ADDR_WIDTH), .DATA_WIDTH(AXI_DATA_WIDTH),
     .ID_WIDTH(AXI_ID_WIDTH), .LEN_WIDTH(AXI_LEN_WIDTH)
   ) cache_biu (

@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_cache_biu_tb;
+module edge_32_cache_biu_tb;
   reg clk = 1'b0;
   reg reset_n = 1'b0;
   always #5 clk = ~clk;
@@ -65,7 +65,7 @@ module edge_rv_lite_cache_biu_tb;
   reg wready;
   integer beat;
 
-  edge_rv_lite_cache_biu dut (
+  edge_32_cache_biu dut (
     .clk(clk), .reset_n(reset_n),
     .icache_req_valid(ic_req_valid), .icache_req_ready(ic_req_ready),
     .icache_req_addr(ic_req_addr), .icache_resp_valid(ic_resp_valid),

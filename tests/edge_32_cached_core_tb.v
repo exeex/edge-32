@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_cached_core_tb;
+module edge_32_cached_core_tb;
   reg clk = 1'b0;
   reg reset_n = 1'b0;
   always #5 clk = ~clk;
@@ -57,7 +57,7 @@ module edge_rv_lite_cached_core_tb;
     end
   endfunction
 
-  edge_rv_lite_cached_core dut (
+  edge_32_cached_core dut (
     .clk(clk), .reset_n(reset_n),
     .imem_refill_req_valid(imem_refill_req_valid),
     .imem_refill_req_ready(1'b1),

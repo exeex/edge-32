@@ -487,7 +487,7 @@ edge_core_lite_top
         +-- shared accelerator data controller
 ```
 
-`edge_rv_lite_cached_core` composes the bootable core with the maintained
+`edge_32_cached_core` composes the bootable core with the maintained
 I-cache and D-cache. Its adapters convert one-owner fetch and LSU handshakes to
 the existing cache contracts. Lane 1, redirect-kill metadata, and backend
 pause inputs are tied inactive because lite cannot have a younger outstanding
@@ -499,7 +499,7 @@ read owner until response. Raw DTCM bank data is normalized to the same
 size/sign-formatted response used by D-cache, allowing scalar code to verify
 BF16 and byte results produced by ASIC tests.
 
-`edge_rv_lite_cache_biu` and product-facing `edge32_axi_core` connect this hierarchy to
+`edge_32_cache_biu` and product-facing `edge32_axi_core` connect this hierarchy to
 the existing 128-bit Edge AXI boundary. The BIU checks response IDs, status,
 burst beat counts, and `RLAST`. Failed instruction fills do not populate
 I-cache. Failed dirty writebacks remain buffered for retry, and AW/W may
@@ -639,7 +639,7 @@ Area uses Yosys `synth_xilinx -family xc7 -noiopad -noclkbuf`. These are
 FPGA-oriented estimates, not placed-and-routed FPGA or ASIC physical area.
 Two boundaries are reported:
 
-1. **RV layer:** `edge_rv_top` versus `edge_rv_lite_cached_core`, excluding
+1. **RV layer:** `edge_rv_top` versus `edge_32_cached_core`, excluding
    Tensor, DTCM, DMA, ACTU, and CMPU product logic.
 2. **Complete product:** `edge_core_top` versus `edge_core_lite_top`, retaining
    the same ASICs, caches, and SRAM-to-BRAM wrappers.
@@ -815,8 +815,8 @@ EDGE_YOSYS_VARIANT=xilinx-clean \
   ./synth/run_yosys.sh edge_rv_top xilinx \
   synth/filelists/edge_rv.fl
 EDGE_YOSYS_VARIANT=xilinx-lite-cached \
-  ./synth/run_yosys.sh edge_rv_lite_cached_core xilinx \
-  src/edge-rv-lite/filelists/edge_rv_lite.fl
+  ./synth/run_yosys.sh edge_32_cached_core xilinx \
+  src/edge-32/filelists/edge_rv_lite.fl
 ```
 
 Use the same revision, Yosys version, target family, filelists, and elaboration
@@ -832,12 +832,12 @@ the implementation:
 - `docs/edge_32_lsu.v.md`: RV32 scalar memory request and completion;
 - `docs/edge_32_fp_mem_format.v.md`: FP memory normalization;
 - `docs/edge_rv_lite_cache_adapters.v.md`: one-owner cache adaptation;
-- `docs/edge_rv_lite_cached_core.v.md`: bootable cache composition and
+- `docs/edge_32_cached_core.v.md`: bootable cache composition and
   `FENCE.I`;
 - `docs/edge_32_dtcm_router.v.md`: cache/DTCM ownership and formatting;
-- `docs/edge_rv_lite_cache_biu.v.md`: refill, writeback, error, and retry;
+- `docs/edge_32_cache_biu.v.md`: refill, writeback, error, and retry;
 - `docs/edge32_axi_core.v.md`: selectable Edge-32 product AXI boundary;
-- `docs/edge_rv_lite_axi_core.v.md`: maintained Edge AXI implementation contract.
+- `docs/edge_32_axi_core.v.md`: maintained Edge AXI implementation contract.
 
 Together, these contracts and tests establish that the performance and area
 comparison comes from scalar issue policy—not from silently removing product

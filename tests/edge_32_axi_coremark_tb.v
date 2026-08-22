@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_axi_coremark_tb;
+module edge_32_axi_coremark_tb;
   localparam integer MEM_BYTES = 1024 * 1024;
   localparam integer MEM_WORDS = MEM_BYTES / 8;
   localparam integer TIMEOUT_CYCLES = 10_000_000;

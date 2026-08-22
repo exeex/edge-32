@@ -3,7 +3,7 @@
 // Serial cache-to-AXI bridge for edge-rv-lite. One read burst and one dirty
 // writeback beat may be in flight independently; no transaction IDs are kept
 // inside the scalar core.
-module edge_rv_lite_cache_biu #(
+module edge_32_cache_biu #(
   parameter ADDR_WIDTH = 40,
   parameter DATA_WIDTH = 128,
   parameter ID_WIDTH = 8,

@@ -557,77 +557,60 @@ set(CACHED_CORE_RTL
   ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_tag_array.v
   ${EDGE_RV_ROOT}/edge_dcache/rtl/edge_dcache_dirty_array.v
   ${EDGE_RV_ROOT}/edge_dcache/edge_dcache.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_cached_core.v)
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cached_core.v)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_rv_lite_cached_core_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_32_cached_core_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_cached_core_tb
+          --top-module edge_32_cached_core_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj
           ${CACHED_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cached_core_tb.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_cached_core_tb.v
   DEPENDS ${CACHED_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cached_core_tb.v)
-add_custom_target(edge_rv_lite_cached_core_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_rv_lite_cached_core_tb)
-add_test(NAME edge_rv_lite_cached_core
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_rv_lite_cached_core_tb)
-set_tests_properties(edge_rv_lite_cached_core PROPERTIES TIMEOUT 30)
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_cached_core_tb.v)
+add_custom_target(edge_32_cached_core_verilator ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_32_cached_core_tb)
+add_test(NAME edge_32_cached_core
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_32_cached_core_tb)
+set_tests_properties(edge_32_cached_core PROPERTIES TIMEOUT 30)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_rv_lite_cache_biu_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_32_cache_biu_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_cache_biu_tb
+          --top-module edge_32_cache_biu_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj
-          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_cache_biu.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cache_biu_tb.v
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_cache_biu.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cache_biu_tb.v)
-add_custom_target(edge_rv_lite_cache_biu_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_rv_lite_cache_biu_tb)
-add_test(NAME edge_rv_lite_cache_biu
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_rv_lite_cache_biu_tb)
-set_tests_properties(edge_rv_lite_cache_biu PROPERTIES TIMEOUT 30)
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cache_biu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_cache_biu_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cache_biu.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_cache_biu_tb.v)
+add_custom_target(edge_32_cache_biu_verilator ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_32_cache_biu_tb)
+add_test(NAME edge_32_cache_biu
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/cache_biu_obj/Vedge_32_cache_biu_tb)
+set_tests_properties(edge_32_cache_biu PROPERTIES TIMEOUT 30)
 
 set(AXI_CORE_RTL
   ${CACHED_CORE_RTL}
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_cache_biu.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_axi_core.v)
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cache_biu.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_axi_core.v)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_axi_coremark_tb
+          --top-module edge_32_axi_coremark_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj
           ${AXI_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_axi_coremark_tb.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_axi_coremark_tb.v
   DEPENDS ${AXI_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_axi_coremark_tb.v)
-add_custom_target(edge_rv_lite_axi_coremark_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_axi_coremark_tb.v)
+add_custom_target(edge_32_axi_coremark_verilator ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
           ${EDGE32_COREMARK_MEM64})
-add_test(NAME edge_rv_lite_axi_coremark
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_rv_lite_axi_coremark_tb
+add_test(NAME edge_32_axi_coremark
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
           +mem64=${EDGE32_COREMARK_MEM64})
-set_tests_properties(edge_rv_lite_axi_coremark PROPERTIES
+set_tests_properties(edge_32_axi_coremark PROPERTIES
   REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 60)
-
-add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cached_coremark_obj/Vedge_rv_lite_cached_coremark_tb
-  COMMAND ${VERILATOR} --binary --timing -Wno-fatal
-          --top-module edge_rv_lite_cached_coremark_tb
-          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/cached_coremark_obj
-          ${CACHED_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cached_coremark_tb.v
-  DEPENDS ${CACHED_CORE_RTL}
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_cached_coremark_tb.v)
-add_custom_target(edge_rv_lite_cached_coremark_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cached_coremark_obj/Vedge_rv_lite_cached_coremark_tb)
-add_test(NAME edge_rv_lite_cached_coremark
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/cached_coremark_obj/Vedge_rv_lite_cached_coremark_tb
-          +mem64=${EDGE_COREMARK_MEM64})
-set_tests_properties(edge_rv_lite_cached_coremark PROPERTIES
-  REQUIRED_FILES "${EDGE_COREMARK_MEM64}" TIMEOUT 60)
 
 foreach(adapter IN ITEMS icache dcache)
   add_custom_command(
