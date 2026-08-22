@@ -179,7 +179,7 @@ module edge_rv_lite_core #(
   wire [31:0] fpu_store_value;
   wire [31:0] fp_load_value;
   wire [63:0] fp_store_value;
-  edge_rv_lite_fp_mem_format fp_mem_format(
+  edge_32_fp_mem_format fp_mem_format(
     .funct3(f3),.load_value({32'd0,lsu_value}),.store_fp32(fpu_store_value),
     .load_fp32(fp_load_value),.store_value(fp_store_value));
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(

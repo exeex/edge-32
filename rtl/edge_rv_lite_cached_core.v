@@ -176,7 +176,7 @@ module edge_rv_lite_cached_core #(
     .cycle_count(cycle_count), .instret_count(instret_count)
   );
 
-  edge_rv_lite_icache_adapter #(.PC_WIDTH(PC_WIDTH)) icache_adapter (
+  edge_32_icache_adapter #(.PC_WIDTH(PC_WIDTH)) icache_adapter (
     .clk(clk), .reset_n(reset_n),
     .core_req_valid(core_imem_req_valid),
     .core_req_ready(core_imem_req_ready),
@@ -192,7 +192,7 @@ module edge_rv_lite_cached_core #(
   );
 
   generate if(ENABLE_DTCM_PORT) begin: g_dtcm
-    edge_rv_lite_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) dtcm_router(
+    edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) dtcm_router(
       .clk(clk),.reset_n(reset_n),.dtcm_base(dtcm_base),.dtcm_mask(dtcm_mask),
       .dtcm_enable(dtcm_enable),.core_req_valid(core_dmem_req_valid),
       .core_req_ready(core_dmem_req_ready),.core_req_write(core_dmem_req_write),
@@ -267,7 +267,7 @@ module edge_rv_lite_cached_core #(
     end
   end
 
-  edge_rv_lite_dcache_adapter dcache_adapter (
+  edge_32_dcache_adapter dcache_adapter (
     .clk(clk), .reset_n(reset_n),
     .core_req_valid(cache_core_req_valid),
     .core_req_ready(cache_core_req_ready),

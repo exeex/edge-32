@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module edge_rv_lite_dtcm_router_tb;
+module edge_32_dtcm_router_tb;
   reg clk=0; always #5 clk=~clk;
   reg reset_n=0,core_req_valid=0,core_req_write=0;
   reg [63:0] core_req_addr=0,core_req_wdata=0;
@@ -13,7 +13,7 @@ module edge_rv_lite_dtcm_router_tb;
   wire [63:0] cache_req_addr,cache_req_wdata,dtcm_wdata;
   wire [7:0] cache_req_wstrb,dtcm_wstrb; wire [13:0] dtcm_addr;
 
-  edge_rv_lite_dtcm_router dut(
+  edge_32_dtcm_router dut(
     .clk(clk),.reset_n(reset_n),.dtcm_base(64'h1000_0000),
     .dtcm_mask(64'hffff_ffff_ffff_0000),.dtcm_enable(1'b1),.*);
 

@@ -2,7 +2,7 @@
 
 // Serial lane0 adapter between the lite LSU and the maintained Edge D-cache.
 // No sequence/epoch identity is required because only one operation may exist.
-module edge_rv_lite_dcache_adapter #(
+module edge_32_dcache_adapter #(
   parameter VALUE_WIDTH = 64,
   parameter SEQ_ID_WIDTH = 8,
   parameter EPOCH_WIDTH = 4

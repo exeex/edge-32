@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module edge_rv_lite_dtcm_router #(
+module edge_32_dtcm_router #(
   parameter ADDR_WIDTH = 64,
   parameter DTCM_ADDR_WIDTH = 14
 ) (

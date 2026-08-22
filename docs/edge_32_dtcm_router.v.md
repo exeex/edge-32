@@ -1,4 +1,4 @@
-# edge_rv_lite_dtcm_router
+# edge_32_dtcm_router
 
 This leaf owns the single in-order scalar memory transaction after the lite LSU
 selects either the configured DTCM base/mask window or the normal D-cache path.

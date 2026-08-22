@@ -19,10 +19,10 @@ ${EDGE_RV_LITE_ROOT}/rtl/edge_32_decode.v
 ${EDGE_RV_LITE_ROOT}/rtl/edge_32_frontend.v
 ${EDGE_RV_LITE_ROOT}/rtl/edge_32_instruction_assembler.v
 ${EDGE_RV_LITE_ROOT}/rtl/edge_32_lsu.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_rv_lite_fp_mem_format.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_rv_lite_icache_adapter.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_rv_lite_dcache_adapter.v
-${EDGE_RV_LITE_ROOT}/rtl/edge_rv_lite_dtcm_router.v
+${EDGE_RV_LITE_ROOT}/rtl/edge_32_fp_mem_format.v
+${EDGE_RV_LITE_ROOT}/rtl/edge_32_icache_adapter.v
+${EDGE_RV_LITE_ROOT}/rtl/edge_32_dcache_adapter.v
+${EDGE_RV_LITE_ROOT}/rtl/edge_32_dtcm_router.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
 ${EDGE_RV_ROOT}/edge_ifu_icache/edge_ifu_icache.v

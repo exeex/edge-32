@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 // Converts the physical FP32 FPR payload to/from the scalar FP memory formats.
-module edge_rv_lite_fp_mem_format (
+module edge_32_fp_mem_format (
   input  wire [2:0]  funct3,
   input  wire [63:0] load_value,
   input  wire [31:0] store_fp32,

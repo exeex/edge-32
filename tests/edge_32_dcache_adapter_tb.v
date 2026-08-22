@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module edge_rv_lite_dcache_adapter_tb;
+module edge_32_dcache_adapter_tb;
   reg clk = 1'b0;
   reg reset_n = 1'b0;
   always #5 clk = ~clk;
@@ -36,7 +36,7 @@ module edge_rv_lite_dcache_adapter_tb;
   wire [63:0] cache_store_req_data;
   wire [7:0] cache_store_req_wstrb;
 
-  edge_rv_lite_dcache_adapter dut (.*);
+  edge_32_dcache_adapter dut (.*);
 
   initial begin
     repeat (2) @(posedge clk);

@@ -164,18 +164,18 @@ add_test(NAME edge_32_lsu
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/lsu32_obj/Vedge_32_lsu_tb)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_rv_lite_dtcm_router_tb
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_32_dtcm_router_tb
   COMMAND ${VERILATOR} --binary --timing
-          --top-module edge_rv_lite_dtcm_router_tb
+          --top-module edge_32_dtcm_router_tb
           --Mdir ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj
-          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_dtcm_router.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_dtcm_router_tb.v
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_dtcm_router.v
-          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_dtcm_router_tb.v)
-add_custom_target(edge_rv_lite_dtcm_router_vvp ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_rv_lite_dtcm_router_tb)
-add_test(NAME edge_rv_lite_dtcm_router
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_rv_lite_dtcm_router_tb)
+          ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dtcm_router.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_dtcm_router_tb.v
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dtcm_router.v
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_dtcm_router_tb.v)
+add_custom_target(edge_32_dtcm_router_vvp ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_32_dtcm_router_tb)
+add_test(NAME edge_32_dtcm_router
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dtcm_router_obj/Vedge_32_dtcm_router_tb)
 
 set(EDGE_RV_ROOT "${CMAKE_CURRENT_LIST_DIR}/../edge-rv" CACHE PATH
     "Path to the shared edge-rv execution-unit repository")
@@ -205,7 +205,7 @@ set(CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_instruction_assembler.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_pipeline.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_lsu.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_fp_mem_format.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_fp_mem_format.v
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_core.v)
 
 add_custom_command(
@@ -541,9 +541,9 @@ set_tests_properties(edge_rv_lite_hardware_id PROPERTIES TIMEOUT 30)
 
 set(CACHED_CORE_RTL
   ${CORE_RTL}
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_icache_adapter.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_dcache_adapter.v
-  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_dtcm_router.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_icache_adapter.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dcache_adapter.v
+  ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_dtcm_router.v
   ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_data_array.v
   ${EDGE_RV_ROOT}/edge_ifu_icache/rtl/edge_ifu_icache_tag_array.v
   ${EDGE_RV_ROOT}/edge_ifu_icache/edge_ifu_icache.v
@@ -631,18 +631,18 @@ set_tests_properties(edge_rv_lite_cached_coremark PROPERTIES
 
 foreach(adapter IN ITEMS icache dcache)
   add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_rv_lite_${adapter}_adapter_tb
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_32_${adapter}_adapter_tb
     COMMAND ${VERILATOR} --binary --timing
-            --top-module edge_rv_lite_${adapter}_adapter_tb
+            --top-module edge_32_${adapter}_adapter_tb
             --Mdir ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj
-            ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_${adapter}_adapter.v
-            ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_${adapter}_adapter_tb.v
-    DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_rv_lite_${adapter}_adapter.v
-            ${CMAKE_CURRENT_LIST_DIR}/tests/edge_rv_lite_${adapter}_adapter_tb.v)
-  add_custom_target(edge_rv_lite_${adapter}_adapter_vvp ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_rv_lite_${adapter}_adapter_tb)
-  add_test(NAME edge_rv_lite_${adapter}_adapter
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_rv_lite_${adapter}_adapter_tb)
+            ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_${adapter}_adapter.v
+            ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_${adapter}_adapter_tb.v
+    DEPENDS ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_${adapter}_adapter.v
+            ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_${adapter}_adapter_tb.v)
+  add_custom_target(edge_32_${adapter}_adapter_vvp ALL
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_32_${adapter}_adapter_tb)
+  add_test(NAME edge_32_${adapter}_adapter
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_32_${adapter}_adapter_tb)
 endforeach()
 
 add_custom_command(

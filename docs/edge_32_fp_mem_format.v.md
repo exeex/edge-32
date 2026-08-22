@@ -1,4 +1,4 @@
-# edge_rv_lite_fp_mem_format
+# edge_32_fp_mem_format
 
 This combinational leaf is the lite core's FP memory-format boundary. The FPR
 file remains physical FP32. Loads promote FP16 (`funct3=001`), FP32 (`010`),
