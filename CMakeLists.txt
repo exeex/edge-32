@@ -608,6 +608,51 @@ foreach(adapter IN ITEMS icache dcache)
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${adapter}_adapter_obj/Vedge_32_${adapter}_adapter_tb)
 endforeach()
 
+# Maintained D-cache leaf regressions.  Keep these beside the Edge-32 cache RTL
+# rather than relying on the retired edge-rv/test-rv harness path.
+function(edge32_add_dcache_leaf_test name top testbench rtl)
+  set(obj_dir "${CMAKE_CURRENT_BINARY_DIR}/${name}_obj")
+  add_custom_command(
+    OUTPUT "${obj_dir}/V${top}"
+    COMMAND ${VERILATOR} --binary --timing --Wno-fatal
+            --top-module ${top}
+            --Mdir "${obj_dir}"
+            "${rtl}" "${testbench}"
+    DEPENDS "${rtl}" "${testbench}")
+  add_custom_target(${name}_verilator ALL DEPENDS "${obj_dir}/V${top}")
+  add_test(NAME ${name} COMMAND "${obj_dir}/V${top}")
+  set_tests_properties(${name} PROPERTIES TIMEOUT 30)
+endfunction()
+
+set(EDGE32_DCACHE_RTL_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/rtl/cache/edge_dcache/rtl")
+set(EDGE32_DCACHE_TEST_DIR "${CMAKE_CURRENT_LIST_DIR}/tests/cache")
+
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_mshr edge_dcache_mshr_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_mshr_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_mshr.v")
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_hit_queue edge_dcache_hit_queue_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_hit_queue_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_hit_queue.v")
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_lookup_buffer edge_dcache_lookup_buffer_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_lookup_buffer_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_lookup_buffer.v")
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_registered_lookup_buffer edge_dcache_registered_lookup_buffer_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_registered_lookup_buffer_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_registered_lookup_buffer.v")
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_lookup_scheduler edge_dcache_lookup_scheduler_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_lookup_scheduler_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_lookup_scheduler.v")
+edge32_add_dcache_leaf_test(
+  edge_32_dcache_banked_data_array edge_dcache_banked_data_array_tb
+  "${EDGE32_DCACHE_TEST_DIR}/edge_dcache_banked_data_array_tb.v"
+  "${EDGE32_DCACHE_RTL_DIR}/edge_dcache_banked_data_array.v")
+
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/decode_obj/Vedge_32_decode_tb
   COMMAND ${VERILATOR} --binary --timing --top-module edge_32_decode_tb
