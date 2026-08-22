@@ -9,7 +9,7 @@ module edge_32_branch_tb;
   wire taken;
   wire [31:0] target;
 
-  edge_32_branch #(.PC_WIDTH(40)) dut(
+  edge_32_branch #(.PC_WIDTH(32)) dut(
     .branch_issue_op(op), .branch_issue_pc(pc),
     .branch_issue_src0_value(src0), .branch_issue_src1_value(src1),
     .branch_issue_imm(imm), .branch_issue_branch_imm(branch_imm),
@@ -30,7 +30,7 @@ module edge_32_branch_tb;
   endtask
 
   initial begin
-    op=BRANCH; pc=32'h1_0000_1000; src0=5; src1=5;
+    op=BRANCH; pc=32'h0000_1000; src0=5; src1=5;
     imm=0; branch_imm=32'hffff_fffc; jal_imm=0;
     funct3=3'b000; check(1, 32'h0000_0ffc, "beq negative target");
     funct3=3'b001; check(0, 32'h0000_0ffc, "bne false");

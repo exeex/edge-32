@@ -375,6 +375,61 @@ add_test(NAME edge32_software_address_header_switch
 set_tests_properties(edge32_software_address_header_switch PROPERTIES
   REQUIRED_FILES "${EDGE32_HEADER_SOFTWARE_MEM64}" TIMEOUT 30)
 
+set(EDGE32_CONTROL_FLOW_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/software/control_flow_redirect")
+set(EDGE32_CONTROL_FLOW_SOURCE
+    "${CMAKE_CURRENT_LIST_DIR}/tests/software/control_flow_redirect.s")
+set(EDGE32_CONTROL_FLOW_OBJECT
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.o")
+set(EDGE32_CONTROL_FLOW_ELF
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.elf")
+set(EDGE32_CONTROL_FLOW_MEM128
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.memh")
+set(EDGE32_CONTROL_FLOW_WORDS
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.words")
+set(EDGE32_CONTROL_FLOW_MEM64
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.data64.memh")
+set(EDGE32_CONTROL_FLOW_MEM64_WORDS
+    "${EDGE32_CONTROL_FLOW_DIR}/control_flow_redirect.data64.words")
+add_custom_command(
+  OUTPUT ${EDGE32_CONTROL_FLOW_MEM64}
+         ${EDGE32_CONTROL_FLOW_MEM128}
+         ${EDGE32_CONTROL_FLOW_ELF}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDGE32_CONTROL_FLOW_DIR}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -x assembler-with-cpp
+          -c ${EDGE32_CONTROL_FLOW_SOURCE} -o ${EDGE32_CONTROL_FLOW_OBJECT}
+  COMMAND ${EDGE32_CLANG}
+          --target=${EDGE32_RISCV_TARGET}
+          -march=${EDGE32_RISCV_MARCH} -mabi=${EDGE32_RISCV_ABI}
+          -mcmodel=medany -fuse-ld=lld -B${EDGE32_LLD_BIN}
+          -nostdlib -nostartfiles
+          -Wl,-T,${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${EDGE32_CONTROL_FLOW_OBJECT} -o ${EDGE32_CONTROL_FLOW_ELF}
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+          ${EDGE32_CONTROL_FLOW_ELF}
+          -o ${EDGE32_CONTROL_FLOW_MEM128}
+          --words-file ${EDGE32_CONTROL_FLOW_WORDS}
+          --mem64-output ${EDGE32_CONTROL_FLOW_MEM64}
+          --mem64-words-file ${EDGE32_CONTROL_FLOW_MEM64_WORDS}
+  DEPENDS ${EDGE32_CONTROL_FLOW_SOURCE}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge32_flat.ld
+          ${CMAKE_CURRENT_LIST_DIR}/../../tools/elf2mem128.py
+  VERBATIM)
+add_custom_target(edge32_software_control_flow_redirect
+  DEPENDS ${EDGE32_CONTROL_FLOW_MEM64})
+add_custom_target(edge32_software_control_flow_redirect_verilator
+  DEPENDS edge32_software_control_flow_redirect
+          ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb)
+add_test(NAME edge32_software_control_flow_redirect
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
+          +mem64=${EDGE32_CONTROL_FLOW_MEM64} +return_only)
+set_tests_properties(edge32_software_control_flow_redirect PROPERTIES
+  REQUIRED_FILES "${EDGE32_CONTROL_FLOW_MEM64}" TIMEOUT 30)
+
 set(EDGE32_COREMARK_DIR "${CMAKE_CURRENT_BINARY_DIR}/software/edge32_coremark")
 set(EDGE32_COREMARK_SOURCE
     "${CMAKE_CURRENT_LIST_DIR}/../../tests/software/bench/coremark_bench.c")

@@ -71,6 +71,11 @@ reset and boots the image again. It requires both CSRs to return to zero and
 observes fresh zero-header instruction and data refills, proving stale cache
 metadata cannot survive reset.
 
+The AXI control-flow software test covers dependent taken/not-taken branches,
+a backward loop, JAL and odd-target JALR link semantics, and redirects across
+I-cache lines. Stores and an I-header CSR write placed on wrong paths must
+remain architecturally invisible.
+
 The cached CoreMark integration test loads the parent harness memory image only
 behind these refill/writeback ports. It services I-cache lines and D-cache
 four-beat refills independently, commits dirty writeback beats to the backing
