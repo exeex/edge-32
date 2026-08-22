@@ -540,6 +540,20 @@ set(CACHED_CORE_RTL
   ${CMAKE_CURRENT_LIST_DIR}/rtl/edge_32_cached_core.v)
 
 add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/address_header_obj/Vedge_32_address_header_tb
+  COMMAND ${VERILATOR} --binary --timing --Wno-fatal
+          --top-module edge_32_address_header_tb
+          --Mdir ${CMAKE_CURRENT_BINARY_DIR}/address_header_obj
+          ${CORE_RTL} ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_address_header_tb.v
+  DEPENDS ${CORE_RTL}
+          ${CMAKE_CURRENT_LIST_DIR}/tests/edge_32_address_header_tb.v)
+add_custom_target(edge_32_address_header_verilator ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/address_header_obj/Vedge_32_address_header_tb)
+add_test(NAME edge_32_address_header
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/address_header_obj/Vedge_32_address_header_tb)
+set_tests_properties(edge_32_address_header PROPERTIES TIMEOUT 30)
+
+add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cached_core_obj/Vedge_32_cached_core_tb
   COMMAND ${VERILATOR} --binary --timing -Wno-fatal
           --top-module edge_32_cached_core_tb
@@ -589,8 +603,13 @@ add_custom_target(edge_32_axi_coremark_verilator ALL
 add_test(NAME edge_32_axi_coremark
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
           +mem64=${EDGE32_COREMARK_MEM64})
+add_test(NAME edge_32_axi_address_header
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/axi_coremark_obj/Vedge_32_axi_coremark_tb
+          +mem64=${EDGE32_COREMARK_MEM64} +address_header_smoke)
 set_tests_properties(edge_32_axi_coremark PROPERTIES
   REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 60)
+set_tests_properties(edge_32_axi_address_header PROPERTIES
+  REQUIRED_FILES "${EDGE32_COREMARK_MEM64}" TIMEOUT 30)
 
 foreach(adapter IN ITEMS icache dcache)
   add_custom_command(

@@ -22,6 +22,7 @@ module edge_32_axi_coremark_tb;
   integer dcache_reads;
   integer write_responses;
   integer return_only;
+  integer address_header_smoke;
   integer byte_i;
 
   wire [63:0] araddr;
@@ -115,7 +116,13 @@ module edge_32_axi_coremark_tb;
 
   always @(posedge clk) begin
     if (arvalid && arready) begin
-      if (araddr[63:32] != 0)
+      if (address_header_smoke) begin
+        if (arid != 8'hf1 || araddr != 64'h1234_5678_0000_0000)
+          $fatal(1, "instruction address header mismatch id=%h addr=%h",
+                 arid, araddr);
+        $display("PASS: AXI Edge-32 address header=%h", araddr[63:32]);
+        $finish;
+      end else if (araddr[63:32] != 0)
         $fatal(1, "scalar cache read escaped the 32-bit address window");
       if (arburst != 2'b01 || arsize != 3'd4 || arcache != 0 || arlock ||
           arprot != 0 || (arid == 8'hf1 && arlen != 0) ||
@@ -174,6 +181,7 @@ module edge_32_axi_coremark_tb;
     awid_q = 0; bvalid_q = 0; bid_q = 0; icache_reads = 0;
     dcache_reads = 0; write_responses = 0;
     return_only = $test$plusargs("return_only");
+    address_header_smoke = $test$plusargs("address_header_smoke");
     for (i = 0; i < MEM_WORDS; i = i + 1) mem[i] = 64'd0;
     if (!$value$plusargs("mem64=%s", mem64_file))
       $fatal(1, "pass +mem64=<coremark_bench.data64.memh>");
@@ -182,6 +190,10 @@ module edge_32_axi_coremark_tb;
     repeat (4) @(posedge clk);
     reset_n <= 1'b1;
     repeat (3) @(posedge clk);
+    if (dut.icache_address_header != 0 || dut.dcache_address_header != 0)
+      $fatal(1, "I/D address headers were not zero after reset");
+    if (address_header_smoke)
+      dut.cached_core.core.icache_address_header_q = 32'h1234_5678;
     if (arvalid) $fatal(1, "AXI fetch escaped before core_start");
     core_start <= 1'b1;
     @(posedge clk); core_start <= 1'b0;

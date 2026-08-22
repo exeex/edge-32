@@ -11,6 +11,8 @@ module edge_32_core #(
   input wire clk, input wire reset_n,
   input wire [PC_WIDTH-1:0] boot_pc,
   input wire core_start,input wire core_force_stop,
+  output wire [31:0] icache_address_header,
+  output wire [31:0] dcache_address_header,
   output wire imem_req_valid, input wire imem_req_ready,
   output wire [PC_WIDTH-1:0] imem_req_addr,
   input wire imem_resp_valid, input wire [31:0] imem_resp_data,
@@ -104,6 +106,9 @@ module edge_32_core #(
   wire is_hardware_id=(opc==7'h73)&&(f3==3'b010)&&
     (ex_inst[31:20]==12'hfc0)&&(ex_inst[19:15]==0);
   wire is_csr_op=(opc==7'h73)&&(f3[1:0]!=2'b00);
+  wire is_icache_header_csr=is_csr_op&&(ex_inst[31:20]==12'h7db);
+  wire is_dcache_header_csr=is_csr_op&&(ex_inst[31:20]==12'h7dc);
+  wire is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
   wire is_fp_csr=ENABLE_FPU&&is_csr_op&&
     ((ex_inst[31:20]==12'h001)||(ex_inst[31:20]==12'h002)||
      (ex_inst[31:20]==12'h003));
@@ -116,8 +121,8 @@ module edge_32_core #(
   wire is_fp_mem=ENABLE_FPU&&(is_fp_load||is_fp_store);
   wire is_fence=(decoded_class==4'd6)&&(opc==7'h0f);
   wire is_fence_i=is_fence&&(f3==3'b001);
-  wire is_supported_system=is_cycle||is_instret||is_hardware_id||is_ebreak||
-    is_edge_break||is_fp_csr||is_fence;
+  wire is_supported_system=is_cycle||is_instret||is_hardware_id||
+    is_address_header_csr||is_ebreak||is_edge_break||is_fp_csr||is_fence;
   wire is_accel=(ex_inst[6:0]==7'h3f)&&(decoded_class==4'd8);
   wire fpu_legal;
   wire ex_supported=is_accel||is_fast_class||is_muldiv||is_int_mem||is_fp_mem||
@@ -256,13 +261,25 @@ module edge_32_core #(
   wire redirect=branch_redirect||fence_i_done;
   wire [PC_WIDTH-1:0] redirect_pc=fence_i_done ?
     ex_pc+{{(PC_WIDTH-3){1'b0}},3'd4}:branch_target;
+  reg [31:0] icache_address_header_q,dcache_address_header_q;
+  assign icache_address_header=icache_address_header_q;
+  assign dcache_address_header=dcache_address_header_q;
+  wire [31:0] address_header_old=is_icache_header_csr?
+    icache_address_header_q:dcache_address_header_q;
+  wire [31:0] address_header_source=f3[2]?{27'd0,ex_inst[19:15]}:
+                                            ex_rs1_value;
+  wire [31:0] address_header_new=(f3[1:0]==2'b01)?address_header_source:
+    (f3[1:0]==2'b10)?(address_header_old|address_header_source):
+                       (address_header_old&~address_header_source);
+  wire address_header_write=(f3[1:0]==2'b01)||(ex_inst[19:15]!=5'd0);
   wire [31:0] wb_value=is_accel?accel_resp_value[31:0]:
     is_fp_compute?fpu_value[31:0]:is_muldiv?mul_result:
     is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
     is_instret?instret_q[31:0]:is_fp_csr?
     (ex_inst[31:20]==12'h001 ? {27'd0,fflags_q} :
      ex_inst[31:20]==12'h002 ? {29'd0,frm_q} : {24'd0,frm_q,fflags_q}):
-    is_hardware_id?EDGE_ASIC_ID[31:0]:fast_result;
+    is_hardware_id?EDGE_ASIC_ID[31:0]:
+    is_address_header_csr?address_header_old:fast_result;
   wire [31:0] fp_csr_source=f3[2]?{27'd0,ex_inst[19:15]}:ex_rs1_value;
   wire [7:0] fp_csr_old=(ex_inst[31:20]==12'h001)?
                         {3'd0,fflags_q}:
@@ -318,6 +335,7 @@ module edge_32_core #(
       for(ri=0;ri<32;ri=ri+1) gpr[ri]<=0;
       cycle_q<=0; instret_q<=0; mem_started_q<=0; mul_started_q<=0;
       fflags_q<=0; frm_q<=0;
+      icache_address_header_q<=0; dcache_address_header_q<=0;
       fpu_started_q<=0;
       accel_started_q<=0; cache_started_q<=0;
       icache_invalidate_started_q<=0;
@@ -352,6 +370,10 @@ module edge_32_core #(
             frm_q<=fp_csr_new[7:5];
           end
         end
+        if(!ex_faulting&&is_icache_header_csr&&address_header_write)
+          icache_address_header_q<=address_header_new;
+        if(!ex_faulting&&is_dcache_header_csr&&address_header_write)
+          dcache_address_header_q<=address_header_new;
         if(!ex_faulting&&is_fp_compute&&fpu_done)
           fflags_q<=fflags_q|fpu_fflags;
         if(!ex_faulting&&(is_ebreak||is_edge_break)) halted<=1;

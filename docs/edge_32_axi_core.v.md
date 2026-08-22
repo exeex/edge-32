@@ -17,11 +17,16 @@ leave reset on different clock edges. Functional activity begins only after
 the second rising edge following external reset release.
 
 The scalar instruction/cache address domain is 32 bits. `AXI_ADDR_WIDTH`
-defaults to 64 bits, and the wrapper zero-extends instruction refill addresses
-only at the cache-BIU boundary. This leaves the external AXI fabric ready for
-native 64-bit DMA traffic without carrying unused upper address bits through
-the RV32 frontend or I-cache. Future I-cache high-header CSR concatenation
-belongs at this same boundary.
+defaults to 64 bits. Edge CSR `0x7db` owns the readable I-cache address header
+and CSR `0x7dc` owns the readable D-cache address header; both reset to zero.
+The wrapper applies the I header to instruction refills and the D header to
+data refills and dirty writebacks at the cache-BIU boundary. Neither header
+widens the RV32 frontend, LSU, or cache tags.
+
+Software must clean dirty data and execute `FENCE.I` before changing active
+headers. Reset restores both headers to zero; cache metadata reset initialization
+leaves all instruction and data lines invalid before a restarted program sets
+the header selected by its boot policy.
 
 The wrapper implements the same `boot_pc`, `core_start`, and
 `core_force_stop` control form as edge-rv. Reset leaves the product frontend

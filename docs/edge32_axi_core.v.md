@@ -13,8 +13,11 @@ recognizable and physically local.
 
 The top uses the edge-rv control names and pulse semantics: 32-bit `boot_pc`,
 `core_start`, and `core_force_stop`. Reset release does not auto-start fetch.
-The architectural boot PC remains a low 32-bit address; future I-cache high
-header state is concatenated separately and resets to zero.
+The architectural boot PC remains a low 32-bit address. Edge CSR `0x7db`
+supplies the upper 32-bit AXI address header for instruction refills; CSR
+`0x7dc` supplies it for data refills and dirty writebacks. Both readable CSR
+states reset to zero and software may replace them after cache clean plus
+`FENCE.I` serialization.
 
 Apart from reset synchronization, the renamed top adds no protocol state.
 E3/E4 select the Edge-32 or RV64-lite filelist at build time. Edge-32 internal

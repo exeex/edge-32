@@ -106,8 +106,9 @@ module edge32_axi_core #(
   wire imem_refill_req_valid;
   wire imem_refill_req_ready;
   wire [PC_WIDTH-1:0] imem_refill_req_addr;
+  wire [31:0] icache_address_header,dcache_address_header;
   wire [AXI_ADDR_WIDTH-1:0] imem_refill_req_axi_addr =
-    {{(AXI_ADDR_WIDTH-PC_WIDTH){1'b0}}, imem_refill_req_addr};
+    {icache_address_header, imem_refill_req_addr};
   wire imem_refill_resp_valid;
   wire imem_refill_resp_ready;
   wire [127:0] imem_refill_resp_data;
@@ -115,6 +116,8 @@ module edge32_axi_core #(
   wire dmem_refill_req_valid;
   wire dmem_refill_req_ready;
   wire [63:0] dmem_refill_req_addr;
+  wire [63:0] dmem_refill_req_axi_addr =
+    {dcache_address_header, dmem_refill_req_addr[31:0]};
   wire dmem_refill_resp_valid;
   wire dmem_refill_resp_ready;
   wire [127:0] dmem_refill_resp_data;
@@ -123,6 +126,8 @@ module edge32_axi_core #(
   wire dmem_clean_wb_valid;
   wire dmem_clean_wb_ready;
   wire [63:0] dmem_clean_wb_addr;
+  wire [63:0] dmem_clean_wb_axi_addr =
+    {dcache_address_header, dmem_clean_wb_addr[31:0]};
   wire [127:0] dmem_clean_wb_data;
   wire dmem_clean_wb_last;
   wire dmem_clean_wb_complete;
@@ -138,6 +143,8 @@ module edge32_axi_core #(
     .clk(forever_cpuclk), .reset_n(core_reset_n),
     .boot_pc(boot_pc),.core_start(core_start),
     .core_force_stop(core_force_stop),
+    .icache_address_header(icache_address_header),
+    .dcache_address_header(dcache_address_header),
     .imem_refill_req_valid(imem_refill_req_valid),
     .imem_refill_req_ready(imem_refill_req_ready),
     .imem_refill_req_addr(imem_refill_req_addr),
@@ -188,7 +195,7 @@ module edge32_axi_core #(
     .icache_resp_error(imem_refill_resp_error),
     .dcache_refill_req_valid(dmem_refill_req_valid),
     .dcache_refill_req_ready(dmem_refill_req_ready),
-    .dcache_refill_req_addr(dmem_refill_req_addr),
+    .dcache_refill_req_addr(dmem_refill_req_axi_addr),
     .dcache_refill_resp_valid(dmem_refill_resp_valid),
     .dcache_refill_resp_ready(dmem_refill_resp_ready),
     .dcache_refill_resp_data(dmem_refill_resp_data),
@@ -196,7 +203,7 @@ module edge32_axi_core #(
     .dcache_refill_resp_error(dmem_refill_resp_error),
     .dcache_wb_valid(dmem_clean_wb_valid),
     .dcache_wb_ready(dmem_clean_wb_ready),
-    .dcache_wb_addr(dmem_clean_wb_addr),
+    .dcache_wb_addr(dmem_clean_wb_axi_addr),
     .dcache_wb_data(dmem_clean_wb_data),
     .dcache_wb_last(dmem_clean_wb_last),
     .dcache_wb_complete(dmem_clean_wb_complete),

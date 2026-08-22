@@ -11,6 +11,44 @@ typedef uint64_t addr_t;
 #define EDGE_DCACHE_LINE_SIZE 64u
 #define EDGE_CSR_BREAK_ID 0x7e0u
 #define EDGE_CSR_SIM_PUTCHAR_ID 0x7e1u
+#define EDGE_CSR_ICACHE_HEADER_ID 0x7dbu
+#define EDGE_CSR_DCACHE_HEADER_ID 0x7dcu
+
+static inline uint32_t edge_icache_header_read() {
+  uint32_t value;
+#if defined(__riscv)
+  __asm__ volatile("csrr %0, 0x7db" : "=r"(value));
+#else
+  value = 0;
+#endif
+  return value;
+}
+
+static inline void edge_icache_header_write(uint32_t value) {
+#if defined(__riscv)
+  __asm__ volatile("csrw 0x7db, %0" :: "r"(value) : "memory");
+#else
+  (void)value;
+#endif
+}
+
+static inline uint32_t edge_dcache_header_read() {
+  uint32_t value;
+#if defined(__riscv)
+  __asm__ volatile("csrr %0, 0x7dc" : "=r"(value));
+#else
+  value = 0;
+#endif
+  return value;
+}
+
+static inline void edge_dcache_header_write(uint32_t value) {
+#if defined(__riscv)
+  __asm__ volatile("csrw 0x7dc, %0" :: "r"(value) : "memory");
+#else
+  (void)value;
+#endif
+}
 #define EDGE_TENSOR_WTYPE_BF16 1
 #define EDGE_TENSOR_WTYPE_INT8 2
 #define EDGE_TENSOR_LOAD_OPT_REUSE (1u << 1)
@@ -210,23 +248,35 @@ static inline uintptr_t edge_dcache_line_ceil(uintptr_t addr)
 
 static inline void edge_dcache_clean_va(addr_t addr)
 {
+#if defined(__riscv)
     register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
     __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x5"
                      : : "r"(edge_addr) : "memory");
+#else
+    (void)addr;
+#endif
 }
 
 static inline void edge_dcache_invalidate_va(addr_t addr)
 {
+#if defined(__riscv)
     register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
     __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x6"
                      : : "r"(edge_addr) : "memory");
+#else
+    (void)addr;
+#endif
 }
 
 static inline void edge_dcache_clean_invalidate_va(addr_t addr)
 {
+#if defined(__riscv)
     register uintptr_t edge_addr __asm__("a0") = (uintptr_t)addr;
     __asm__ volatile(".insn r 0x0b, 1, 0, x0, %0, x7"
                      : : "r"(edge_addr) : "memory");
+#else
+    (void)addr;
+#endif
 }
 
 static inline void edge_dcache_clean_range(addr_t addr, uintptr_t len)

@@ -19,6 +19,8 @@ module edge_32_cached_core #(
   input  wire [PC_WIDTH-1:0]    boot_pc,
   input  wire                   core_start,
   input  wire                   core_force_stop,
+  output wire [31:0]            icache_address_header,
+  output wire [31:0]            dcache_address_header,
 
   output wire                   imem_refill_req_valid,
   input  wire                   imem_refill_req_ready,
@@ -144,6 +146,8 @@ module edge_32_cached_core #(
     .clk(clk), .reset_n(reset_n),
     .boot_pc(boot_pc),.core_start(core_start),
     .core_force_stop(core_force_stop),
+    .icache_address_header(icache_address_header),
+    .dcache_address_header(dcache_address_header),
     .imem_req_valid(core_imem_req_valid),
     .imem_req_ready(core_imem_req_ready),
     .imem_req_addr(core_imem_req_addr),
