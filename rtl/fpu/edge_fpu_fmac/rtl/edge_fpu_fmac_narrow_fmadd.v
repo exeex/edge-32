@@ -87,6 +87,8 @@ assign special_fflags = any_snan || inf_zero || inf_cancel;
 // Numerical transport and semantic action have separate register banks.
 // Every numerical capture free-runs; only the parent owns validity.
 wire signed [9:0] product_exp = $signed(src0_exp[9:0]) + $signed(src1_exp[9:0]);
+reg [23:0] lhs_input_q, rhs_input_q;
+reg [44:0] numeric_input_q;
 reg [44:0] numeric_m0, numeric_m1;
 wire product_sign_mul, addend_sign_mul;
 wire signed [9:0] product_exp_mul;
@@ -98,15 +100,20 @@ assign {product_sign_mul, addend_sign_mul, product_exp_mul,
 wire zero_sign = fmadd_mul_only ? product_sign
                : (product_sign == addend_sign) ? product_sign
                : (fmadd_rm == 3'b010);
-reg [7:0] action_m0, action_m1, action_a0, action_a1;
+reg [7:0] action_input_q, action_m0, action_m1, action_a0, action_a1;
 wire action_override, action_nan, action_sign, action_nv, action_zero_sign;
 wire [2:0] result_rm;
 assign {action_override, action_nan, action_sign, action_nv,
         action_zero_sign, result_rm} = action_a1;
 always @(posedge forever_cpuclk) begin
-  numeric_m0 <= {product_sign, addend_sign, product_exp, src2_sig, src2_exp[8:0]};
+  // Reuse the owning FMAC input capture for prepared values, not raw FP32.
+  lhs_input_q <= src0_sig;
+  rhs_input_q <= src1_sig;
+  numeric_input_q <= {product_sign, addend_sign, product_exp, src2_sig, src2_exp[8:0]};
+  action_input_q <= {special_vld, special_result, special_fflags, zero_sign, fmadd_rm};
+  numeric_m0 <= numeric_input_q;
   numeric_m1 <= numeric_m0;
-  action_m0 <= {special_vld, special_result, special_fflags, zero_sign, fmadd_rm};
+  action_m0 <= action_input_q;
   action_m1 <= action_m0;
   action_a0 <= action_m1;
   action_a1 <= action_a0;
@@ -114,7 +121,7 @@ end
 wire [47:0] product;
 edge_fpu_mul24x24_pipe2 #(.MASK_INVALID(0)) x_product (
   .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(fmadd_cancel),
-  .lhs(src0_sig), .rhs(src1_sig), .product(product)
+  .lhs(lhs_input_q), .rhs(rhs_input_q), .product(product)
 );
 // Preserve every product bit; zero naturally multiplies to zero.
 wire [52:0] product_sig = product[47] ? {product, 5'b0} : {product[46:0], 6'b0};

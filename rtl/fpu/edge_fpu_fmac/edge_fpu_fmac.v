@@ -50,11 +50,6 @@ reg     [4 :0]  fmac_wb_fflags;
 reg     [4 :0]  fmac_wb_reg;
 reg             fmac_wb_vld;
 reg             fmac_inst_vld_q;
-reg     [19:0]  fmac_func_q;
-reg     [2 :0]  fmac_rm_q;
-reg     [31:0]  fmac_src0_q;
-reg     [31:0]  fmac_src1_q;
-reg     [31:0]  fmac_src2_q;
 reg     [4 :0]  fmac_dst_reg_q;
 reg             fmac_dst_vld_q;
 reg             fmac_pipe_vld_d0;
@@ -70,7 +65,6 @@ wire            fmac_fadd;
 wire            fmac_fmadd;
 wire            fmac_fmul;
 wire            fmac_fsub;
-wire            fmac_narrow_fmadd;
 wire    [4 :0]  narrow_fmadd_fflags;
 wire    [31:0]  narrow_fmadd_result;
 wire    [31:0]  fmac_wb_data_pre;
@@ -94,26 +88,23 @@ begin
     fmac_dst_vld_q <= 1'b0;
   end
   else begin
-    fmac_inst_vld_q <= fmac_inst_vld;
+    fmac_inst_vld_q <= fmac_inst_vld
+                        && (fmac_fadd || fmac_fsub || fmac_fmul || fmac_fmadd);
     fmac_dst_vld_q <= fmac_dst_vld;
   end
 end
 
-// Invalid operand/mode/tag values are unobservable until valid reaches writeback.
+// The backend captures unpacked operands and parallel semantic action at N.
+// Tags retain the same input boundary and are observable only with valid.
 always @(posedge forever_cpuclk) begin
-    fmac_func_q[19:0] <= fmac_func[19:0];
-    fmac_rm_q[2:0] <= fmac_rm[2:0];
-    fmac_src0_q <= fmac_src0;
-    fmac_src1_q <= fmac_src1;
-    fmac_src2_q <= fmac_src2;
     fmac_dst_reg_q[4:0] <= fmac_dst_reg[4:0];
 end
 
 edge_fpu_fmac_prep  x_edge_fpu_fmac_prep (
-  .fmac_func    (fmac_func_q ),
-  .fmac_src0    (fmac_src0_q ),
-  .fmac_src1    (fmac_src1_q ),
-  .fmac_src2    (fmac_src2_q ),
+  .fmac_func    (fmac_func ),
+  .fmac_src0    (fmac_src0 ),
+  .fmac_src1    (fmac_src1 ),
+  .fmac_src2    (fmac_src2 ),
   .fmac_fadd    (fmac_fadd   ),
   .fmac_fsub    (fmac_fsub   ),
   .fmac_fmul    (fmac_fmul   ),
@@ -123,11 +114,10 @@ edge_fpu_fmac_prep  x_edge_fpu_fmac_prep (
   .fmac_mac_c   (fmac_mac_c  )
 );
 
-assign fmac_narrow_fmadd = fmac_fadd || fmac_fsub || fmac_fmul || fmac_fmadd;
 
-assign fmac_neg_product = fmac_fmadd && fmac_func_q[2];
+assign fmac_neg_product = fmac_fmadd && fmac_func[2];
 assign fmac_neg_addend = fmac_fmadd
-                       ? (fmac_func_q[2] ^ fmac_func_q[1])
+                       ? (fmac_func[2] ^ fmac_func[1])
                        : fmac_fsub;
 
 edge_fpu_fmac_narrow_fmadd  x_edge_fpu_fmac_narrow_fmadd (
@@ -137,7 +127,7 @@ edge_fpu_fmac_narrow_fmadd  x_edge_fpu_fmac_narrow_fmadd (
   .fmadd_mul_only     (fmac_fmul              ),
   .fmadd_neg_product (fmac_neg_product       ),
   .fmadd_neg_addend  (fmac_neg_addend        ),
-  .fmadd_rm          (fmac_rm_q              ),
+  .fmadd_rm          (fmac_rm              ),
   .fmadd_src0        (fmac_mac_a             ),
   .fmadd_src1        (fmac_mac_b             ),
   .fmadd_src2        (fmac_mac_c             ),
@@ -183,8 +173,7 @@ begin
     fmac_wb_fflags[4:0] <= 5'b0;
   end
   else begin
-    fmac_pipe_vld_d0 <= fmac_inst_vld_q && fmac_dst_vld_q
-                     && fmac_narrow_fmadd;
+    fmac_pipe_vld_d0 <= fmac_inst_vld_q && fmac_dst_vld_q;
     fmac_pipe_vld_d1 <= fmac_pipe_vld_d0;
     fmac_pipe_vld_d2 <= fmac_pipe_vld_d1;
     fmac_pipe_vld_d3 <= fmac_pipe_vld_d2;
