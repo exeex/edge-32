@@ -11,6 +11,15 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   output wire        issue_ready,
   input  wire [31:0] issue_inst,
   input  wire [63:0] issue_gpr_src,
+  input  wire [31:0] issue_fsrc0,
+  input  wire [31:0] issue_fsrc1,
+  input  wire [31:0] issue_fsrc2,
+  input  wire [4:0]  read_frs0,
+  input  wire [4:0]  read_frs1,
+  input  wire [4:0]  read_frs2,
+  output wire [31:0] read_fsrc0,
+  output wire [31:0] read_fsrc1,
+  output wire [31:0] read_fsrc2,
   input  wire [2:0]  issue_frm,
   output wire        issue_legal,
   output reg         complete_valid,
@@ -36,8 +45,8 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
 
   wire [6:0] opcode=issue_inst[6:0];
   wire [2:0] funct3=issue_inst[14:12];
-  wire [4:0] rd=issue_inst[11:7], rs1=issue_inst[19:15];
-  wire [4:0] rs2=issue_inst[24:20], rs3=issue_inst[31:27];
+  wire [4:0] rd=issue_inst[11:7];
+  wire [4:0] rs2=issue_inst[24:20];
   wire op_madd=(opcode==7'h43)||(opcode==7'h47)||(opcode==7'h4b)||(opcode==7'h4f);
   wire op_fp=opcode==7'h53;
   wire rounding_rm_valid=(funct3<=3'b100)||
@@ -98,10 +107,15 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   wire fire=issue_valid&&issue_ready&&issue_legal;
   assign issue_ready=!busy_q && (!fmac_op||!fmac_stall) && (!slow_op||slow_ready);
   assign store_read_value=fpr[store_read_rs];
+  // ID reads bypass a load completing on the same capture edge. FPU writes
+  // occur before complete_valid releases EX, so they are already visible.
+  assign read_fsrc0=(load_write_valid && load_write_rd==read_frs0) ? load_write_value : fpr[read_frs0];
+  assign read_fsrc1=(load_write_valid && load_write_rd==read_frs1) ? load_write_value : fpr[read_frs1];
+  assign read_fsrc2=(load_write_valid && load_write_rd==read_frs2) ? load_write_value : fpr[read_frs2];
 
   edge_fpu_fmac fmac(.cpurst_b(reset_n),.forever_cpuclk(clk),.fmac_cancel(1'b0),
     .fmac_inst_vld(fire&&fmac_op),.fmac_func(fmac_func),.fmac_rm(rm),
-    .fmac_src0(fpr[rs1]),.fmac_src1(fpr[rs2]),.fmac_src2(fpr[rs3]),
+    .fmac_src0(issue_fsrc0),.fmac_src1(issue_fsrc1),.fmac_src2(issue_fsrc2),
     .fmac_dst_reg(rd),.fmac_dst_vld(1'b1),.fmac_stall(fmac_stall),
     .fmac_wb_data(fmac_value),.fmac_wb_fflags(fmac_flags),.fmac_wb_reg(),
     .fmac_wb_vld(fmac_done));
@@ -110,7 +124,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
     .misc_issue_ready(misc_ready),.misc_issue_seq_id(1'b0),.misc_issue_epoch(1'b0),
     .misc_issue_op(misc_sel),.misc_issue_fmt(issue_inst[26:25]),.misc_issue_rm(rm),
     .misc_issue_funct3(funct3),.misc_issue_rd(rd),.misc_issue_rd_bank(1'b0),
-    .misc_issue_fsrc0(fpr[rs1]),.misc_issue_fsrc1(fpr[rs2]),
+    .misc_issue_fsrc0(issue_fsrc0),.misc_issue_fsrc1(issue_fsrc1),
     .misc_issue_gsrc0(issue_gpr_src),.misc_complete_valid(misc_done),
     .misc_complete_seq_id(),.misc_complete_epoch(),.misc_complete_rd(),
     .misc_complete_rd_bank(),.misc_complete_domain(misc_domain),
@@ -119,7 +133,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
     .forever_cpuclk(clk),.cpurst_b(reset_n),.cvt_issue_valid(fire&&cvt_op),
     .cvt_issue_ready(cvt_ready),.cvt_issue_seq_id(1'b0),.cvt_issue_epoch(1'b0),
     .cvt_issue_op(cvt_sel),.cvt_issue_int_type(rs2[1:0]),.cvt_issue_rm(rm),
-    .cvt_issue_rd(rd),.cvt_issue_rd_bank(1'b0),.cvt_issue_fsrc(fpr[rs1]),
+    .cvt_issue_rd(rd),.cvt_issue_rd_bank(1'b0),.cvt_issue_fsrc(issue_fsrc0),
     .cvt_issue_gsrc(issue_gpr_src[GPR_WIDTH-1:0]),.cvt_complete_valid(cvt_done),
     .cvt_complete_seq_id(),.cvt_complete_epoch(),.cvt_complete_rd(),
     .cvt_complete_rd_bank(),.cvt_complete_domain(cvt_domain),
@@ -129,7 +143,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
     .slow_issue_valid(fire&&slow_op),.slow_issue_ready(slow_ready),
     .slow_issue_seq_id(1'b0),.slow_issue_epoch(1'b0),.slow_issue_sqrt(slow_sqrt),
     .slow_issue_rm(rm),.slow_issue_rd(rd),.slow_issue_rd_bank(1'b0),
-    .slow_issue_src0(fpr[rs1]),.slow_issue_src1(fpr[rs2]),
+    .slow_issue_src0(issue_fsrc0),.slow_issue_src1(issue_fsrc1),
     .slow_complete_valid(slow_done),.slow_complete_seq_id(),.slow_complete_epoch(),
     .slow_complete_rd(),.slow_complete_rd_bank(),.slow_complete_value(slow_value),
     .slow_complete_fflags(slow_flags));

@@ -16,6 +16,7 @@ module edge_32_pipeline #(
   input  wire                   fetch_error,
 
   output wire                   id_valid,
+  output wire                   id_capture_enable,
   output wire [PC_WIDTH-1:0]    id_pc,
   output wire [63:0]            id_inst,
   output wire                   id_is_64b,
@@ -69,6 +70,7 @@ module edge_32_pipeline #(
 
   assign fetch_ready = id_can_advance && !ex_redirect_valid;
   assign id_valid = id_valid_q;
+  assign id_capture_enable = reset_n && id_can_advance && !ex_redirect_valid;
   assign id_pc = id_pc_q;
   assign id_inst = id_inst_q;
   assign id_is_64b = id_is_64b_q;

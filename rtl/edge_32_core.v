@@ -60,6 +60,18 @@ module edge_32_core #(
   wire ex_valid, ex_error, ex_is_64b;
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
   wire [31:0] ex_rs1_value, ex_rs2_value;
+  wire id_capture_enable;
+  wire [31:0] id_fsrc0, id_fsrc1, id_fsrc2;
+  reg [31:0] ex_fsrc0_q, ex_fsrc1_q, ex_fsrc2_q;
+  // Same ID->EX advance/stall/flush boundary as GPR operands. EX valid owns
+  // observability; these numerical payload registers do not need reset.
+  always @(posedge clk) begin
+    if (id_capture_enable) begin
+      ex_fsrc0_q <= id_fsrc0;
+      ex_fsrc1_q <= id_fsrc1;
+      ex_fsrc2_q <= id_fsrc2;
+    end
+  end
   wire [4:0] id_scalar_rs1=id_inst[19:15], id_scalar_rs2=id_inst[24:20];
   wire [3:0] id_decoded_class;
   wire id_decoded_legal;
@@ -218,14 +230,19 @@ module edge_32_core #(
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
       .issue_ready(fpu_ready),.issue_inst(ex_inst[31:0]),
       .issue_gpr_src({32'd0,ex_rs1_value}),.issue_frm(frm_q),
+      .issue_fsrc0(ex_fsrc0_q),.issue_fsrc1(ex_fsrc1_q),.issue_fsrc2(ex_fsrc2_q),
+      .read_frs0(id_inst[19:15]),.read_frs1(id_inst[24:20]),.read_frs2(id_inst[31:27]),
+      .read_fsrc0(id_fsrc0),.read_fsrc1(id_fsrc1),.read_fsrc2(id_fsrc2),
       .issue_legal(fpu_legal),
       .complete_valid(fpu_done),.complete_gpr_write(fpu_gpr_write),
       .complete_rd(),.complete_value(fpu_value),
       .complete_fflags(fpu_fflags),
       .load_write_valid(ex_issue_ok&&is_fp_load&&lsu_done&&!lsu_error),
       .load_write_rd(rd),.load_write_value(fp_load_value),
-      .store_read_rs(ex_inst[24:20]),.store_read_value(fpu_store_value));
+      .store_read_rs(5'd0),.store_read_value());
+    assign fpu_store_value=ex_fsrc1_q;
   end else begin: g_no_fpu
+    assign id_fsrc0=0; assign id_fsrc1=0; assign id_fsrc2=0;
     assign fpu_ready=1'b0; assign fpu_done=1'b0;
     assign fpu_gpr_write=1'b0;
     assign fpu_value=64'b0; assign fpu_fflags=5'b0;
@@ -322,7 +339,7 @@ module edge_32_core #(
     .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
-    .id_valid(),.id_pc(), .id_inst(id_inst),
+    .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
     .id_is_64b(id_is_64b),.id_error(),.id_rs1(id_rs1),.id_rs2(id_rs2),
     .id_rs1_raw(id_rs1_raw),.id_rs2_raw(id_rs2_raw),.ex_valid(ex_valid),
     .id_op_class(id_decoded_class),.id_legal(id_decoded_legal),
