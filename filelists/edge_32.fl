@@ -9,8 +9,6 @@ ${EDGE32_ROOT}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_slow/edge_fpu_slow.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
-${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_round_pack.v
-${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_shift_sticky_2stage.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/edge_fpu_fmac.v

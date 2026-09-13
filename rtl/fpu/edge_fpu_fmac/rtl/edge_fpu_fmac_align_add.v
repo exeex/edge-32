@@ -151,8 +151,9 @@ endfunction
 assign same_sign = op0_sign == op1_sign;
 assign exp0_bigger = op0_exp > op1_exp;
 assign exp_equal = op0_exp == op1_exp;
-assign mag0_ge_mag1 = exp0_bigger
-                   || (exp_equal && (op0_sig[52:0] >= op1_sig[52:0]));
+// Zero has no magnitude irrespective of its transported exponent.
+assign mag0_ge_mag1 = (|op0_sig) && (!(|op1_sig) || exp0_bigger
+                   || (exp_equal && (op0_sig >= op1_sig)));
 assign exp_big = mag0_ge_mag1 ? op0_exp : op1_exp;
 assign exp_diff[12:0] = mag0_ge_mag1 ? op0_exp - op1_exp
                                       : op1_exp - op0_exp;
@@ -184,7 +185,10 @@ assign sum_norm = sum_carry
                 : raw_add[63:0];
 assign sum_exp = exp_big_q + {12'b0, sum_carry};
 
-wire add_zero_pre = !same_sign_q && (raw_sub == 64'b0);
+// Equality/zero status runs beside arithmetic, not after subtraction/normalize.
+wire add_zero_pre = !same_sign_q && (big_q == small_aligned);
+wire exact_zero_pre = same_sign_q ? !(|big_q) && !(|small_aligned)
+                                   : (big_q == small_aligned);
 assign lshift_amt = leading_zero_count(raw_sub);
 assign diff_norm = add_zero_pre ? 64'b0
                  : lshift_stage8(raw_sub, lshift_amt);
@@ -193,7 +197,7 @@ assign exp_norm_sub = exp_big_q - {7'b0, lshift_amt};
 assign result_norm = same_sign_q ? sum_norm : diff_norm;
 
   always @(posedge forever_cpuclk) begin
-    add_zero <= add_zero_pre;
+    add_zero <= exact_zero_pre;
     add_sign <= add_zero_pre ? 1'b0 : big_sign_q;
     add_exp <= add_zero_pre ? 13'sd0
              : same_sign_q ? sum_exp : exp_norm_sub;
