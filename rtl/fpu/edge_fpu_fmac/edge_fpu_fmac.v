@@ -120,6 +120,27 @@ assign fmac_neg_addend = fmac_fmadd
                        ? (fmac_func[2] ^ fmac_func[1])
                        : fmac_fsub;
 
+// Classify raw operands in parallel with mode decode. Only four-bit class
+// metadata is selected; exceptional policy never waits for a 32-bit mux.
+function [3:0] classify_operand;
+ input [31:0] value;
+ reg exp_all_ones, fraction_nonzero;
+ begin
+  exp_all_ones=&value[30:23];
+  fraction_nonzero=|value[22:0];
+  classify_operand={!(|value[30:0]),
+                    exp_all_ones && !fraction_nonzero,
+                    exp_all_ones && fraction_nonzero && value[22],
+                    exp_all_ones && fraction_nonzero && !value[22]};
+ end
+endfunction
+wire [3:0] raw_class0=classify_operand(fmac_src0);
+wire [3:0] raw_class1=classify_operand(fmac_src1);
+wire [3:0] raw_class2=classify_operand(fmac_src2);
+wire [3:0] selected_class1=(fmac_fadd || fmac_fsub) ? 4'b0000 : raw_class1;
+wire [3:0] selected_class2=fmac_fmul ? 4'b1000
+ : (fmac_fadd || fmac_fsub) ? raw_class1 : raw_class2;
+
 edge_fpu_fmac_narrow_fmadd  x_edge_fpu_fmac_narrow_fmadd (
   .cpurst_b           (cpurst_b                ),
   .forever_cpuclk     (forever_cpuclk          ),
@@ -128,6 +149,8 @@ edge_fpu_fmac_narrow_fmadd  x_edge_fpu_fmac_narrow_fmadd (
   .fmadd_neg_product (fmac_neg_product       ),
   .fmadd_neg_addend  (fmac_neg_addend        ),
   .fmadd_rm          (fmac_rm              ),
+  .fmadd_class0(raw_class0), .fmadd_class1(selected_class1),
+  .fmadd_class2(selected_class2),
   .fmadd_src0        (fmac_mac_a             ),
   .fmadd_src1        (fmac_mac_b             ),
   .fmadd_src2        (fmac_mac_c             ),

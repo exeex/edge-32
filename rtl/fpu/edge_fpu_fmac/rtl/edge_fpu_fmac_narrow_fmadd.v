@@ -6,6 +6,7 @@ module edge_fpu_fmac_narrow_fmadd(
   fmadd_neg_product,
   fmadd_neg_addend,
   fmadd_rm,
+  fmadd_class0, fmadd_class1, fmadd_class2,
   fmadd_src0,
   fmadd_src1,
   fmadd_src2,
@@ -20,6 +21,7 @@ input           fmadd_mul_only;
 input           fmadd_neg_product;
 input           fmadd_neg_addend;
 input   [2 :0]  fmadd_rm;
+input   [3:0] fmadd_class0, fmadd_class1, fmadd_class2;
 input   [31:0]  fmadd_src0;
 input   [31:0]  fmadd_src1;
 input   [31:0]  fmadd_src2;
@@ -41,21 +43,25 @@ wire product_inf, inf_cancel, special_vld, special_fflags;
 wire [1:0] special_result;
 edge_fpu_fmac_fp32_unpack x_src0_unpack (
   .src       (fmadd_src0), .sign(src0_sign), .exp(src0_exp),
-  .sig       (src0_sig), .zero(src0_zero), .subnormal(),
-  .normal    (), .inf(src0_inf), .qnan(src0_qnan), .snan(src0_snan)
+  .sig       (src0_sig), .zero(), .subnormal(),
+  .normal    (), .inf(), .qnan(), .snan()
 );
 
 edge_fpu_fmac_fp32_unpack x_src1_unpack (
   .src       (fmadd_src1), .sign(src1_sign), .exp(src1_exp),
-  .sig       (src1_sig), .zero(src1_zero), .subnormal(),
-  .normal    (), .inf(src1_inf), .qnan(src1_qnan), .snan(src1_snan)
+  .sig       (src1_sig), .zero(), .subnormal(),
+  .normal    (), .inf(), .qnan(), .snan()
 );
 
 edge_fpu_fmac_fp32_unpack x_src2_unpack (
   .src       (fmadd_src2), .sign(src2_sign), .exp(src2_exp),
-  .sig       (src2_sig), .zero(src2_zero), .subnormal(),
-  .normal    (), .inf(src2_inf), .qnan(src2_qnan), .snan(src2_snan)
+  .sig       (src2_sig), .zero(), .subnormal(),
+  .normal    (), .inf(), .qnan(), .snan()
 );
+
+assign {src0_zero,src0_inf,src0_qnan,src0_snan} = fmadd_class0;
+assign {src1_zero,src1_inf,src1_qnan,src1_snan} = fmadd_class1;
+assign {src2_zero,src2_inf,src2_qnan,src2_snan} = fmadd_class2;
 
 assign product_sign = src0_sign ^ src1_sign ^ fmadd_neg_product;
 assign addend_sign = src2_sign ^ fmadd_neg_addend;
