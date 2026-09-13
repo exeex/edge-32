@@ -361,7 +361,7 @@ assign wide_addend_sig[52:0] = {src2_sig_mul[23:0], 29'b0};
 assign wide_product_exp = product_exp_norm + 13'sd127;
 assign wide_addend_exp = src2_exp_mul + 13'sd127;
 
-edge_fpu_fmac_align_add #(.RESET_PAYLOAD(0)) x_wide_single_align_add (
+edge_fpu_fmac_align_add x_wide_single_align_add (
   .cpurst_b     (cpurst_b                 ),
   .forever_cpuclk(forever_cpuclk          ),
   .align_cancel(fmadd_cancel              ),

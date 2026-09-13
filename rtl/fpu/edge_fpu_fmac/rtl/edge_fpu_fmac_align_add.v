@@ -1,4 +1,4 @@
-module edge_fpu_fmac_align_add #(parameter RESET_PAYLOAD = 1) (
+module edge_fpu_fmac_align_add (
   cpurst_b,
   forever_cpuclk,
   align_cancel,
@@ -163,32 +163,6 @@ assign big_ext = mag0_ge_mag1 ? op0_ext : op1_ext;
 assign small_ext = mag0_ge_mag1 ? op1_ext : op0_ext;
 assign small_coarse = rshift_sticky_coarse(small_ext, exp_diff[12:2]);
 
-generate if (RESET_PAYLOAD) begin : g_reset_1
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
-  if(!cpurst_b) begin
-    same_sign_q <= 1'b0;
-    big_sign_q <= 1'b0;
-    fine_q <= 2'b0;
-    big_q <= 64'b0;
-    small_coarse_q <= 64'b0;
-    exp_big_q <= 13'sd0;
-  end else if(align_cancel) begin
-    same_sign_q <= 1'b0;
-    big_sign_q <= 1'b0;
-    fine_q <= 2'b0;
-    big_q <= 64'b0;
-    small_coarse_q <= 64'b0;
-    exp_big_q <= 13'sd0;
-  end else begin
-    same_sign_q <= same_sign;
-    big_sign_q <= mag0_ge_mag1 ? op0_sign : op1_sign;
-    fine_q <= exp_diff[1:0];
-    big_q <= big_ext;
-    small_coarse_q <= small_coarse;
-    exp_big_q <= exp_big;
-  end
-end
-end else begin : g_free_1
   always @(posedge forever_cpuclk) begin
     same_sign_q <= same_sign;
     big_sign_q <= mag0_ge_mag1 ? op0_sign : op1_sign;
@@ -197,7 +171,7 @@ end else begin : g_free_1
     small_coarse_q <= small_coarse;
     exp_big_q <= exp_big;
   end
-end endgenerate
+
 
 assign small_aligned = rshift_sticky_fine(small_coarse_q, fine_q);
 
@@ -218,27 +192,6 @@ assign exp_norm_sub = exp_big_q - {7'b0, lshift_amt};
 
 assign result_norm = same_sign_q ? sum_norm : diff_norm;
 
-generate if (RESET_PAYLOAD) begin : g_reset_2
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
-  if(!cpurst_b) begin
-    add_zero <= 1'b0;
-    add_sign <= 1'b0;
-    add_exp <= 13'sd0;
-    add_sig_grs <= 56'b0;
-  end else if(align_cancel) begin
-    add_zero <= 1'b0;
-    add_sign <= 1'b0;
-    add_exp <= 13'sd0;
-    add_sig_grs <= 56'b0;
-  end else begin
-    add_zero <= add_zero_pre;
-    add_sign <= add_zero_pre ? 1'b0 : big_sign_q;
-    add_exp <= add_zero_pre ? 13'sd0
-             : same_sign_q ? sum_exp : exp_norm_sub;
-    add_sig_grs <= {result_norm[62:8], |result_norm[7:0]};
-  end
-end
-end else begin : g_free_2
   always @(posedge forever_cpuclk) begin
     add_zero <= add_zero_pre;
     add_sign <= add_zero_pre ? 1'b0 : big_sign_q;
@@ -246,6 +199,6 @@ end else begin : g_free_2
              : same_sign_q ? sum_exp : exp_norm_sub;
     add_sig_grs <= {result_norm[62:8], |result_norm[7:0]};
   end
-end endgenerate
+
 
 endmodule
