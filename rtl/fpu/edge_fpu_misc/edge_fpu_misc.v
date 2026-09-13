@@ -40,7 +40,6 @@ module edge_fpu_misc #(
   localparam [OP_WIDTH-1:0] OP_MV_FP4_X = 4'd7;
 
   localparam [1:0] FMT_S = 2'b00;
-  localparam [1:0] FMT_D = 2'b01;
   localparam [1:0] FMT_H = 2'b10;
 
   reg [VALUE_WIDTH-1:0] result_d;
@@ -131,96 +130,6 @@ module edge_fpu_misc #(
           if (!found && frac[i]) begin lead = 9-i; found = 1; end
         out_exp = 8'd112 - lead;
         fp16_to_fp32 = {value[15], out_exp, (frac << (lead+1)), 13'b0};
-      end
-    end
-  endfunction
-
-  function [31:0] fp64_to_fp32_rne;
-    input [63:0] value;
-    integer unbiased;
-    integer rshift;
-    reg [52:0] sig;
-    reg [24:0] rounded;
-    reg [23:0] base;
-    reg guard_bit;
-    reg sticky_bit;
-    reg [7:0] out_exp;
-    begin
-      sig = {1'b1, value[51:0]};
-      if (value[62:52] == 11'h7ff) begin
-        fp64_to_fp32_rne = value[51:0] == 52'b0 ?
-                           {value[63], 8'hff, 23'b0} :
-                           32'h7fc0_0000;
-      end else if (value[62:52] == 11'h000) begin
-        fp64_to_fp32_rne = {value[63], 31'b0};
-      end else begin
-        unbiased = value[62:52] - 1023;
-        if (unbiased > 127) begin
-          fp64_to_fp32_rne = {value[63], 8'hff, 23'b0};
-        end else if (unbiased >= -126) begin
-          base = sig >> 29;
-          guard_bit = value[28];
-          sticky_bit = |value[27:0];
-          rounded = {1'b0, base} +
-                    (guard_bit && (sticky_bit || base[0]));
-          if (rounded[24]) begin
-            out_exp = unbiased + 128;
-            fp64_to_fp32_rne = out_exp == 8'hff ?
-              {value[63], 8'hff, 23'b0} :
-              {value[63], out_exp, rounded[23:1]};
-          end else begin
-            out_exp = unbiased + 127;
-            fp64_to_fp32_rne = {value[63], out_exp, rounded[22:0]};
-          end
-        end else if (unbiased >= -150) begin
-          rshift = (-126 - unbiased) + 29;
-          base = sig >> rshift;
-          guard_bit = (sig >> (rshift - 1)) & 1'b1;
-          sticky_bit = sig != ((sig >> (rshift - 1)) << (rshift - 1));
-          rounded = {1'b0, base} +
-                    (guard_bit && (sticky_bit || base[0]));
-          fp64_to_fp32_rne = rounded[23] ?
-            {value[63], 8'h01, 23'b0} :
-            {value[63], 8'h00, rounded[22:0]};
-        end else begin
-          fp64_to_fp32_rne = {value[63], 31'b0};
-        end
-      end
-    end
-  endfunction
-
-  function [63:0] fp32_to_fp64;
-    input [31:0] value;
-    integer shift;
-    integer bit_index;
-    reg [22:0] frac;
-    reg [10:0] exponent;
-    reg found;
-    begin
-      if (value[30:23] == 8'h00) begin
-        if (value[22:0] == 23'b0) begin
-          fp32_to_fp64 = {value[31], 63'b0};
-        end else begin
-          frac = value[22:0];
-          shift = 0;
-          found = 1'b0;
-          for (bit_index = 22; bit_index >= 0; bit_index = bit_index - 1) begin
-            if (!found && value[bit_index]) begin
-              shift = 22 - bit_index;
-              found = 1'b1;
-            end
-          end
-          frac = frac << shift;
-          exponent = 11'd896 - shift;
-          fp32_to_fp64 = {value[31], exponent, frac[21:0], 30'b0};
-        end
-      end else if (value[30:23] == 8'hff) begin
-        fp32_to_fp64 = value[22:0] == 23'b0 ?
-                       {value[31], 11'h7ff, 52'b0} :
-                       64'h7ff8_0000_0000_0000;
-      end else begin
-        fp32_to_fp64 = {value[31], value[30:23] + 11'd896,
-                        value[22:0], 29'b0};
       end
     end
   endfunction
@@ -328,8 +237,6 @@ module edge_fpu_misc #(
       OP_MV_X_F: begin
         if (misc_issue_fmt == FMT_H)
           result_d = {{(VALUE_WIDTH-16){half_payload[15]}}, half_payload};
-        else if (misc_issue_fmt == FMT_D)
-          result_d = fp32_to_fp64(misc_issue_fsrc0);
         else
           result_d = {{(VALUE_WIDTH-32){misc_issue_fsrc0[31]}}, misc_issue_fsrc0};
       end
@@ -337,8 +244,6 @@ module edge_fpu_misc #(
         result_domain_d = 1'b1;
         fpr_result = (misc_issue_fmt == FMT_H) ?
                        fp16_to_fp32(misc_issue_gsrc0[15:0]) :
-                     (misc_issue_fmt == FMT_D) ?
-                       fp64_to_fp32_rne(misc_issue_gsrc0[63:0]) :
                        misc_issue_gsrc0[31:0];
         result_d = {{(VALUE_WIDTH-32){1'b0}}, fpr_result};
       end

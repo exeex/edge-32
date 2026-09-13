@@ -53,8 +53,10 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   wire misc_minmax=op_fp&&(issue_inst[31:27]==5'b00101)&&(funct3<=1);
   wire misc_cmp=op_fp&&(issue_inst[31:27]==5'b10100)&&(funct3<=2);
   wire misc_class=op_fp&&(issue_inst[31:27]==5'b11100)&&(rs2==0)&&(funct3==1);
-  wire misc_mvx=op_fp&&(issue_inst[31:27]==5'b11100)&&(rs2==0)&&(funct3==0);
-  wire misc_mvf=op_fp&&(issue_inst[31:27]==5'b11110)&&(rs2==0)&&(funct3==0);
+  // External moves support S/H only; no FP64 payload conversion hardware.
+  wire misc_move_fmt=(issue_inst[26:25]==2'b00)||(issue_inst[26:25]==2'b10);
+  wire misc_mvx=misc_move_fmt&&op_fp&&(issue_inst[31:27]==5'b11100)&&(rs2==0)&&(funct3==0);
+  wire misc_mvf=misc_move_fmt&&op_fp&&(issue_inst[31:27]==5'b11110)&&(rs2==0)&&(funct3==0);
   wire misc_x_fp4=op_fp&&(issue_inst[31:25]==7'b1110011)&&(rs2==0)&&(funct3==0);
   wire misc_fp4_x=op_fp&&(issue_inst[31:25]==7'b1111011)&&(rs2==0)&&(funct3==0);
   wire misc_op=((issue_inst[26:25]!=2'b11)&&(misc_sgnj||misc_minmax||
