@@ -6,6 +6,8 @@ ${EDGE32_ROOT}/rtl/edge_32_muldiv.v
 ${EDGE32_ROOT}/rtl/edge_instruction_classifier.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_misc/edge_fpu_misc.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_slow/rtl/edge_fpu_div_iter.v
+${EDGE32_ROOT}/rtl/fpu/edge_fpu_slow/rtl/edge_fpu_sqrt_iter.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_slow/edge_fpu_slow.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_align_add.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v

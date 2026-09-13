@@ -55,6 +55,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   wire fmac_basic=op_fp&&((issue_inst[31:27]==5'b00000)||
     (issue_inst[31:27]==5'b00001)||(issue_inst[31:27]==5'b00010));
   wire fmac_op=(op_madd||fmac_basic)&&rounding_rm_valid;
+  // Arithmetic format encodings alias FP32 by the Edge contract.
   wire slow_div=op_fp&&(issue_inst[31:27]==5'b00011);
   wire slow_sqrt=op_fp&&(issue_inst[31:27]==5'b01011)&&(rs2==0);
   wire slow_op=(slow_div||slow_sqrt)&&rounding_rm_valid;

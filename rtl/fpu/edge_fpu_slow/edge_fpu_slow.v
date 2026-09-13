@@ -38,34 +38,29 @@ module edge_fpu_slow #(
   reg sign_r;
   reg [2:0] rm_r;
   reg [23:0] sig_a_r, sig_b_r;
-  reg signed [10:0] exp_a_r, exp_b_r, exp_z_r;
-
-  reg [24:0] div_rem_r;
-  reg [31:0] div_quot_r;
-  reg [5:0] iter_r;
-
-  reg [63:0] sqrt_rad_r;
-  reg [65:0] sqrt_rem_r;
-  reg [31:0] sqrt_root_r;
+  // Normalized input exponents: -22..254; DIV result: -151..402.
+  reg signed [9:0] exp_a_r, exp_b_r, exp_z_r;
 
   reg [31:0] round_sig_r;
-  reg signed [10:0] round_exp_r;
+  reg signed [9:0] round_exp_r;
   reg tiny_r;
+  reg special_r;
   reg [36:0] result_flags;
 
-  wire div_take = div_rem_r >= {1'b0, sig_b_r};
-  wire [24:0] div_rem_sub = div_take
-                           ? div_rem_r - {1'b0, sig_b_r} : div_rem_r;
-  wire [24:0] div_rem_next = div_rem_sub << 1;
-  wire [31:0] div_quot_next = {div_quot_r[30:0], div_take};
-
-  wire [65:0] sqrt_rem_shift = (sqrt_rem_r << 2) |
-                                {64'b0, sqrt_rad_r[63:62]};
-  wire [65:0] sqrt_trial = ({34'b0, sqrt_root_r} << 2) | 66'b1;
-  wire sqrt_take = sqrt_rem_shift >= sqrt_trial;
-  wire [65:0] sqrt_rem_next = sqrt_take
-                            ? sqrt_rem_shift - sqrt_trial : sqrt_rem_shift;
-  wire [31:0] sqrt_root_next = {sqrt_root_r[30:0], sqrt_take};
+  wire div_last, sqrt_last;
+  wire [31:0] div_result_sig, sqrt_result_sig;
+  edge_fpu_div_iter div_iter (
+    .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(slow_cancel),
+    .load(state_r == ST_PREP && !sqrt_r), .step(state_r == ST_DIV),
+    .numerator(sig_a_r), .denominator(sig_b_r),
+    .last(div_last), .result_sig(div_result_sig)
+  );
+  edge_fpu_sqrt_iter sqrt_iter (
+    .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(slow_cancel),
+    .load(state_r == ST_PREP && sqrt_r), .step(state_r == ST_SQRT),
+    .significand(sig_a_r), .exponent_even(!exp_a_r[0]),
+    .last(sqrt_last), .result_sig(sqrt_result_sig)
+  );
 
   assign slow_issue_ready = !busy_r;
 
@@ -85,7 +80,7 @@ module edge_fpu_slow #(
 
   function result_is_tiny;
     input sign;
-    input signed [10:0] exp;
+    input signed [9:0] exp;
     input [31:0] sig;
     input [2:0] rm;
     reg [7:0] increment;
@@ -102,7 +97,7 @@ module edge_fpu_slow #(
   // ST_DENORM one bit per cycle before entering this final round stage.
   function [36:0] round_pack;
     input sign;
-    input signed [10:0] exp_in;
+    input signed [9:0] exp_in;
     input [31:0] sig_in;
     input [2:0] rm;
     reg [7:0] increment;
@@ -146,18 +141,13 @@ module edge_fpu_slow #(
       rm_r <= 3'b0;
       sig_a_r <= 24'b0;
       sig_b_r <= 24'b0;
-      exp_a_r <= 11'sd0;
-      exp_b_r <= 11'sd0;
-      exp_z_r <= 11'sd0;
-      div_rem_r <= 25'b0;
-      div_quot_r <= 32'b0;
-      iter_r <= 6'b0;
-      sqrt_rad_r <= 64'b0;
-      sqrt_rem_r <= 66'b0;
-      sqrt_root_r <= 32'b0;
+      exp_a_r <= 10'sd0;
+      exp_b_r <= 10'sd0;
+      exp_z_r <= 10'sd0;
       round_sig_r <= 32'b0;
-      round_exp_r <= 11'sd0;
+      round_exp_r <= 10'sd0;
       tiny_r <= 1'b0;
+      special_r <= 1'b0;
       slow_complete_valid <= 1'b0;
       slow_complete_seq_id <= {SEQ_ID_WIDTH{1'b0}};
       slow_complete_epoch <= {EPOCH_WIDTH{1'b0}};
@@ -175,6 +165,7 @@ module edge_fpu_slow #(
         ST_IDLE: begin
           if (slow_issue_valid) begin
             busy_r <= 1'b1;
+            special_r <= 1'b0;
             sqrt_r <= slow_issue_sqrt;
             sign_r <= slow_issue_sqrt ? 1'b0
                                       : slow_issue_src0[31] ^ slow_issue_src1[31];
@@ -191,22 +182,22 @@ module edge_fpu_slow #(
                 slow_complete_value <= 32'h7fc00000;
                 slow_complete_fflags <= {!slow_issue_src0[22], 4'b0};
                 state_r <= ST_ROUND;
-                round_exp_r <= 11'sd1023;
+                special_r <= 1'b1;
               end else if (slow_issue_src0[31] &&
                            slow_issue_src0[30:0] != 0) begin
                 slow_complete_value <= 32'h7fc00000;
                 slow_complete_fflags <= 5'b10000;
                 state_r <= ST_ROUND;
-                round_exp_r <= 11'sd1023;
+                special_r <= 1'b1;
               end else if (slow_issue_src0[30:23] == 8'hff ||
                            slow_issue_src0[30:0] == 0) begin
                 slow_complete_value <= slow_issue_src0;
                 state_r <= ST_ROUND;
-                round_exp_r <= 11'sd1023;
+                special_r <= 1'b1;
               end else begin
                 sig_a_r <= {1'b0, slow_issue_src0[22:0]};
                 exp_a_r <= slow_issue_src0[30:23] == 0
-                         ? 11'sd1 : {3'b0, slow_issue_src0[30:23]};
+                         ? 10'sd1 : {2'b0, slow_issue_src0[30:23]};
                 if (slow_issue_src0[30:23] != 0)
                   sig_a_r[23] <= 1'b1;
                 state_r <= ST_NORM_A;
@@ -222,7 +213,7 @@ module edge_fpu_slow #(
                   (slow_issue_src1[30:23] == 8'hff &&
                    slow_issue_src1[22:0] != 0 && !slow_issue_src1[22])), 4'b0};
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else if ((slow_issue_src0[30:23] == 8'hff &&
                           slow_issue_src1[30:23] == 8'hff) ||
                          (slow_issue_src0[30:0] == 0 &&
@@ -230,35 +221,35 @@ module edge_fpu_slow #(
               slow_complete_value <= 32'h7fc00000;
               slow_complete_fflags <= 5'b10000;
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else if (slow_issue_src0[30:23] == 8'hff) begin
               slow_complete_value <= {slow_issue_src0[31] ^
                                       slow_issue_src1[31], 8'hff, 23'b0};
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else if (slow_issue_src1[30:23] == 8'hff) begin
               slow_complete_value <= {slow_issue_src0[31] ^
                                       slow_issue_src1[31], 31'b0};
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else if (slow_issue_src1[30:0] == 0) begin
               slow_complete_value <= {slow_issue_src0[31] ^
                                       slow_issue_src1[31], 8'hff, 23'b0};
               slow_complete_fflags <= 5'b01000;
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else if (slow_issue_src0[30:0] == 0) begin
               slow_complete_value <= {slow_issue_src0[31] ^
                                       slow_issue_src1[31], 31'b0};
               state_r <= ST_ROUND;
-              round_exp_r <= 11'sd1023;
+              special_r <= 1'b1;
             end else begin
               sig_a_r <= {1'b0, slow_issue_src0[22:0]};
               sig_b_r <= {1'b0, slow_issue_src1[22:0]};
               exp_a_r <= slow_issue_src0[30:23] == 0
-                       ? 11'sd1 : {3'b0, slow_issue_src0[30:23]};
+                       ? 10'sd1 : {2'b0, slow_issue_src0[30:23]};
               exp_b_r <= slow_issue_src1[30:23] == 0
-                       ? 11'sd1 : {3'b0, slow_issue_src1[30:23]};
+                       ? 10'sd1 : {2'b0, slow_issue_src1[30:23]};
               if (slow_issue_src0[30:23] != 0)
                 sig_a_r[23] <= 1'b1;
               if (slow_issue_src1[30:23] != 0)
@@ -290,47 +281,27 @@ module edge_fpu_slow #(
 
         ST_PREP: begin
           if (sqrt_r) begin
-            exp_z_r <= ((exp_a_r - 11'sd127) >>> 1) + 11'sd126;
-            sqrt_rad_r <= {40'b0, sig_a_r} <<
-                          (!exp_a_r[0] ? 38 : 37);
-            sqrt_rem_r <= 66'b0;
-            sqrt_root_r <= 32'b0;
-            iter_r <= 6'd32;
+            exp_z_r <= ((exp_a_r - 10'sd127) >>> 1) + 10'sd126;
             state_r <= ST_SQRT;
           end else begin
-            exp_z_r <= exp_a_r - exp_b_r + 11'sd126 -
-                       {10'b0, (sig_a_r < sig_b_r)};
-            div_rem_r <= {1'b0, sig_a_r};
-            div_quot_r <= 32'b0;
-            iter_r <= sig_a_r < sig_b_r ? 6'd32 : 6'd31;
+            exp_z_r <= exp_a_r - exp_b_r + 10'sd126 -
+                       {9'b0, (sig_a_r < sig_b_r)};
             state_r <= ST_DIV;
           end
         end
 
         ST_DIV: begin
-          div_rem_r <= div_rem_next;
-          div_quot_r <= div_quot_next;
-          iter_r <= iter_r - 1'b1;
-          if (iter_r == 1) begin
-            round_sig_r <= (div_rem_sub != 0)
-                         ? {div_quot_next[31:1], 1'b1} : div_quot_next;
+          if (div_last) begin
+            round_sig_r <= div_result_sig;
             round_exp_r <= exp_z_r;
-            tiny_r <= result_is_tiny(sign_r, exp_z_r,
-                         (div_rem_sub != 0)
-                           ? {div_quot_next[31:1], 1'b1} : div_quot_next,
-                         rm_r);
+            tiny_r <= result_is_tiny(sign_r, exp_z_r, div_result_sig, rm_r);
             state_r <= exp_z_r < 0 ? ST_DENORM : ST_ROUND;
           end
         end
 
         ST_SQRT: begin
-          sqrt_rad_r <= sqrt_rad_r << 2;
-          sqrt_rem_r <= sqrt_rem_next;
-          sqrt_root_r <= sqrt_root_next;
-          iter_r <= iter_r - 1'b1;
-          if (iter_r == 1) begin
-            round_sig_r <= (sqrt_rem_next != 0)
-                         ? {sqrt_root_next[31:1], 1'b1} : sqrt_root_next;
+          if (sqrt_last) begin
+            round_sig_r <= sqrt_result_sig;
             round_exp_r <= exp_z_r;
             tiny_r <= 1'b0;
             state_r <= ST_ROUND;
@@ -346,7 +317,7 @@ module edge_fpu_slow #(
         end
 
         ST_ROUND: begin
-          if (round_exp_r == 11'sd1023) begin
+          if (special_r) begin
             // Special-case result was already captured at issue.
             busy_r <= 1'b0;
             state_r <= ST_IDLE;
