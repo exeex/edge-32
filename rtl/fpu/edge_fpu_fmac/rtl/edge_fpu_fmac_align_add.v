@@ -7,7 +7,9 @@ module edge_fpu_fmac_align_add (
  input subtract_in,
  input [52:0] op0_sig_complement, op1_sig_complement,
  output reg add_zero, output reg add_sign,
- output reg signed [12:0] add_exp,
+ output reg signed [12:0] add_base_exp,
+ output reg add_norm_subtract,
+ output reg [5:0] add_norm_adjust,
  output reg [63:0] add_magnitude,
  output reg signed [7:0] add_pack_shift
 );
@@ -116,8 +118,6 @@ end
 // One shared magnitude adder; complement is already aligned and captured.
 wire [63:0] raw_sum=big_q+small_aligned_q+{63'b0,!same_sign_q};
 wire [5:0] lshift_amt=leading_zero_count(raw_sum);
-wire signed [12:0] normalized_exp= same_sign_q
-  ? exp_big_q+{12'b0,raw_sum[63]} : exp_big_q-{7'b0,lshift_amt};
 // For a normal result, shift magnitude down to 24+GRS bits. For a
 // subnormal, LZ/carry adjustments cancel algebraically: 37 - base_exp.
 // Compare in parallel with normalized_exp, avoiding subtract -> compare.
@@ -132,7 +132,10 @@ wire exact_zero= same_sign_q ? !(|big_q) && !(|small_aligned_q)
 always @(posedge forever_cpuclk) begin
  add_zero<=exact_zero;
  add_sign<=big_sign_q;
- add_exp<=normalized_exp;
+ // WB completes exponent adjustment in parallel with the magnitude shifter.
+ add_base_exp<=exp_big_q;
+ add_norm_subtract<=!same_sign_q;
+ add_norm_adjust<=same_sign_q ? {5'b0,raw_sum[63]} : lshift_amt;
  add_magnitude<=raw_sum;
  add_pack_shift<=pack_shift;
 end

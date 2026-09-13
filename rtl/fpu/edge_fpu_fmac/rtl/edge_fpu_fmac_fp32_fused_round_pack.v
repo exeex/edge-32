@@ -1,13 +1,19 @@
 // Finish the A1 unfinished magnitude packet with one combined shift/RNE.
 module edge_fpu_fmac_fp32_fused_round_pack(
  input sign,
- input signed [12:0] biased_exp,
+ input signed [12:0] base_exp,
+ input norm_subtract,
+ input [5:0] norm_adjust,
  input [63:0] magnitude,
  input signed [7:0] pack_shift,
  input [2:0] rm,
  output [31:0] result,
  output [4:0] fflags
 );
+// Numerical exponent path runs parallel to magnitude shifting/GRS generation.
+wire signed [12:0] biased_exp = norm_subtract
+ ? base_exp - $signed({7'b0,norm_adjust})
+ : base_exp + $signed({7'b0,norm_adjust});
 wire [63:0] shifted_right=magnitude >> pack_shift[6:0];
 wire [63:0] discarded_mask=~(64'hffffffffffffffff << pack_shift[6:0]);
 wire [26:0] right_grs=pack_shift>=8'sd64 ? {26'b0,|magnitude}
