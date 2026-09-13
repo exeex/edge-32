@@ -149,43 +149,33 @@ begin
     fmac_pipe_vld_d1 <= 1'b0;
     fmac_pipe_vld_d2 <= 1'b0;
     fmac_pipe_vld_d3 <= 1'b0;
-    fmac_dst_reg_d0 <= 5'b0;
-    fmac_dst_reg_d1 <= 5'b0;
-    fmac_dst_reg_d2 <= 5'b0;
-    fmac_dst_reg_d3 <= 5'b0;
     fmac_wb_vld <= 1'b0;
-    fmac_wb_reg[4:0] <= 5'b0;
-    fmac_wb_data <= 32'b0;
-    fmac_wb_fflags[4:0] <= 5'b0;
   end
   else if(fmac_cancel) begin
     fmac_pipe_vld_d0 <= 1'b0;
     fmac_pipe_vld_d1 <= 1'b0;
     fmac_pipe_vld_d2 <= 1'b0;
     fmac_pipe_vld_d3 <= 1'b0;
-    fmac_dst_reg_d0 <= 5'b0;
-    fmac_dst_reg_d1 <= 5'b0;
-    fmac_dst_reg_d2 <= 5'b0;
-    fmac_dst_reg_d3 <= 5'b0;
     fmac_wb_vld <= 1'b0;
-    fmac_wb_reg[4:0] <= 5'b0;
-    fmac_wb_data <= 32'b0;
-    fmac_wb_fflags[4:0] <= 5'b0;
   end
   else begin
     fmac_pipe_vld_d0 <= fmac_inst_vld_q && fmac_dst_vld_q;
     fmac_pipe_vld_d1 <= fmac_pipe_vld_d0;
     fmac_pipe_vld_d2 <= fmac_pipe_vld_d1;
     fmac_pipe_vld_d3 <= fmac_pipe_vld_d2;
-    fmac_dst_reg_d0 <= fmac_dst_reg_q;
-    fmac_dst_reg_d1 <= fmac_dst_reg_d0;
-    fmac_dst_reg_d2 <= fmac_dst_reg_d1;
-    fmac_dst_reg_d3 <= fmac_dst_reg_d2;
     fmac_wb_vld <= fmac_wb_vld_pre;
-    fmac_wb_reg[4:0] <= fmac_dst_reg_d3[4:0];
-    fmac_wb_data <= fmac_wb_data_pre;
-    fmac_wb_fflags[4:0] <= fmac_wb_fflags_pre[4:0];
   end
+end
+
+// Payload and tags are observable only with WB valid; no reset/cancel muxes.
+always @(posedge forever_cpuclk) begin
+  fmac_dst_reg_d0 <= fmac_dst_reg_q;
+  fmac_dst_reg_d1 <= fmac_dst_reg_d0;
+  fmac_dst_reg_d2 <= fmac_dst_reg_d1;
+  fmac_dst_reg_d3 <= fmac_dst_reg_d2;
+  fmac_wb_reg <= fmac_dst_reg_d3;
+  fmac_wb_data <= fmac_wb_data_pre;
+  fmac_wb_fflags <= fmac_wb_fflags_pre;
 end
 
 endmodule

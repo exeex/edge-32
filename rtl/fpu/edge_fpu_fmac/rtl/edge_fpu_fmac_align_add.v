@@ -16,6 +16,9 @@ wire [63:0] op0_ext, op1_ext, big_ext, small_ext, small_coarse;
 reg same_sign_q, big_sign_q;
 reg [63:0] big_q, small_aligned_q;
 reg signed [12:0] exp_big_q;
+// Numerical metadata computed in parallel with A0 alignment.
+wire signed [12:0] subnormal_shift = 13'sd37-exp_big;
+reg signed [7:0] subnormal_shift_q;
 function [63:0] rshift_sticky_coarse;
   input [63:0] value;
   input [10:0] coarse;
@@ -101,6 +104,8 @@ always @(posedge forever_cpuclk) begin
  big_q<=big_ext;
  small_aligned_q<=rshift_sticky_fine(small_coarse,exp_diff[1:0]);
  exp_big_q<=exp_big;
+ // Only used for subnormal results; positive-range shifts saturate at 64.
+ subnormal_shift_q <= subnormal_shift>=13'sd64 ? 8'sd64 : subnormal_shift[7:0];
 end
 wire [63:0] raw_add=big_q+small_aligned_q;
 wire [63:0] raw_sub=big_q-small_aligned_q;
@@ -109,10 +114,13 @@ wire signed [12:0] normalized_exp= same_sign_q
   ? exp_big_q+{12'b0,raw_add[63]} : exp_big_q-{7'b0,lshift_amt};
 // For a normal result, shift magnitude down to 24+GRS bits. For a
 // subnormal, LZ/carry adjustments cancel algebraically: 37 - base_exp.
-wire signed [12:0] pack_shift=normalized_exp<=13'sd0
-  ? 13'sd37-exp_big_q
-  : same_sign_q ? 13'sd36+{12'b0,raw_add[63]}
-                : 13'sd36-{7'b0,lshift_amt};
+// Compare in parallel with normalized_exp, avoiding subtract -> compare.
+wire result_subnormal = same_sign_q
+  ? (exp_big_q < 13'sd0 || (exp_big_q == 13'sd0 && !raw_add[63]))
+  : exp_big_q <= $signed({7'b0,lshift_amt});
+wire signed [7:0] normal_shift = same_sign_q
+  ? 8'sd36+{7'b0,raw_add[63]} : 8'sd36-$signed({2'b0,lshift_amt});
+wire signed [7:0] pack_shift = result_subnormal ? subnormal_shift_q : normal_shift;
 wire exact_zero= same_sign_q ? !(|big_q) && !(|small_aligned_q)
                              : big_q==small_aligned_q;
 always @(posedge forever_cpuclk) begin
@@ -120,6 +128,6 @@ always @(posedge forever_cpuclk) begin
  add_sign<=big_sign_q;
  add_exp<=normalized_exp;
  add_magnitude<=same_sign_q ? raw_add : raw_sub;
- add_pack_shift<=pack_shift>=13'sd64 ? 8'sd64 : pack_shift[7:0];
+ add_pack_shift<=pack_shift;
 end
 endmodule
