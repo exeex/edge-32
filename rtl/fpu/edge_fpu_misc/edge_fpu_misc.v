@@ -59,68 +59,56 @@ module edge_fpu_misc #(
 
   assign misc_issue_ready = 1'b1;
 
-  function [15:0] fp32_to_fp16;
+  // Finite numerical candidate: exponent ranges bound the shift to 0..11.
+  // NaN/Inf never select operands, shifter controls, or rounding controls.
+  function [15:0] fp32_to_fp16_finite;
     input [31:0] value;
     input [2:0] rm;
-    reg sign;
     reg [7:0] exp;
-    reg [22:0] frac;
-    reg [23:0] sig;
-    reg [10:0] kept;
-    reg [24:0] rounded;
-    reg [22:0] discarded_mask;
-    reg guard;
-    reg sticky;
-    reg increment;
+    reg [23:0] sig, shifted;
+    reg [3:0] extra_shift;
+    reg [10:0] kept, lost_mask;
+    reg [11:0] rounded;
+    reg guard, sticky, increment, overflow_to_inf;
     reg [5:0] half_exp;
-    reg overflow_to_inf;
-    integer unbiased;
-    integer shift;
     begin
-      sign = value[31]; exp = value[30:23]; frac = value[22:0];
-      if (exp == 8'hff) begin
-        fp32_to_fp16 = (frac == 0) ? {sign, 5'h1f, 10'b0} : 16'h7e00;
-      end else if (exp == 0 && frac == 0) begin
-        fp32_to_fp16 = {sign, 15'b0};
-      end else begin
-        unbiased = (exp == 0) ? -126 : exp - 127;
-        sig = (exp == 0) ? {1'b0, frac} : {1'b1, frac};
-        shift = (unbiased < -14) ? (-14 - unbiased + 13) : 13;
-        if (shift >= 25) begin
-          kept = 0; guard = 0; sticky = |sig;
-        end else begin
-          kept = sig >> shift;
-          guard = (shift > 0) ? sig[shift-1] : 1'b0;
-          discarded_mask = (shift > 1) ? ((23'h1 << (shift-1)) - 1'b1) : 23'b0;
-          sticky = |(sig[22:0] & discarded_mask);
-        end
-        case (rm)
-          3'd0: increment = guard && (sticky || kept[0]);
-          3'd1: increment = 1'b0;
-          3'd2: increment = sign && (guard || sticky);
-          3'd3: increment = !sign && (guard || sticky);
-          3'd4: increment = guard;
-          default: increment = guard && (sticky || kept[0]);
-        endcase
-        rounded = {14'b0, kept} + increment;
-        overflow_to_inf = (rm == 3'd0) || (rm == 3'd4) ||
-                          ((rm == 3'd2) && sign) ||
-                          ((rm == 3'd3) && !sign);
-        if (unbiased > 15 || (unbiased == 15 && rounded[11]))
-          fp32_to_fp16 = overflow_to_inf ? {sign, 5'h1f, 10'b0}
-                                         : {sign, 5'h1e, 10'h3ff};
-        else if (unbiased >= -14) begin
-          half_exp = unbiased + 15 + rounded[11];
-          fp32_to_fp16 = {sign, half_exp[4:0],
-                          rounded[11] ? 10'b0 : rounded[9:0]};
-        end
-        else if (rounded[10])
-          fp32_to_fp16 = {sign, 5'h01, 10'b0};
-        else
-          fp32_to_fp16 = {sign, 5'b0, rounded[9:0]};
-      end
+      exp = value[30:23];
+      sig = {exp != 0, value[22:0]};
+      extra_shift = (exp >= 8'd102 && exp < 8'd113) ? 8'd113-exp : 4'd0;
+      shifted = sig >> extra_shift;
+      lost_mask = (11'd1 << extra_shift) - 11'd1;
+      kept = (exp < 8'd102) ? 11'd0 : shifted[23:13];
+      guard = (exp >= 8'd102) && shifted[12];
+      sticky = (exp < 8'd102) ? |sig :
+               (|shifted[11:0] || |(sig[10:0] & lost_mask));
+      case (rm)
+        3'd1: increment = 1'b0;
+        3'd2: increment = value[31] && (guard || sticky);
+        3'd3: increment = !value[31] && (guard || sticky);
+        3'd4: increment = guard;
+        default: increment = guard && (sticky || kept[0]);
+      endcase
+      rounded = {1'b0, kept} + increment;
+      overflow_to_inf = (rm == 3'd0) || (rm == 3'd4) ||
+                        ((rm == 3'd2) && value[31]) ||
+                        ((rm == 3'd3) && !value[31]);
+      half_exp = exp - 8'd112 + rounded[11];
+      if (exp > 8'd142 || (exp == 8'd142 && rounded[11]))
+        fp32_to_fp16_finite = overflow_to_inf ? {value[31], 5'h1f, 10'b0}
+                                                  : {value[31], 5'h1e, 10'h3ff};
+      else if (exp >= 8'd113)
+        fp32_to_fp16_finite = {value[31], half_exp[4:0],
+                               rounded[11] ? 10'b0 : rounded[9:0]};
+      else
+        fp32_to_fp16_finite = {value[31], 4'b0, rounded[10:0]};
     end
   endfunction
+
+  wire [15:0] half_numeric = fp32_to_fp16_finite(misc_issue_fsrc0, misc_issue_rm);
+  wire half_special = &misc_issue_fsrc0[30:23];
+  // Result boundary priority: canonical NaN, signed infinity, finite candidate.
+  wire [15:0] half_resolved = half_special ?
+      (src0_nan ? 16'h7e00 : {misc_issue_fsrc0[31], 5'h1f, 10'b0}) : half_numeric;
 
   function [31:0] fp16_to_fp32;
     input [15:0] value;
@@ -291,7 +279,7 @@ module edge_fpu_misc #(
     result_domain_d = 1'b0;
     fflags_d = 5'b0;
     fpr_result = 32'b0;
-    half_payload = fp32_to_fp16(misc_issue_fsrc0, misc_issue_rm);
+    half_payload = half_resolved;
     equal = (misc_issue_fsrc0 == misc_issue_fsrc1) || (src0_zero && src1_zero);
     less_than = fp32_lt(misc_issue_fsrc0, misc_issue_fsrc1);
     case (misc_issue_op)
@@ -367,27 +355,20 @@ module edge_fpu_misc #(
     endcase
   end
 
+  // Valid owns reset and bubbles. Payload/status/tags are only observable when
+  // complete_valid is asserted and therefore need neither reset nor enable.
   always @(posedge forever_cpuclk or negedge cpurst_b) begin
-    if (!cpurst_b) begin
-      misc_complete_valid <= 1'b0;
-      misc_complete_seq_id <= 0;
-      misc_complete_epoch <= 0;
-      misc_complete_rd <= 0;
-      misc_complete_rd_bank <= 1'b0;
-      misc_complete_domain <= 1'b0;
-      misc_complete_value <= 0;
-      misc_complete_fflags <= 0;
-    end else begin
-      misc_complete_valid <= misc_issue_valid && misc_issue_ready;
-      if (misc_issue_valid && misc_issue_ready) begin
-        misc_complete_seq_id <= misc_issue_seq_id;
-        misc_complete_epoch <= misc_issue_epoch;
-        misc_complete_rd <= misc_issue_rd;
-        misc_complete_rd_bank <= misc_issue_rd_bank;
-        misc_complete_domain <= result_domain_d;
-        misc_complete_value <= result_d;
-        misc_complete_fflags <= fflags_d;
-      end
-    end
+    if (!cpurst_b) misc_complete_valid <= 1'b0;
+    else misc_complete_valid <= misc_issue_valid && misc_issue_ready;
+  end
+
+  always @(posedge forever_cpuclk) begin
+    misc_complete_seq_id <= misc_issue_seq_id;
+    misc_complete_epoch <= misc_issue_epoch;
+    misc_complete_rd <= misc_issue_rd;
+    misc_complete_rd_bank <= misc_issue_rd_bank;
+    misc_complete_domain <= result_domain_d;
+    misc_complete_value <= result_d;
+    misc_complete_fflags <= fflags_d;
   end
 endmodule
