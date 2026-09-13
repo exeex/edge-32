@@ -2,7 +2,8 @@ module edge_fpu_cvt #(
   parameter SEQ_ID_WIDTH = 8,
   parameter EPOCH_WIDTH = 4,
   parameter REG_INDEX_WIDTH = 5,
-  parameter VALUE_WIDTH = 64
+  parameter VALUE_WIDTH = 64,
+  parameter GPR_WIDTH = VALUE_WIDTH
 ) (
   input wire forever_cpuclk, input wire cpurst_b,
   input wire cvt_issue_valid, output wire cvt_issue_ready,
@@ -14,7 +15,7 @@ module edge_fpu_cvt #(
   input wire [REG_INDEX_WIDTH-1:0] cvt_issue_rd,
   input wire cvt_issue_rd_bank,
   input wire [31:0] cvt_issue_fsrc,
-  input wire [VALUE_WIDTH-1:0] cvt_issue_gsrc,
+  input wire [GPR_WIDTH-1:0] cvt_issue_gsrc,
   output reg cvt_complete_valid,
   output reg [SEQ_ID_WIDTH-1:0] cvt_complete_seq_id,
   output reg [EPOCH_WIDTH-1:0] cvt_complete_epoch,
@@ -33,10 +34,13 @@ module edge_fpu_cvt #(
   wire word_in = !cvt_issue_int_type[1];
   wire unsigned_in = cvt_issue_int_type[0];
   wire [63:0] gsrc64 = cvt_issue_gsrc;
-  wire [63:0] integer_input = word_in
-    ? (unsigned_in ? {32'b0,gsrc64[31:0]} : {{32{gsrc64[31]}},gsrc64[31:0]})
-    : gsrc64;
-  wire integer_sign = !unsigned_in && integer_input[63];
+  wire integer_sign = !unsigned_in && (word_in ? gsrc64[31] : gsrc64[63]);
+  // Complete the two's-complement magnitude in parallel 32-bit pieces.
+  // Carry into the high half of -x is exactly (x[31:0] == 0).
+  wire [31:0] magnitude_low = integer_sign ? (~gsrc64[31:0]+32'd1) : gsrc64[31:0];
+  wire magnitude_high_carry = !(|gsrc64[31:0]);
+  wire [31:0] magnitude_high = word_in ? 32'b0 :
+    ((!unsigned_in && gsrc64[63]) ? (~gsrc64[63:32]+{31'b0,magnitude_high_carry}) : gsrc64[63:32]);
   wire input_nan = (&cvt_issue_fsrc[30:23]) && (|cvt_issue_fsrc[22:0]);
   // Includes NaN/Inf and finite exponent overflow. Does not gate arithmetic.
   wire input_nv = cvt_issue_fsrc[30:23] > 8'd190;
@@ -150,7 +154,7 @@ module edge_fpu_cvt #(
 
   always @(posedge forever_cpuclk) begin
     // S1: I2F absolute value; F2I alignment and guard/sticky. Classify once.
-    magnitude_q0<=integer_sign ? (~integer_input+1'b1) : integer_input;
+    magnitude_q0<={magnitude_high,magnitude_low};
     f2i_mag_q0<=f2i_mag;
     f2i_inc_q0<=round_increment(cvt_issue_rm,cvt_issue_fsrc[31],
                                 f2i_mag[0],f2i_guard,f2i_sticky);

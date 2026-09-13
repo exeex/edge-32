@@ -4,7 +4,7 @@
 // instruction at a time; this leaf owns the FPR file, FP decode and the
 // variable-latency execution-unit selection.  Issue/retire policy stays in the
 // surrounding core (edge-rv or edge-rv-lite).
-module edge_fpu_alu (
+module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   input  wire        clk,
   input  wire        reset_n,
   input  wire        issue_valid,
@@ -113,12 +113,12 @@ module edge_fpu_alu (
     .misc_complete_seq_id(),.misc_complete_epoch(),.misc_complete_rd(),
     .misc_complete_rd_bank(),.misc_complete_domain(misc_domain),
     .misc_complete_value(misc_value),.misc_complete_fflags(misc_flags));
-  edge_fpu_cvt #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1)) cvt(
+  edge_fpu_cvt #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1),.GPR_WIDTH(GPR_WIDTH)) cvt(
     .forever_cpuclk(clk),.cpurst_b(reset_n),.cvt_issue_valid(fire&&cvt_op),
     .cvt_issue_ready(cvt_ready),.cvt_issue_seq_id(1'b0),.cvt_issue_epoch(1'b0),
     .cvt_issue_op(cvt_sel),.cvt_issue_int_type(rs2[1:0]),.cvt_issue_rm(rm),
     .cvt_issue_rd(rd),.cvt_issue_rd_bank(1'b0),.cvt_issue_fsrc(fpr[rs1]),
-    .cvt_issue_gsrc(issue_gpr_src),.cvt_complete_valid(cvt_done),
+    .cvt_issue_gsrc(issue_gpr_src[GPR_WIDTH-1:0]),.cvt_complete_valid(cvt_done),
     .cvt_complete_seq_id(),.cvt_complete_epoch(),.cvt_complete_rd(),
     .cvt_complete_rd_bank(),.cvt_complete_domain(cvt_domain),
     .cvt_complete_value(cvt_value),.cvt_complete_fflags(cvt_flags));

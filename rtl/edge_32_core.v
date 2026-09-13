@@ -213,7 +213,7 @@ module edge_32_core #(
   wire fpu_ready, fpu_done, fpu_gpr_write;
   wire [63:0] fpu_value; wire [4:0] fpu_fflags;
   generate if(ENABLE_FPU) begin: g_fpu
-    edge_fpu_alu fpu_alu(
+    edge_fpu_alu #(.GPR_WIDTH(32)) fpu_alu(
       .clk(clk),.reset_n(reset_n),
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
       .issue_ready(fpu_ready),.issue_inst(ex_inst[31:0]),
