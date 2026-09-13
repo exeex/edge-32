@@ -93,9 +93,12 @@ reg [44:0] numeric_m0, numeric_m1;
 wire product_sign_mul, addend_sign_mul;
 wire signed [9:0] product_exp_mul;
 wire [23:0] addend_sig_mul;
+wire [23:0] addend_complement_mul;
+reg subtract_m1_q;
 wire signed [8:0] addend_exp_mul;
 assign {product_sign_mul, addend_sign_mul, product_exp_mul,
-        addend_sig_mul, addend_exp_mul} = numeric_m1;
+        addend_complement_mul, addend_exp_mul} = numeric_m1;
+assign addend_sig_mul = ~addend_complement_mul;
 // Exact-zero sign is semantic. Rounded-to-zero nonzero values retain math sign.
 wire zero_sign = fmadd_mul_only ? product_sign
                : (product_sign == addend_sign) ? product_sign
@@ -112,16 +115,18 @@ always @(posedge forever_cpuclk) begin
   numeric_input_q <= {product_sign, addend_sign, product_exp, src2_sig, src2_exp[8:0]};
   action_input_q <= {special_vld, special_result, special_fflags, zero_sign, fmadd_rm};
   numeric_m0 <= numeric_input_q;
-  numeric_m1 <= numeric_m0;
+  // M1 captures complement representation; raw view is used only for ordering.
+  numeric_m1 <= numeric_m0 ^ {12'b0,24'hffffff,9'b0};
+  subtract_m1_q <= numeric_m0[44] ^ numeric_m0[43];
   action_m0 <= action_input_q;
   action_m1 <= action_m0;
   action_a0 <= action_m1;
   action_a1 <= action_a0;
 end
-wire [47:0] product;
+wire [47:0] product, product_complement;
 edge_fpu_mul24x24_pipe2 #(.MASK_INVALID(0)) x_product (
   .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(fmadd_cancel),
-  .lhs(lhs_input_q), .rhs(rhs_input_q), .product(product)
+  .lhs(lhs_input_q), .rhs(rhs_input_q), .product(product), .product_complement(product_complement)
 );
 // Preserve every product bit; zero naturally multiplies to zero.
 wire [52:0] product_sig = product[47] ? {product, 5'b0} : {product[46:0], 6'b0};
@@ -137,6 +142,9 @@ edge_fpu_fmac_align_add x_fused_align_add (
   .forever_cpuclk(forever_cpuclk),
   .op0_sign(product_sign_mul), .op0_exp(product_biased_exp), .op0_sig(product_sig),
   .op1_sign(addend_sign_mul), .op1_exp(addend_biased_exp), .op1_sig({addend_sig_mul,29'b0}),
+  .subtract_in(subtract_m1_q),
+  .op0_sig_complement(product[47] ? {product_complement,5'b11111} : {product_complement[46:0],6'b111111}),
+  .op1_sig_complement({addend_complement_mul,29'h1fffffff}),
   .add_zero(math_zero), .add_sign(math_sign), .add_exp(math_exp), .add_magnitude(math_magnitude), .add_pack_shift(math_pack_shift)
 );
 wire [31:0] numerical_result;
@@ -157,7 +165,7 @@ endmodule
 module edge_fpu_mul24x24_pipe2 #(parameter MASK_INVALID = 1) (
   input wire clk, input wire reset_n, input wire cancel,
   input wire [23:0] lhs, input wire [23:0] rhs,
-  output wire [47:0] product
+  output wire [47:0] product, product_complement
 );
   reg [31:0] partial0_q, partial1_q, partial2_q;
   reg [47:0] product_q;
@@ -165,7 +173,10 @@ module edge_fpu_mul24x24_pipe2 #(parameter MASK_INVALID = 1) (
   // Only liveness is asynchronously reset. Numerical registers free-run so
   // FPGA DSP MREG can absorb the partial products. Two cleared liveness bits
   // prevent pre-reset/cancel payload from escaping, even for an off-edge reset.
-  assign product = MASK_INVALID ? (live_q[1] ? product_q : 48'b0) : product_q;
+  // M1 stores one's complement; provide raw and complemented views of the
+  // same capture, without duplicate arithmetic or an extra stage.
+  assign product_complement = product_q;
+  assign product = MASK_INVALID ? (live_q[1] ? ~product_q : 48'b0) : ~product_q;
   wire [47:0] p0 = {16'b0, partial0_q};
   wire [47:0] p1 = {8'b0, partial1_q, 8'b0};
   wire [47:0] p2 = {partial2_q, 16'b0};
@@ -180,6 +191,6 @@ module edge_fpu_mul24x24_pipe2 #(parameter MASK_INVALID = 1) (
     partial0_q <= lhs * rhs[7:0];
     partial1_q <= lhs * rhs[15:8];
     partial2_q <= lhs * rhs[23:16];
-    product_q <= sum + carry;
+    product_q <= ~(sum + carry);
   end
 endmodule
