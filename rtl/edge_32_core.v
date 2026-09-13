@@ -172,11 +172,19 @@ module edge_32_core #(
   wire mul_ready,mul_result_valid,mul_busy; wire [31:0] mul_result;
   wire [6:0] mul_latency;
   wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
+  generate if (MULDIV_ASAP7) begin: g_muldiv_asap7
+  edge_32_muldiv_asap7 muldiv(.clk(clk),.reset_n(reset_n),
+    .op_valid(mul_start),.op_ready(mul_ready),
+    .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
+    .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
+    .op_latency(mul_latency));
+  end else begin: g_muldiv_portable
   edge_32_muldiv muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
     .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
     .op_latency(mul_latency));
+  end endgenerate
 
   wire lsu_ready,lsu_done,lsu_error,lsu_busy; wire [31:0] lsu_value;
   wire [31:0] lsu_mem_addr;

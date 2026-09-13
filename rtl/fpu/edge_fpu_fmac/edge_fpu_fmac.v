@@ -59,8 +59,12 @@ reg     [4 :0]  fmac_dst_reg_q;
 reg             fmac_dst_vld_q;
 reg             fmac_pipe_vld_d0;
 reg             fmac_pipe_vld_d1;
+reg             fmac_pipe_vld_d2;
+reg             fmac_pipe_vld_d3;
 reg     [4 :0]  fmac_dst_reg_d0;
 reg     [4 :0]  fmac_dst_reg_d1;
+reg     [4 :0]  fmac_dst_reg_d2;
+reg     [4 :0]  fmac_dst_reg_d3;
 
 wire            fmac_fadd;
 wire            fmac_fmadd;
@@ -153,7 +157,7 @@ assign fmac_stall = 1'b0;
 assign fmac_fp32_result = narrow_fmadd_result;
 assign fmac_wb_data_pre = fmac_fp32_result;
 assign fmac_wb_fflags_pre[4:0] = narrow_fmadd_fflags[4:0];
-assign fmac_wb_vld_pre = fmac_pipe_vld_d1
+assign fmac_wb_vld_pre = fmac_pipe_vld_d3
                        && !fmac_cancel;
 
 always @(posedge forever_cpuclk or negedge cpurst_b)
@@ -161,8 +165,12 @@ begin
   if(!cpurst_b) begin
     fmac_pipe_vld_d0 <= 1'b0;
     fmac_pipe_vld_d1 <= 1'b0;
+    fmac_pipe_vld_d2 <= 1'b0;
+    fmac_pipe_vld_d3 <= 1'b0;
     fmac_dst_reg_d0 <= 5'b0;
     fmac_dst_reg_d1 <= 5'b0;
+    fmac_dst_reg_d2 <= 5'b0;
+    fmac_dst_reg_d3 <= 5'b0;
     fmac_wb_vld <= 1'b0;
     fmac_wb_reg[4:0] <= 5'b0;
     fmac_wb_data <= 32'b0;
@@ -171,8 +179,12 @@ begin
   else if(fmac_cancel) begin
     fmac_pipe_vld_d0 <= 1'b0;
     fmac_pipe_vld_d1 <= 1'b0;
+    fmac_pipe_vld_d2 <= 1'b0;
+    fmac_pipe_vld_d3 <= 1'b0;
     fmac_dst_reg_d0 <= 5'b0;
     fmac_dst_reg_d1 <= 5'b0;
+    fmac_dst_reg_d2 <= 5'b0;
+    fmac_dst_reg_d3 <= 5'b0;
     fmac_wb_vld <= 1'b0;
     fmac_wb_reg[4:0] <= 5'b0;
     fmac_wb_data <= 32'b0;
@@ -182,10 +194,14 @@ begin
     fmac_pipe_vld_d0 <= fmac_inst_vld_q && fmac_dst_vld_q
                      && fmac_narrow_fmadd;
     fmac_pipe_vld_d1 <= fmac_pipe_vld_d0;
+    fmac_pipe_vld_d2 <= fmac_pipe_vld_d1;
+    fmac_pipe_vld_d3 <= fmac_pipe_vld_d2;
     fmac_dst_reg_d0 <= fmac_dst_reg_q;
     fmac_dst_reg_d1 <= fmac_dst_reg_d0;
+    fmac_dst_reg_d2 <= fmac_dst_reg_d1;
+    fmac_dst_reg_d3 <= fmac_dst_reg_d2;
     fmac_wb_vld <= fmac_wb_vld_pre;
-    fmac_wb_reg[4:0] <= fmac_dst_reg_d1[4:0];
+    fmac_wb_reg[4:0] <= fmac_dst_reg_d3[4:0];
     fmac_wb_data <= fmac_wb_data_pre;
     fmac_wb_fflags[4:0] <= fmac_wb_fflags_pre[4:0];
   end

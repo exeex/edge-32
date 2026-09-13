@@ -226,15 +226,51 @@ assign special_result = (any_nan || inf_zero || inf_cancel)
                       ? canonical_qnan : canonical_inf;
 assign special_fflags[4:0] = {any_snan || inf_zero || inf_cancel, 4'b0000};
 
-assign product[47:0] = src0_sig[23:0] * src1_sig[23:0];
+// M0 captures three exact 24x8 products; M1 combines them to 48 bits.
+// Classification is computed once at ingress and travels alongside the math.
 assign product_exp = src0_exp + src1_exp;
+assign wide_single_candidate = (src0_normal || src0_subnormal)
+                            && (src1_normal || src1_subnormal)
+                            && (src2_normal || src2_subnormal);
+
+wire product_sign_mul;
+wire addend_sign_mul;
+wire product_zero_mul;
+wire signed [12:0] product_exp_mul;
+wire special_vld_mul;
+wire [31:0] special_result_mul;
+wire [4:0] special_fflags_mul;
+wire wide_single_candidate_mul;
+wire [23:0] src2_sig_mul;
+wire signed [12:0] src2_exp_mul;
+wire src2_zero_mul;
+wire [2:0] fmadd_rm_mul;
+wire fmadd_mul_only_mul;
+reg [96:0] mul_sideband_m0, mul_sideband_m1;
+assign {product_sign_mul, addend_sign_mul, product_zero_mul, product_exp_mul, special_vld_mul, special_result_mul, special_fflags_mul, wide_single_candidate_mul, src2_sig_mul, src2_exp_mul, src2_zero_mul, fmadd_rm_mul, fmadd_mul_only_mul} = mul_sideband_m1;
+always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  if (!cpurst_b) begin
+    mul_sideband_m0 <= 0;
+    mul_sideband_m1 <= 0;
+  end else if (fmadd_cancel) begin
+    mul_sideband_m0 <= 0;
+    mul_sideband_m1 <= 0;
+  end else begin
+    mul_sideband_m0 <= {product_sign, addend_sign, product_zero, product_exp, special_vld, special_result, special_fflags, wide_single_candidate, src2_sig, src2_exp, src2_zero, fmadd_rm, fmadd_mul_only};
+    mul_sideband_m1 <= mul_sideband_m0;
+  end
+end
+edge_fpu_mul24x24_pipe2 x_product (
+  .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(fmadd_cancel),
+  .lhs(src0_sig), .rhs(src1_sig), .product(product)
+);
 assign finite_carry = product[47];
-assign product_exp_norm = product_exp + {12'b0, finite_carry};
-assign product_lost_low_bits = !product_zero
+assign product_exp_norm = product_exp_mul + {12'b0, finite_carry};
+assign product_lost_low_bits = !product_zero_mul
                             && (finite_carry
                                 ? |product[21:0]
                                 : |product[20:0]);
-assign product_sig_grs[26:0] = product_zero
+assign product_sig_grs[26:0] = product_zero_mul
                                ? 27'b0
                                : finite_carry
                                  ? {product[47:24],
@@ -245,22 +281,22 @@ assign product_sig_grs[26:0] = product_zero
                                     product[22],
                                     product[21],
                                     |product[20:0]};
-assign addend_sig_grs[26:0] = src2_zero
+assign addend_sig_grs[26:0] = src2_zero_mul
                               ? 27'b0
-                              : {src2_sig[23:0], 3'b0};
+                              : {src2_sig_mul[23:0], 3'b0};
 
-assign same_sign = product_sign == addend_sign;
-assign exp_product_bigger = product_exp_norm > src2_exp;
-assign exp_equal = product_exp_norm == src2_exp;
-assign mag_product_ge_addend = !product_zero
-                            && (src2_zero
+assign same_sign = product_sign_mul == addend_sign_mul;
+assign exp_product_bigger = product_exp_norm > src2_exp_mul;
+assign exp_equal = product_exp_norm == src2_exp_mul;
+assign mag_product_ge_addend = !product_zero_mul
+                            && (src2_zero_mul
                              || exp_product_bigger
                              || (exp_equal
                               && (product_sig_grs[26:0] >= addend_sig_grs[26:0])));
-assign exp_big = mag_product_ge_addend ? product_exp_norm : src2_exp;
+assign exp_big = mag_product_ge_addend ? product_exp_norm : src2_exp_mul;
 assign exp_diff[12:0] = mag_product_ge_addend
-                        ? product_exp_norm - src2_exp
-                        : src2_exp - product_exp_norm;
+                        ? product_exp_norm - src2_exp_mul
+                        : src2_exp_mul - product_exp_norm;
 
 edge_fpu_fmac_narrow_shift_sticky_2stage  x_product_shift (
   .shift_in  (product_sig_grs[26:0]),
@@ -308,9 +344,9 @@ assign result_norm[26:0] = same_sign ? sum_norm[26:0] : diff_norm[26:0];
 assign result_norm_sticky[26:0] = product_lost_low_bits && !add_zero
                                 ? {result_norm[26:1], result_norm[0] | !add_zero}
                                 : result_norm[26:0];
-assign add_sign = add_zero ? (fmadd_rm == 3'b010)
-                : mag_product_ge_addend ? product_sign
-                : addend_sign;
+assign add_sign = add_zero ? (fmadd_rm_mul == 3'b010)
+                : mag_product_ge_addend ? product_sign_mul
+                : addend_sign_mul;
 assign add_exp = add_zero ? 13'sd0
                : same_sign ? sum_exp
                : exp_norm_sub;
@@ -318,29 +354,29 @@ assign add_sig_grs[26:0] = result_norm_sticky[26:0];
 
 edge_fpu_fmac_fp32_round_pack x_round_pack (
   .sign     (add_sign), .exp(add_exp), .sig_grs(add_sig_grs),
-  .rm       (fmadd_rm), .result(narrow_finite_result),
+  .rm       (fmadd_rm_mul), .result(narrow_finite_result),
   .fflags   (narrow_finite_fflags)
 );
 
 // Single FMADD needs a fused-width align/add path; compressing the exact
 // 24x24 product to 24+GRS before adding src2 loses tie/carry information.
-assign wide_product_sig[52:0] = product_zero
+assign wide_product_sig[52:0] = product_zero_mul
                                 ? 53'b0
                                 : finite_carry
                                   ? {product[47:0], 5'b0}
                                   : {product[46:0], 6'b0};
-assign wide_addend_sig[52:0] = {src2_sig[23:0], 29'b0};
+assign wide_addend_sig[52:0] = {src2_sig_mul[23:0], 29'b0};
 assign wide_product_exp = product_exp_norm + 13'sd127;
-assign wide_addend_exp = src2_exp + 13'sd127;
+assign wide_addend_exp = src2_exp_mul + 13'sd127;
 
 edge_fpu_fmac_align_add  x_wide_single_align_add (
   .cpurst_b     (cpurst_b                 ),
   .forever_cpuclk(forever_cpuclk          ),
   .align_cancel(fmadd_cancel              ),
-  .op0_sign    (product_sign             ),
+  .op0_sign    (product_sign_mul             ),
   .op0_exp     (wide_product_exp         ),
   .op0_sig     (wide_product_sig[52:0]   ),
-  .op1_sign    (addend_sign              ),
+  .op1_sign    (addend_sign_mul              ),
   .op1_exp     (wide_addend_exp          ),
   .op1_sig     (wide_addend_sig[52:0]    ),
   .add_zero    (wide_add_zero            ),
@@ -360,9 +396,6 @@ edge_fpu_fmac_fp32_fused_round_pack x_wide_single_round_pack (
 // delayed rounding mode so the wide pipeline cannot use a younger instruction.
 assign wide_round_sign = wide_add_zero ? (rm_d1 == 3'b010) : wide_add_sign;
 
-assign wide_single_candidate = (src0_normal || src0_subnormal)
-                            && (src1_normal || src1_subnormal)
-                            && (src2_normal || src2_subnormal);
 assign wide_single_use = wide_single_candidate_d1
                       && !wide_add_zero;
 assign finite_result = wide_single_use
@@ -415,21 +448,21 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     narrow_finite_fflags_d0 <= 5'b0;
     narrow_finite_fflags_d1 <= 5'b0;
   end else begin
-    special_vld_d0 <= special_vld;
+    special_vld_d0 <= special_vld_mul;
     special_vld_d1 <= special_vld_d0;
-    wide_single_candidate_d0 <= wide_single_candidate;
+    wide_single_candidate_d0 <= wide_single_candidate_mul;
     wide_single_candidate_d1 <= wide_single_candidate_d0;
-    mul_only_d0 <= fmadd_mul_only;
+    mul_only_d0 <= fmadd_mul_only_mul;
     mul_only_d1 <= mul_only_d0;
-    product_zero_d0 <= product_zero;
+    product_zero_d0 <= product_zero_mul;
     product_zero_d1 <= product_zero_d0;
-    product_sign_d0 <= product_sign;
+    product_sign_d0 <= product_sign_mul;
     product_sign_d1 <= product_sign_d0;
-    rm_d0 <= fmadd_rm;
+    rm_d0 <= fmadd_rm_mul;
     rm_d1 <= rm_d0;
-    special_result_d0 <= special_result;
+    special_result_d0 <= special_result_mul;
     special_result_d1 <= special_result_d0;
-    special_fflags_d0 <= special_fflags;
+    special_fflags_d0 <= special_fflags_mul;
     special_fflags_d1 <= special_fflags_d0;
     narrow_finite_result_d0 <= narrow_finite_result;
     narrow_finite_result_d1 <= narrow_finite_result_d0;
@@ -449,4 +482,30 @@ assign fmadd_fflags[4:0] = special_vld_d1
                            ? special_fflags_d1[4:0]
                            : finite_fflags[4:0];
 
+endmodule
+
+// Unsigned significand multiplier: no truncation or rounding at this boundary.
+module edge_fpu_mul24x24_pipe2 (
+  input wire clk, input wire reset_n, input wire cancel,
+  input wire [23:0] lhs, input wire [23:0] rhs,
+  output reg [47:0] product
+);
+  reg [31:0] partial0_q, partial1_q, partial2_q;
+  wire [47:0] p0 = {16'b0, partial0_q};
+  wire [47:0] p1 = {8'b0, partial1_q, 8'b0};
+  wire [47:0] p2 = {partial2_q, 16'b0};
+  wire [47:0] sum = p0 ^ p1 ^ p2;
+  wire [47:0] carry = ((p0 & p1) | (p0 & p2) | (p1 & p2)) << 1;
+  always @(posedge clk or negedge reset_n) begin
+    if (!reset_n) begin
+      partial0_q <= 0; partial1_q <= 0; partial2_q <= 0; product <= 0;
+    end else if (cancel) begin
+      partial0_q <= 0; partial1_q <= 0; partial2_q <= 0; product <= 0;
+    end else begin
+      partial0_q <= lhs * rhs[7:0];
+      partial1_q <= lhs * rhs[15:8];
+      partial2_q <= lhs * rhs[23:16];
+      product <= sum + carry;
+    end
+  end
 endmodule
