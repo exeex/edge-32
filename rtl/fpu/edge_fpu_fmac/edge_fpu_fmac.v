@@ -87,34 +87,26 @@ always @(posedge forever_cpuclk or negedge cpurst_b)
 begin
   if(!cpurst_b) begin
     fmac_inst_vld_q <= 1'b0;
-    fmac_func_q[19:0] <= 20'b0;
-    fmac_rm_q[2:0] <= 3'b0;
-    fmac_src0_q <= 32'b0;
-    fmac_src1_q <= 32'b0;
-    fmac_src2_q <= 32'b0;
-    fmac_dst_reg_q[4:0] <= 5'b0;
     fmac_dst_vld_q <= 1'b0;
   end
   else if(fmac_cancel) begin
     fmac_inst_vld_q <= 1'b0;
-    fmac_func_q[19:0] <= 20'b0;
-    fmac_rm_q[2:0] <= 3'b0;
-    fmac_src0_q <= 32'b0;
-    fmac_src1_q <= 32'b0;
-    fmac_src2_q <= 32'b0;
-    fmac_dst_reg_q[4:0] <= 5'b0;
     fmac_dst_vld_q <= 1'b0;
   end
   else begin
     fmac_inst_vld_q <= fmac_inst_vld;
+    fmac_dst_vld_q <= fmac_dst_vld;
+  end
+end
+
+// Invalid operand/mode/tag values are unobservable until valid reaches writeback.
+always @(posedge forever_cpuclk) begin
     fmac_func_q[19:0] <= fmac_func[19:0];
     fmac_rm_q[2:0] <= fmac_rm[2:0];
     fmac_src0_q <= fmac_src0;
     fmac_src1_q <= fmac_src1;
     fmac_src2_q <= fmac_src2;
     fmac_dst_reg_q[4:0] <= fmac_dst_reg[4:0];
-    fmac_dst_vld_q <= fmac_dst_vld;
-  end
 end
 
 edge_fpu_fmac_prep  x_edge_fpu_fmac_prep (

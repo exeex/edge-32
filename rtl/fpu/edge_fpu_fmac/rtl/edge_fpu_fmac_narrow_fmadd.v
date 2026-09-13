@@ -61,17 +61,17 @@ reg             product_sign_d0;
 reg             product_sign_d1;
 reg     [2 :0]  rm_d0;
 reg     [2 :0]  rm_d1;
-reg     [31:0]  special_result_d0;
-reg     [31:0]  special_result_d1;
-reg     [4 :0]  special_fflags_d0;
-reg     [4 :0]  special_fflags_d1;
+reg     [1 :0]  special_result_d0;
+reg     [1 :0]  special_result_d1;
+reg             special_fflags_d0;
+reg             special_fflags_d1;
 reg     [31:0]  narrow_finite_result_d0;
 reg     [31:0]  narrow_finite_result_d1;
 reg     [4 :0]  narrow_finite_fflags_d0;
 reg     [4 :0]  narrow_finite_fflags_d1;
 wire    [4 :0]  finite_fflags;
 wire    [4 :0]  narrow_finite_fflags;
-wire    [4 :0]  special_fflags;
+wire            special_fflags;
 wire    [4 :0]  wide_single_fflags;
 wire    [4 :0]  lshift_amt;
 wire    [12:0]  exp_diff;
@@ -94,11 +94,9 @@ wire    [26:0]  sum_norm;
 wire    [26:0]  raw_sub;
 wire    [27:0]  raw_add;
 wire    [47:0]  product;
-wire    [31:0]  canonical_inf;
-wire    [31:0]  canonical_qnan;
 wire    [31:0]  finite_result;
 wire    [31:0]  narrow_finite_result;
-wire    [31:0]  special_result;
+wire    [1 :0]  special_result;
 wire    [31:0]  wide_single_result;
 wire    [52:0]  wide_addend_sig;
 wire    [52:0]  wide_product_sig;
@@ -213,18 +211,15 @@ assign inf_cancel = product_inf
                  && (product_sign ^ addend_sign);
 assign product_zero = src0_zero || src1_zero;
 
-assign canonical_qnan = 32'h7fc0_0000;
-assign canonical_inf = {product_inf ? product_sign : addend_sign,
-                        8'hff, 23'b0};
-
 assign special_vld = any_nan
                   || inf_zero
                   || inf_cancel
                   || product_inf
                   || src2_inf;
-assign special_result = (any_nan || inf_zero || inf_cancel)
-                      ? canonical_qnan : canonical_inf;
-assign special_fflags[4:0] = {any_snan || inf_zero || inf_cancel, 4'b0000};
+// {is_nan, infinity_sign}; no materialized exceptional payload in flight.
+assign special_result = {any_nan || inf_zero || inf_cancel,
+                         product_inf ? product_sign : addend_sign};
+assign special_fflags = any_snan || inf_zero || inf_cancel;
 
 // M0 captures three exact 24x8 products; M1 combines them to 48 bits.
 // Classification is computed once at ingress and travels alongside the math.
@@ -241,8 +236,8 @@ wire product_zero_mul;
 wire signed [9:0] product_exp_transport;
 wire signed [12:0] product_exp_mul = {{3{product_exp_transport[9]}}, product_exp_transport};
 wire special_vld_mul;
-wire [31:0] special_result_mul;
-wire [4:0] special_fflags_mul;
+wire [1:0] special_result_mul;
+wire special_fflags_mul;
 wire wide_single_candidate_mul;
 wire [23:0] src2_sig_mul;
 wire signed [8:0] src2_exp_transport;
@@ -250,21 +245,14 @@ wire signed [12:0] src2_exp_mul = {{4{src2_exp_transport[8]}}, src2_exp_transpor
 wire src2_zero_mul;
 wire [2:0] fmadd_rm_mul;
 wire fmadd_mul_only_mul;
-reg [89:0] mul_sideband_m0, mul_sideband_m1;
+reg [55:0] mul_sideband_m0, mul_sideband_m1;
 assign {product_sign_mul, addend_sign_mul, product_zero_mul, product_exp_transport, special_vld_mul, special_result_mul, special_fflags_mul, wide_single_candidate_mul, src2_sig_mul, src2_exp_transport, src2_zero_mul, fmadd_rm_mul, fmadd_mul_only_mul} = mul_sideband_m1;
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
-  if (!cpurst_b) begin
-    mul_sideband_m0 <= 0;
-    mul_sideband_m1 <= 0;
-  end else if (fmadd_cancel) begin
-    mul_sideband_m0 <= 0;
-    mul_sideband_m1 <= 0;
-  end else begin
+// Payload is qualified by the owning FMAC valid pipeline.
+always @(posedge forever_cpuclk) begin
     mul_sideband_m0 <= {product_sign, addend_sign, product_zero, product_exp, special_vld, special_result, special_fflags, wide_single_candidate, src2_sig, src2_exp[8:0], src2_zero, fmadd_rm, fmadd_mul_only};
     mul_sideband_m1 <= mul_sideband_m0;
-  end
 end
-edge_fpu_mul24x24_pipe2 x_product (
+edge_fpu_mul24x24_pipe2 #(.MASK_INVALID(0)) x_product (
   .clk(forever_cpuclk), .reset_n(cpurst_b), .cancel(fmadd_cancel),
   .lhs(src0_sig), .rhs(src1_sig), .product(product)
 );
@@ -373,7 +361,7 @@ assign wide_addend_sig[52:0] = {src2_sig_mul[23:0], 29'b0};
 assign wide_product_exp = product_exp_norm + 13'sd127;
 assign wide_addend_exp = src2_exp_mul + 13'sd127;
 
-edge_fpu_fmac_align_add  x_wide_single_align_add (
+edge_fpu_fmac_align_add #(.RESET_PAYLOAD(0)) x_wide_single_align_add (
   .cpurst_b     (cpurst_b                 ),
   .forever_cpuclk(forever_cpuclk          ),
   .align_cancel(fmadd_cancel              ),
@@ -408,50 +396,8 @@ assign finite_fflags[4:0] = wide_single_use
                             ? wide_single_fflags[4:0]
                             : narrow_finite_fflags_d1[4:0];
 
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
-  if(!cpurst_b) begin
-    special_vld_d0 <= 1'b0;
-    special_vld_d1 <= 1'b0;
-    wide_single_candidate_d0 <= 1'b0;
-    wide_single_candidate_d1 <= 1'b0;
-    mul_only_d0 <= 1'b0;
-    mul_only_d1 <= 1'b0;
-    product_zero_d0 <= 1'b0;
-    product_zero_d1 <= 1'b0;
-    product_sign_d0 <= 1'b0;
-    product_sign_d1 <= 1'b0;
-    rm_d0 <= 3'b0;
-    rm_d1 <= 3'b0;
-    special_result_d0 <= 32'b0;
-    special_result_d1 <= 32'b0;
-    special_fflags_d0 <= 5'b0;
-    special_fflags_d1 <= 5'b0;
-    narrow_finite_result_d0 <= 32'b0;
-    narrow_finite_result_d1 <= 32'b0;
-    narrow_finite_fflags_d0 <= 5'b0;
-    narrow_finite_fflags_d1 <= 5'b0;
-  end else if(fmadd_cancel) begin
-    special_vld_d0 <= 1'b0;
-    special_vld_d1 <= 1'b0;
-    wide_single_candidate_d0 <= 1'b0;
-    wide_single_candidate_d1 <= 1'b0;
-    mul_only_d0 <= 1'b0;
-    mul_only_d1 <= 1'b0;
-    product_zero_d0 <= 1'b0;
-    product_zero_d1 <= 1'b0;
-    product_sign_d0 <= 1'b0;
-    product_sign_d1 <= 1'b0;
-    rm_d0 <= 3'b0;
-    rm_d1 <= 3'b0;
-    special_result_d0 <= 32'b0;
-    special_result_d1 <= 32'b0;
-    special_fflags_d0 <= 5'b0;
-    special_fflags_d1 <= 5'b0;
-    narrow_finite_result_d0 <= 32'b0;
-    narrow_finite_result_d1 <= 32'b0;
-    narrow_finite_fflags_d0 <= 5'b0;
-    narrow_finite_fflags_d1 <= 5'b0;
-  end else begin
+// Payload is qualified by the owning FMAC valid pipeline.
+always @(posedge forever_cpuclk) begin
     special_vld_d0 <= special_vld_mul;
     special_vld_d1 <= special_vld_d0;
     wide_single_candidate_d0 <= wide_single_candidate_mul;
@@ -472,24 +418,24 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     narrow_finite_result_d1 <= narrow_finite_result_d0;
     narrow_finite_fflags_d0 <= narrow_finite_fflags;
     narrow_finite_fflags_d1 <= narrow_finite_fflags_d0;
-  end
 end
 
 // A multiply is represented internally as product + +0.  The generic adder
 // cancellation rule chooses +0, but IEEE-754 multiplication requires the
 // zero sign to remain the product sign.
-assign fmadd_result = special_vld_d1 ? special_result_d1
+assign fmadd_result = special_vld_d1 ? (special_result_d1[1] ? 32'h7fc0_0000
+                                            : {special_result_d1[0], 8'hff, 23'b0})
                     : (mul_only_d1 && product_zero_d1)
                       ? {product_sign_d1, 31'b0}
                       : finite_result;
 assign fmadd_fflags[4:0] = special_vld_d1
-                           ? special_fflags_d1[4:0]
+                           ? {special_fflags_d1, 4'b0}
                            : finite_fflags[4:0];
 
 endmodule
 
 // Unsigned significand multiplier: no truncation or rounding at this boundary.
-module edge_fpu_mul24x24_pipe2 (
+module edge_fpu_mul24x24_pipe2 #(parameter MASK_INVALID = 1) (
   input wire clk, input wire reset_n, input wire cancel,
   input wire [23:0] lhs, input wire [23:0] rhs,
   output wire [47:0] product
@@ -500,7 +446,7 @@ module edge_fpu_mul24x24_pipe2 (
   // Only liveness is asynchronously reset. Numerical registers free-run so
   // FPGA DSP MREG can absorb the partial products. Two cleared liveness bits
   // prevent pre-reset/cancel payload from escaping, even for an off-edge reset.
-  assign product = live_q[1] ? product_q : 48'b0;
+  assign product = MASK_INVALID ? (live_q[1] ? product_q : 48'b0) : product_q;
   wire [47:0] p0 = {16'b0, partial0_q};
   wire [47:0] p1 = {8'b0, partial1_q, 8'b0};
   wire [47:0] p2 = {partial2_q, 16'b0};

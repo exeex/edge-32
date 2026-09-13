@@ -24,195 +24,167 @@ module edge_fpu_cvt #(
   output reg [VALUE_WIDTH-1:0] cvt_complete_value,
   output reg [4:0] cvt_complete_fflags
 );
-  localparam [1:0] OP_F2F = 2'd0, OP_F2I = 2'd1, OP_I2F = 2'd2;
-  localparam [1:0] TYPE_W = 2'd0, TYPE_WU = 2'd1,
-                   TYPE_L = 2'd2, TYPE_LU = 2'd3;
+  localparam [1:0] OP_F2F=0, OP_F2I=1, OP_I2F=2;
+  // Low metadata bits: fsrc[31:0], NaN, input NV, integer sign, float sign,
+  // rm[2:0], unsigned, word, op[1:0]. Upper bits are the destination tag.
+  localparam META_WIDTH = 43 + SEQ_ID_WIDTH + EPOCH_WIDTH + REG_INDEX_WIDTH + 1;
+  reg [META_WIDTH-1:0] meta_q [0:1];
+  reg [1:0] valid_q;
+  wire word_in = !cvt_issue_int_type[1];
+  wire unsigned_in = cvt_issue_int_type[0];
+  wire [63:0] gsrc64 = cvt_issue_gsrc;
+  wire [63:0] integer_input = word_in
+    ? (unsigned_in ? {32'b0,gsrc64[31:0]} : {{32{gsrc64[31]}},gsrc64[31:0]})
+    : gsrc64;
+  wire integer_sign = !unsigned_in && integer_input[63];
+  wire input_nan = (&cvt_issue_fsrc[30:23]) && (|cvt_issue_fsrc[22:0]);
+  // Includes NaN/Inf and finite exponent overflow. Does not gate arithmetic.
+  wire input_nv = cvt_issue_fsrc[30:23] > 8'd190;
 
-  reg domain_d;
-  reg [63:0] value_d;
-  reg [4:0] flags_d;
-  reg sign;
-  reg is_unsigned;
-  reg is_word;
-  reg is_nan;
-  reg is_inf;
-  reg invalid;
-  reg inexact;
-  reg increment;
-  reg [7:0] exp_field;
-  reg [22:0] frac;
-  reg [23:0] sig;
-  reg [63:0] integer_mag;
-  reg [63:0] remainder;
-  reg [63:0] half;
-  reg [63:0] rounded_mag;
-  reg [63:0] signed_limit;
-  reg [63:0] unsigned_limit;
-  reg [63:0] int_value;
-  reg [63:0] int_magnitude;
-  reg [23:0] fp_sig;
-  reg [24:0] fp_rounded;
-  reg [7:0] fp_exp;
-  integer unbiased;
-  integer rshift;
-  integer msb;
-  integer i;
-  reg found;
+  wire [23:0] sig_in = {|cvt_issue_fsrc[30:23],cvt_issue_fsrc[22:0]};
+  wire [7:0] exp_in = (cvt_issue_fsrc[30:23]==0)?8'd1:cvt_issue_fsrc[30:23];
+  reg [63:0] magnitude_q0, f2i_mag_q0, f2i_signed_q1;
+  reg f2i_inc_q0, f2i_nx_q0, f2i_nx_q1, f2i_nv_q1;
+  reg zero_q1;
+  reg [23:0] fp_main_q1;
+  reg fp_guard_q1, fp_sticky_q1;
+  reg [7:0] fp_exp_q1;
 
-  assign cvt_issue_ready = 1'b1;
+  // Six balanced binary decisions, rather than a 64-entry priority chain.
+  function [5:0] highest_bit;
+    input [63:0] v;
+    reg [31:0] a;
+    reg [15:0] b;
+    reg [7:0] c;
+    reg [3:0] d;
+    reg [1:0] e;
+    begin
+      highest_bit[5]=|v[63:32]; a=highest_bit[5]?v[63:32]:v[31:0];
+      highest_bit[4]=|a[31:16]; b=highest_bit[4]?a[31:16]:a[15:0];
+      highest_bit[3]=|b[15:8]; c=highest_bit[3]?b[15:8]:b[7:0];
+      highest_bit[2]=|c[7:4]; d=highest_bit[2]?c[7:4]:c[3:0];
+      highest_bit[1]=|d[3:2]; e=highest_bit[1]?d[3:2]:d[1:0];
+      highest_bit[0]=e[1];
+    end
+  endfunction
 
-  always @* begin
-    domain_d = 1'b1;
-    value_d = 64'b0;
-    flags_d = 5'b0;
-    sign = cvt_issue_fsrc[31];
-    exp_field = cvt_issue_fsrc[30:23];
-    frac = cvt_issue_fsrc[22:0];
-    sig = exp_field == 0 ? {1'b0, frac} : {1'b1, frac};
-    is_nan = (exp_field == 8'hff) && (frac != 0);
-    is_inf = (exp_field == 8'hff) && (frac == 0);
-    is_unsigned = (cvt_issue_int_type == TYPE_WU) ||
-                  (cvt_issue_int_type == TYPE_LU);
-    is_word = (cvt_issue_int_type == TYPE_W) ||
-              (cvt_issue_int_type == TYPE_WU);
-    invalid = 1'b0;
-    inexact = 1'b0;
-    increment = 1'b0;
-    integer_mag = 0;
-    remainder = 0;
-    half = 0;
-    rounded_mag = 0;
-    signed_limit = is_word ? 64'h0000000080000000 : 64'h8000000000000000;
-    unsigned_limit = is_word ? 64'h00000000ffffffff : 64'hffffffffffffffff;
-    int_value = cvt_issue_gsrc;
-    int_magnitude = 0;
-    fp_sig = 0;
-    fp_rounded = 0;
-    fp_exp = 0;
-    unbiased = 0;
-    rshift = 0;
-    msb = 0;
-    found = 0;
+  function [25:0] right_sticky;
+    input [25:0] v;
+    input [7:0] amount;
+    reg [25:0] t;
+    begin
+      t=v;
+      if(amount[0]) t={1'b0,t[25:2],|t[1:0]};
+      if(amount[1]) t={2'b0,t[25:3],|t[2:0]};
+      if(amount[2]) t={4'b0,t[25:5],|t[4:0]};
+      if(amount[3]) t={8'b0,t[25:9],|t[8:0]};
+      if(amount[4]) t={16'b0,t[25:17],|t[16:0]};
+      right_sticky=(amount>=26)?{25'b0,|v}:t;
+    end
+  endfunction
 
-    case (cvt_issue_op)
-      OP_F2F: begin
-        // D/S/H are aliases of the same physical FP32 FPR payload.
-        domain_d = 1'b1;
-        value_d = {32'b0, cvt_issue_fsrc};
-      end
+  function round_increment;
+    input [2:0] rm;
+    input sign, lsb, guard_bit, sticky_bit;
+    begin
+      case(rm)
+        3'd1: round_increment=0;
+        3'd2: round_increment=sign && (guard_bit || sticky_bit);
+        3'd3: round_increment=!sign && (guard_bit || sticky_bit);
+        3'd4: round_increment=guard_bit;
+        default: round_increment=guard_bit && (sticky_bit || lsb);
+      endcase
+    end
+  endfunction
+
+  wire f2i_left = exp_in >= 8'd150;
+  wire [7:0] right_amount = 8'd150-exp_in;
+  wire [5:0] left_amount = exp_in-8'd150;
+  wire [25:0] f2i_shifted = right_sticky({sig_in,2'b0},right_amount);
+  wire [63:0] f2i_mag = f2i_left ? ({40'b0,sig_in} << left_amount)
+                                                : {40'b0,f2i_shifted[25:2]};
+  wire f2i_guard = !f2i_left && f2i_shifted[1];
+  wire f2i_sticky = !f2i_left && f2i_shifted[0];
+  wire [5:0] msb = highest_bit(magnitude_q0);
+  wire [63:0] fp_normalized = magnitude_q0 << (6'd63-msb);
+  wire [63:0] f2i_rounded = f2i_mag_q0 + {{63{1'b0}},f2i_inc_q0};
+  // -(m+inc) = ~m + !inc: rounding and negation share one carry chain.
+  wire [63:0] f2i_signed = (meta_q[0][35] ? ~f2i_mag_q0 : f2i_mag_q0)
+    + {{63{1'b0}},(meta_q[0][35] ? !f2i_inc_q0 : f2i_inc_q0)};
+  wire fp_increment = round_increment(meta_q[1][38:36],meta_q[1][34],
+                                     fp_main_q1[0],fp_guard_q1,fp_sticky_q1);
+  wire [24:0] fp_rounded = {1'b0,fp_main_q1}+{{24{1'b0}},fp_increment};
+  wire [7:0] fp_exp = fp_exp_q1+{7'b0,fp_rounded[24]};
+  wire [31:0] fp_result = zero_q1 ? 32'b0 :
+    {meta_q[1][34],fp_exp,fp_rounded[24]?fp_rounded[23:1]:fp_rounded[22:0]};
+
+  // Range checks operate on the rounded finite candidate. NV has priority
+  // over NX at the consumer; negative unsigned fractions may legally round to 0.
+  wire finite_nv = meta_q[0][39]
+    ? ((meta_q[0][35] && (|f2i_rounded)) ||
+       (meta_q[0][40] && (|f2i_rounded[63:32])))
+    : meta_q[0][40]
+      ? ((|f2i_rounded[63:32]) ||
+         (f2i_rounded[31] && (!meta_q[0][35] || (|f2i_rounded[30:0]))))
+      : (f2i_rounded[63] && (!meta_q[0][35] || (|f2i_rounded[62:0])));
+  wire [63:0] signed_limit = meta_q[1][40] ? 64'h80000000 : 64'h8000000000000000;
+  wire [63:0] unsigned_limit = meta_q[1][40] ? 64'hffffffff : 64'hffffffffffffffff;
+  wire saturation_negative = meta_q[1][35] && !meta_q[1][32];
+  wire [63:0] saturated = meta_q[1][39]
+    ? (saturation_negative ? 64'b0 : unsigned_limit)
+    : (saturation_negative ? signed_limit : signed_limit-1'b1);
+  wire invalid_result = meta_q[1][33] || f2i_nv_q1;
+  wire [63:0] integer_result = invalid_result ? saturated : f2i_signed_q1;
+  wire [63:0] word_result = meta_q[1][40]
+    ? {{32{integer_result[31]}},integer_result[31:0]} : integer_result;
+
+  assign cvt_issue_ready=1'b1;
+  // Only validity resets. All payload is unspecified while complete_valid=0.
+  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+    if(!cpurst_b) begin valid_q<=0; cvt_complete_valid<=0; end
+    else begin
+      valid_q<={valid_q[0],cvt_issue_valid};
+      cvt_complete_valid<=valid_q[1];
+    end
+  end
+
+  always @(posedge forever_cpuclk) begin
+    // S1: I2F absolute value; F2I alignment and guard/sticky. Classify once.
+    magnitude_q0<=integer_sign ? (~integer_input+1'b1) : integer_input;
+    f2i_mag_q0<=f2i_mag;
+    f2i_inc_q0<=round_increment(cvt_issue_rm,cvt_issue_fsrc[31],
+                                f2i_mag[0],f2i_guard,f2i_sticky);
+    f2i_nx_q0<=f2i_guard || f2i_sticky;
+    meta_q[0]<={cvt_issue_seq_id,cvt_issue_epoch,cvt_issue_rd,cvt_issue_rd_bank,
+      cvt_issue_op,word_in,unsigned_in,cvt_issue_rm,cvt_issue_fsrc[31],
+      integer_sign,input_nv,input_nan,cvt_issue_fsrc};
+    meta_q[1]<=meta_q[0];
+    // S2: I2F balanced priority encode/normalize; F2I round/sign/range.
+    fp_main_q1<=fp_normalized[63:40];
+    fp_guard_q1<=fp_normalized[39];
+    fp_sticky_q1<=|fp_normalized[38:0];
+    fp_exp_q1<=8'd127+{2'b0,msb};
+    zero_q1<=!(|magnitude_q0);
+    f2i_signed_q1<=f2i_signed;
+    f2i_nv_q1<=finite_nv;
+    f2i_nx_q1<=f2i_nx_q0;
+    // S3: materialize semantic results only at the output boundary.
+    {cvt_complete_seq_id,cvt_complete_epoch,cvt_complete_rd,cvt_complete_rd_bank}
+      <=meta_q[1][META_WIDTH-1:43];
+    cvt_complete_domain<=meta_q[1][42:41]!=OP_F2I;
+    cvt_complete_value<=0;
+    cvt_complete_fflags<=0;
+    case(meta_q[1][42:41])
+      OP_F2F: cvt_complete_value<=meta_q[1][31:0];
       OP_F2I: begin
-        domain_d = 1'b0;
-        unbiased = (exp_field == 0) ? -126 : exp_field - 127;
-        if (is_nan || is_inf) invalid = 1'b1;
-        else if (unbiased > 63) invalid = 1'b1;
-        else begin
-          if (unbiased >= 23) integer_mag = {40'b0, sig} << (unbiased - 23);
-          else if (unbiased >= -1) begin
-            rshift = 23 - unbiased;
-            integer_mag = sig >> rshift;
-            remainder = sig & ((64'h1 << rshift) - 1'b1);
-            half = 64'h1 << (rshift - 1);
-          end else begin
-            integer_mag = 0;
-            remainder = sig;
-            // |value| < 0.5, so nearest modes never increment. Directed
-            // modes still use the nonzero remainder through `inexact`.
-            half = 64'hffffffffffffffff;
-          end
-          inexact = remainder != 0;
-          case (cvt_issue_rm)
-            3'd0: increment = inexact &&
-                              ((remainder > half) ||
-                               ((remainder == half) && integer_mag[0]));
-            3'd1: increment = 1'b0;
-            3'd2: increment = sign && inexact;
-            3'd3: increment = !sign && inexact;
-            3'd4: increment = inexact && (remainder >= half);
-            default: increment = inexact &&
-                                 ((remainder > half) ||
-                                  ((remainder == half) && integer_mag[0]));
-          endcase
-          rounded_mag = integer_mag + increment;
-          if (is_unsigned) begin
-            if (sign && (rounded_mag != 0)) invalid = 1'b1;
-            else if (rounded_mag > unsigned_limit) invalid = 1'b1;
-          end else if ((!sign && rounded_mag >= signed_limit) ||
-                       (sign && rounded_mag > signed_limit)) invalid = 1'b1;
-        end
-        if (invalid) begin
-          flags_d[4] = 1'b1;
-          if (is_unsigned)
-            value_d = (sign && !is_nan) ? 64'b0 : unsigned_limit;
-          else
-            value_d = (sign && !is_nan) ? signed_limit : (signed_limit - 1'b1);
-        end else begin
-          flags_d[0] = inexact;
-          value_d = sign ? (~rounded_mag + 1'b1) : rounded_mag;
-        end
-        if (is_word) value_d = {{32{value_d[31]}}, value_d[31:0]};
+        cvt_complete_value<=word_result;
+        cvt_complete_fflags<=invalid_result ? 5'b10000 : {4'b0,f2i_nx_q1};
       end
       OP_I2F: begin
-        domain_d = 1'b1;
-        if (is_word)
-          int_value = is_unsigned ? {32'b0, cvt_issue_gsrc[31:0]}
-                                  : {{32{cvt_issue_gsrc[31]}}, cvt_issue_gsrc[31:0]};
-        sign = !is_unsigned && int_value[63];
-        int_magnitude = sign ? (~int_value + 1'b1) : int_value;
-        if (int_magnitude == 0) value_d = 0;
-        else begin
-          for (i = 63; i >= 0; i = i - 1)
-            if (!found && int_magnitude[i]) begin msb = i; found = 1; end
-          fp_exp = msb + 127;
-          if (msb <= 23) fp_sig = int_magnitude << (23-msb);
-          else begin
-            rshift = msb - 23;
-            fp_sig = int_magnitude >> rshift;
-            remainder = int_magnitude & ((64'h1 << rshift) - 1'b1);
-            half = 64'h1 << (rshift-1);
-            inexact = remainder != 0;
-            case (cvt_issue_rm)
-              3'd0: increment = inexact &&
-                                ((remainder > half) ||
-                                 ((remainder == half) && fp_sig[0]));
-              3'd1: increment = 1'b0;
-              3'd2: increment = sign && inexact;
-              3'd3: increment = !sign && inexact;
-              3'd4: increment = inexact && (remainder >= half);
-              default: increment = inexact &&
-                                   ((remainder > half) ||
-                                    ((remainder == half) && fp_sig[0]));
-            endcase
-          end
-          fp_rounded = {1'b0, fp_sig} + increment;
-          if (fp_rounded[24]) begin
-            fp_exp = fp_exp + 1'b1;
-            fp_sig = fp_rounded[24:1];
-          end else fp_sig = fp_rounded[23:0];
-          value_d = {32'b0, sign, fp_exp, fp_sig[22:0]};
-          flags_d[0] = inexact;
-        end
+        cvt_complete_value<=fp_result;
+        cvt_complete_fflags<={4'b0,fp_guard_q1 || fp_sticky_q1};
       end
       default: begin end
     endcase
-  end
-
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
-    if (!cpurst_b) begin
-      cvt_complete_valid <= 0; cvt_complete_seq_id <= 0;
-      cvt_complete_epoch <= 0; cvt_complete_rd <= 0;
-      cvt_complete_rd_bank <= 0; cvt_complete_domain <= 0;
-      cvt_complete_value <= 0; cvt_complete_fflags <= 0;
-    end else begin
-      cvt_complete_valid <= cvt_issue_valid && cvt_issue_ready;
-      if (cvt_issue_valid && cvt_issue_ready) begin
-        cvt_complete_seq_id <= cvt_issue_seq_id;
-        cvt_complete_epoch <= cvt_issue_epoch;
-        cvt_complete_rd <= cvt_issue_rd;
-        cvt_complete_rd_bank <= cvt_issue_rd_bank;
-        cvt_complete_domain <= domain_d;
-        cvt_complete_value <= value_d;
-        cvt_complete_fflags <= flags_d;
-      end
-    end
   end
 endmodule
