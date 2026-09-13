@@ -1,65 +1,21 @@
+// A0: complete alignment. A1: arithmetic plus normalization metadata.
+// Payload free-runs; the parent owns validity and semantic actions.
 module edge_fpu_fmac_align_add (
-  cpurst_b,
-  forever_cpuclk,
-  align_cancel,
-  op0_sign,
-  op0_exp,
-  op0_sig,
-  op1_sign,
-  op1_exp,
-  op1_sig,
-  add_zero,
-  add_sign,
-  add_exp,
-  add_sig_grs
+ input forever_cpuclk,
+ input op0_sign, input signed [12:0] op0_exp, input [52:0] op0_sig,
+ input op1_sign, input signed [12:0] op1_exp, input [52:0] op1_sig,
+ output reg add_zero, output reg add_sign,
+ output reg signed [12:0] add_exp,
+ output reg [63:0] add_magnitude,
+ output reg signed [7:0] add_pack_shift
 );
-
-input           cpurst_b;
-input           forever_cpuclk;
-input           align_cancel;
-input           op0_sign;
-input   signed [12:0] op0_exp;
-input   [52:0] op0_sig;
-input           op1_sign;
-input   signed [12:0] op1_exp;
-input   [52:0] op1_sig;
-output          add_zero;
-output          add_sign;
-output  signed [12:0] add_exp;
-output  [55:0] add_sig_grs;
-
-wire            exp0_bigger;
-wire            exp_equal;
-wire            mag0_ge_mag1;
-wire            same_sign;
-wire            sum_carry;
-wire    [12:0]  exp_diff;
-wire    [63:0]  op0_ext;
-wire    [63:0]  op1_ext;
-wire    [63:0]  big_ext;
-wire    [63:0]  small_ext;
-wire    [63:0]  small_coarse;
-wire    [63:0]  small_aligned;
-wire    [63:0]  raw_add;
-wire    [63:0]  raw_sub;
-wire    [63:0]  sum_norm;
-wire    [63:0]  diff_norm;
-wire    [63:0]  result_norm;
-wire    [5 :0]  lshift_amt;
-wire    signed [12:0] exp_big;
-wire    signed [12:0] exp_norm_sub;
-wire    signed [12:0] sum_exp;
-reg             same_sign_q;
-reg             big_sign_q;
-reg     [1 :0]  fine_q;
-reg     [63:0]  big_q;
-reg     [63:0]  small_coarse_q;
-reg     signed [12:0] exp_big_q;
-reg             add_zero;
-reg             add_sign;
-reg     signed [12:0] add_exp;
-reg     [55:0]  add_sig_grs;
-
+wire same_sign, exp0_bigger, exp_equal, mag0_ge_mag1;
+wire signed [12:0] exp_big;
+wire [12:0] exp_diff;
+wire [63:0] op0_ext, op1_ext, big_ext, small_ext, small_coarse;
+reg same_sign_q, big_sign_q;
+reg [63:0] big_q, small_aligned_q;
+reg signed [12:0] exp_big_q;
 function [63:0] rshift_sticky_coarse;
   input [63:0] value;
   input [10:0] coarse;
@@ -103,51 +59,25 @@ function [63:0] rshift_sticky_fine;
   end
 endfunction
 
-function [63:0] lshift_stage8;
-  input [63:0] value;
-  input [5 :0] shift;
-  reg   [63:0] coarse;
-  begin
-    case(shift[5:3])
-      3'd0:    coarse = value;
-      3'd1:    coarse = {value[55:0], 8'b0};
-      3'd2:    coarse = {value[47:0], 16'b0};
-      3'd3:    coarse = {value[39:0], 24'b0};
-      3'd4:    coarse = {value[31:0], 32'b0};
-      3'd5:    coarse = {value[23:0], 40'b0};
-      3'd6:    coarse = {value[15:0], 48'b0};
-      default: coarse = {value[7:0], 56'b0};
-    endcase
 
-    case(shift[2:0])
-      3'd0:    lshift_stage8 = coarse;
-      3'd1:    lshift_stage8 = {coarse[62:0], 1'b0};
-      3'd2:    lshift_stage8 = {coarse[61:0], 2'b0};
-      3'd3:    lshift_stage8 = {coarse[60:0], 3'b0};
-      3'd4:    lshift_stage8 = {coarse[59:0], 4'b0};
-      3'd5:    lshift_stage8 = {coarse[58:0], 5'b0};
-      3'd6:    lshift_stage8 = {coarse[57:0], 6'b0};
-      default: lshift_stage8 = {coarse[56:0], 7'b0};
-    endcase
-  end
-endfunction
-
+// Balanced 32/16/8/4/2/1 search; normalization targets bit 62.
+// The ordered unsigned difference has bit 63 clear. For exact zero,
+// shift/exponent metadata is unobservable behind the separate zero action.
 function [5:0] leading_zero_count;
-  input [63:0] value;
-  integer i;
-  reg found;
-  begin
-    leading_zero_count = 6'd63;
-    found = 1'b0;
-    for(i = 62; i >= 0; i = i - 1) begin
-      if(!found && value[i]) begin
-        leading_zero_count = 62 - i;
-        found = 1'b1;
-      end
-    end
-  end
+ input [63:0] value;
+ reg [63:0] v;
+ reg [5:0] count;
+ begin
+  v=value;count=0;
+  if (!(|v[63:32])) begin count=count+6'd32;v=v<<32;end
+  if (!(|v[63:48])) begin count=count+6'd16;v=v<<16;end
+  if (!(|v[63:56])) begin count=count+6'd8;v=v<<8;end
+  if (!(|v[63:60])) begin count=count+6'd4;v=v<<4;end
+  if (!(|v[63:62])) begin count=count+6'd2;v=v<<2;end
+  if (!v[63]) count=count+6'd1;
+  leading_zero_count=count-6'd1;
+ end
 endfunction
-
 assign same_sign = op0_sign == op1_sign;
 assign exp0_bigger = op0_exp > op1_exp;
 assign exp_equal = op0_exp == op1_exp;
@@ -164,45 +94,32 @@ assign big_ext = mag0_ge_mag1 ? op0_ext : op1_ext;
 assign small_ext = mag0_ge_mag1 ? op1_ext : op0_ext;
 assign small_coarse = rshift_sticky_coarse(small_ext, exp_diff[12:2]);
 
-  always @(posedge forever_cpuclk) begin
-    same_sign_q <= same_sign;
-    big_sign_q <= mag0_ge_mag1 ? op0_sign : op1_sign;
-    fine_q <= exp_diff[1:0];
-    big_q <= big_ext;
-    small_coarse_q <= small_coarse;
-    exp_big_q <= exp_big;
-  end
 
-
-assign small_aligned = rshift_sticky_fine(small_coarse_q, fine_q);
-
-assign raw_add = big_q + small_aligned;
-assign raw_sub = big_q - small_aligned;
-
-assign sum_carry = raw_add[63];
-assign sum_norm = sum_carry
-                ? {1'b0, raw_add[63:2], |raw_add[1:0]}
-                : raw_add[63:0];
-assign sum_exp = exp_big_q + {12'b0, sum_carry};
-
-// Equality/zero status runs beside arithmetic, not after subtraction/normalize.
-wire add_zero_pre = !same_sign_q && (big_q == small_aligned);
-wire exact_zero_pre = same_sign_q ? !(|big_q) && !(|small_aligned)
-                                   : (big_q == small_aligned);
-assign lshift_amt = leading_zero_count(raw_sub);
-assign diff_norm = add_zero_pre ? 64'b0
-                 : lshift_stage8(raw_sub, lshift_amt);
-assign exp_norm_sub = exp_big_q - {7'b0, lshift_amt};
-
-assign result_norm = same_sign_q ? sum_norm : diff_norm;
-
-  always @(posedge forever_cpuclk) begin
-    add_zero <= exact_zero_pre;
-    add_sign <= add_zero_pre ? 1'b0 : big_sign_q;
-    add_exp <= add_zero_pre ? 13'sd0
-             : same_sign_q ? sum_exp : exp_norm_sub;
-    add_sig_grs <= {result_norm[62:8], |result_norm[7:0]};
-  end
-
-
+always @(posedge forever_cpuclk) begin
+ same_sign_q<=same_sign;
+ big_sign_q<=mag0_ge_mag1 ? op0_sign : op1_sign;
+ big_q<=big_ext;
+ small_aligned_q<=rshift_sticky_fine(small_coarse,exp_diff[1:0]);
+ exp_big_q<=exp_big;
+end
+wire [63:0] raw_add=big_q+small_aligned_q;
+wire [63:0] raw_sub=big_q-small_aligned_q;
+wire [5:0] lshift_amt=leading_zero_count(raw_sub);
+wire signed [12:0] normalized_exp= same_sign_q
+  ? exp_big_q+{12'b0,raw_add[63]} : exp_big_q-{7'b0,lshift_amt};
+// For a normal result, shift magnitude down to 24+GRS bits. For a
+// subnormal, LZ/carry adjustments cancel algebraically: 37 - base_exp.
+wire signed [12:0] pack_shift=normalized_exp<=13'sd0
+  ? 13'sd37-exp_big_q
+  : same_sign_q ? 13'sd36+{12'b0,raw_add[63]}
+                : 13'sd36-{7'b0,lshift_amt};
+wire exact_zero= same_sign_q ? !(|big_q) && !(|small_aligned_q)
+                             : big_q==small_aligned_q;
+always @(posedge forever_cpuclk) begin
+ add_zero<=exact_zero;
+ add_sign<=big_sign_q;
+ add_exp<=normalized_exp;
+ add_magnitude<=same_sign_q ? raw_add : raw_sub;
+ add_pack_shift<=pack_shift>=13'sd64 ? 8'sd64 : pack_shift[7:0];
+end
 endmodule

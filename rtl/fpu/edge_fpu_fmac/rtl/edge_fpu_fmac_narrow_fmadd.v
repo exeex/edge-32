@@ -124,17 +124,18 @@ wire signed [12:0] addend_biased_exp =
   {{4{addend_exp_mul[8]}},addend_exp_mul} + 13'sd127;
 wire math_zero, math_sign;
 wire signed [12:0] math_exp;
-wire [55:0] math_sig;
+wire [63:0] math_magnitude;
+wire signed [7:0] math_pack_shift;
 edge_fpu_fmac_align_add x_fused_align_add (
-  .cpurst_b(cpurst_b), .forever_cpuclk(forever_cpuclk), .align_cancel(fmadd_cancel),
+  .forever_cpuclk(forever_cpuclk),
   .op0_sign(product_sign_mul), .op0_exp(product_biased_exp), .op0_sig(product_sig),
   .op1_sign(addend_sign_mul), .op1_exp(addend_biased_exp), .op1_sig({addend_sig_mul,29'b0}),
-  .add_zero(math_zero), .add_sign(math_sign), .add_exp(math_exp), .add_sig_grs(math_sig)
+  .add_zero(math_zero), .add_sign(math_sign), .add_exp(math_exp), .add_magnitude(math_magnitude), .add_pack_shift(math_pack_shift)
 );
 wire [31:0] numerical_result;
 wire [4:0] numerical_fflags;
 edge_fpu_fmac_fp32_fused_round_pack x_fused_round_pack (
-  .sign(math_sign), .biased_exp(math_exp), .sig_grs(math_sig), .rm(result_rm),
+  .sign(math_sign), .biased_exp(math_exp), .magnitude(math_magnitude), .pack_shift(math_pack_shift), .rm(result_rm),
   .result(numerical_result), .fflags(numerical_fflags)
 );
 // Semantic status never feeds the multiplier, aligner or add/subtract operands.
