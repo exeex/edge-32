@@ -127,7 +127,7 @@ wire            src2_zero;
 wire    signed [12:0] add_exp;
 wire    signed [12:0] exp_big;
 wire    signed [12:0] exp_norm_sub;
-wire    signed [12:0] product_exp;
+wire    signed [9:0] product_exp;
 wire    signed [12:0] product_exp_norm;
 wire    signed [12:0] src0_exp;
 wire    signed [12:0] src1_exp;
@@ -228,7 +228,9 @@ assign special_fflags[4:0] = {any_snan || inf_zero || inf_cancel, 4'b0000};
 
 // M0 captures three exact 24x8 products; M1 combines them to 48 bits.
 // Classification is computed once at ingress and travels alongside the math.
-assign product_exp = src0_exp + src1_exp;
+// Unpack is [-150,128] for every encoding; its sum is [-300,256].
+// Select ten sign-preserving bits explicitly at this transport boundary.
+assign product_exp = $signed(src0_exp[9:0]) + $signed(src1_exp[9:0]);
 assign wide_single_candidate = (src0_normal || src0_subnormal)
                             && (src1_normal || src1_subnormal)
                             && (src2_normal || src2_subnormal);
@@ -236,18 +238,20 @@ assign wide_single_candidate = (src0_normal || src0_subnormal)
 wire product_sign_mul;
 wire addend_sign_mul;
 wire product_zero_mul;
-wire signed [12:0] product_exp_mul;
+wire signed [9:0] product_exp_transport;
+wire signed [12:0] product_exp_mul = {{3{product_exp_transport[9]}}, product_exp_transport};
 wire special_vld_mul;
 wire [31:0] special_result_mul;
 wire [4:0] special_fflags_mul;
 wire wide_single_candidate_mul;
 wire [23:0] src2_sig_mul;
-wire signed [12:0] src2_exp_mul;
+wire signed [8:0] src2_exp_transport;
+wire signed [12:0] src2_exp_mul = {{4{src2_exp_transport[8]}}, src2_exp_transport};
 wire src2_zero_mul;
 wire [2:0] fmadd_rm_mul;
 wire fmadd_mul_only_mul;
-reg [96:0] mul_sideband_m0, mul_sideband_m1;
-assign {product_sign_mul, addend_sign_mul, product_zero_mul, product_exp_mul, special_vld_mul, special_result_mul, special_fflags_mul, wide_single_candidate_mul, src2_sig_mul, src2_exp_mul, src2_zero_mul, fmadd_rm_mul, fmadd_mul_only_mul} = mul_sideband_m1;
+reg [89:0] mul_sideband_m0, mul_sideband_m1;
+assign {product_sign_mul, addend_sign_mul, product_zero_mul, product_exp_transport, special_vld_mul, special_result_mul, special_fflags_mul, wide_single_candidate_mul, src2_sig_mul, src2_exp_transport, src2_zero_mul, fmadd_rm_mul, fmadd_mul_only_mul} = mul_sideband_m1;
 always @(posedge forever_cpuclk or negedge cpurst_b) begin
   if (!cpurst_b) begin
     mul_sideband_m0 <= 0;
@@ -256,7 +260,7 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     mul_sideband_m0 <= 0;
     mul_sideband_m1 <= 0;
   end else begin
-    mul_sideband_m0 <= {product_sign, addend_sign, product_zero, product_exp, special_vld, special_result, special_fflags, wide_single_candidate, src2_sig, src2_exp, src2_zero, fmadd_rm, fmadd_mul_only};
+    mul_sideband_m0 <= {product_sign, addend_sign, product_zero, product_exp, special_vld, special_result, special_fflags, wide_single_candidate, src2_sig, src2_exp[8:0], src2_zero, fmadd_rm, fmadd_mul_only};
     mul_sideband_m1 <= mul_sideband_m0;
   end
 end
@@ -488,24 +492,29 @@ endmodule
 module edge_fpu_mul24x24_pipe2 (
   input wire clk, input wire reset_n, input wire cancel,
   input wire [23:0] lhs, input wire [23:0] rhs,
-  output reg [47:0] product
+  output wire [47:0] product
 );
   reg [31:0] partial0_q, partial1_q, partial2_q;
+  reg [47:0] product_q;
+  reg [1:0] live_q;
+  // Only liveness is asynchronously reset. Numerical registers free-run so
+  // FPGA DSP MREG can absorb the partial products. Two cleared liveness bits
+  // prevent pre-reset/cancel payload from escaping, even for an off-edge reset.
+  assign product = live_q[1] ? product_q : 48'b0;
   wire [47:0] p0 = {16'b0, partial0_q};
   wire [47:0] p1 = {8'b0, partial1_q, 8'b0};
   wire [47:0] p2 = {partial2_q, 16'b0};
   wire [47:0] sum = p0 ^ p1 ^ p2;
   wire [47:0] carry = ((p0 & p1) | (p0 & p2) | (p1 & p2)) << 1;
   always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-      partial0_q <= 0; partial1_q <= 0; partial2_q <= 0; product <= 0;
-    end else if (cancel) begin
-      partial0_q <= 0; partial1_q <= 0; partial2_q <= 0; product <= 0;
-    end else begin
-      partial0_q <= lhs * rhs[7:0];
-      partial1_q <= lhs * rhs[15:8];
-      partial2_q <= lhs * rhs[23:16];
-      product <= sum + carry;
-    end
+    if (!reset_n) live_q <= 2'b0;
+    else if (cancel) live_q <= 2'b0;
+    else live_q <= {live_q[0], 1'b1};
+  end
+  always @(posedge clk) begin
+    partial0_q <= lhs * rhs[7:0];
+    partial1_q <= lhs * rhs[15:8];
+    partial2_q <= lhs * rhs[23:16];
+    product_q <= sum + carry;
   end
 endmodule

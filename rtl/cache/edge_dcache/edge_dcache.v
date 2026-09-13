@@ -108,7 +108,6 @@ module edge_dcache #(
   localparam VALUE_BYTES = VALUE_WIDTH / 8;
   localparam WORDS = DCACHE_BYTES / VALUE_BYTES;
   localparam LINES = DCACHE_BYTES / LINE_BYTES;
-  localparam WORD_INDEX_WIDTH = (WORDS <= 2) ? 1 : $clog2(WORDS);
   localparam BYTE_OFFSET_WIDTH = (VALUE_BYTES <= 2) ? 1 : $clog2(VALUE_BYTES);
   localparam LINE_OFFSET_WIDTH = (LINE_BYTES <= 2) ? 1 : $clog2(LINE_BYTES);
   localparam LINE_INDEX_WIDTH = (LINES <= 2) ? 1 : $clog2(LINES);
@@ -189,10 +188,6 @@ module edge_dcache #(
   wire clean_wb_busy;
   wire clean_wb_complete_fire;
   wire metadata_write_valid;
-  wire [WORD_INDEX_WIDTH-1:0] load_word_index;
-  wire [WORD_INDEX_WIDTH-1:0] store_word_index;
-  wire [WORD_INDEX_WIDTH-1:0] load1_word_index;
-  wire [WORD_INDEX_WIDTH-1:0] store1_word_index;
   wire [LINE_INDEX_WIDTH-1:0] load_line_index;
   wire [LINE_INDEX_WIDTH-1:0] store_line_index;
   wire [LINE_INDEX_WIDTH-1:0] load1_line_index;
@@ -504,14 +499,6 @@ module edge_dcache #(
     hit_queue_complete_size,
     hit_queue_complete_signed
   );
-  assign load_word_index =
-    lookup_addr[BYTE_OFFSET_WIDTH +: WORD_INDEX_WIDTH];
-  assign store_word_index =
-    lsu_store_req_addr[BYTE_OFFSET_WIDTH +: WORD_INDEX_WIDTH];
-  assign load1_word_index =
-    lookup1_addr[BYTE_OFFSET_WIDTH +: WORD_INDEX_WIDTH];
-  assign store1_word_index =
-    lsu_store_req1_addr[BYTE_OFFSET_WIDTH +: WORD_INDEX_WIDTH];
   assign load_line_index =
     lookup_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH];
   assign store_line_index =

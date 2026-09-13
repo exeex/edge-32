@@ -56,8 +56,8 @@ wire increment = (rne && guard_bit && (round_bit || sticky_bit || main[0]))
 wire [24:0] rounded = {1'b0, main} + {{24{1'b0}}, increment};
 wire carry = rounded[24];
 wire normal_from_sub = subnormal && rounded[23];
-wire signed [12:0] out_exp_full = exp + 13'sd127 + {{12{1'b0}}, carry};
-wire [7:0] out_exp = out_exp_full[7:0];
+// Only the encoded exponent uses this sum; overflow is checked separately.
+wire [7:0] out_exp = exp[7:0] + 8'd127 + {7'b0, carry};
 wire overflow = (exp > 13'sd127) || ((exp == 13'sd127) && carry);
 wire round_to_inf = rne || rmm || (rup && !sign) || (rdn && sign);
 wire tiny = subnormal && !normal_from_sub;

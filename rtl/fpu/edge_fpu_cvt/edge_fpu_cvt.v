@@ -42,7 +42,6 @@ module edge_fpu_cvt #(
   reg [7:0] exp_field;
   reg [22:0] frac;
   reg [23:0] sig;
-  reg [63:0] magnitude;
   reg [63:0] integer_mag;
   reg [63:0] remainder;
   reg [63:0] half;
@@ -79,7 +78,6 @@ module edge_fpu_cvt #(
     invalid = 1'b0;
     inexact = 1'b0;
     increment = 1'b0;
-    magnitude = 0;
     integer_mag = 0;
     remainder = 0;
     half = 0;

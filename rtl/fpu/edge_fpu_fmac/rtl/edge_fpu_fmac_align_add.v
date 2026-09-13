@@ -40,17 +40,16 @@ wire    [63:0]  big_ext;
 wire    [63:0]  small_ext;
 wire    [63:0]  small_coarse;
 wire    [63:0]  small_aligned;
-wire    [64:0]  raw_add;
+wire    [63:0]  raw_add;
 wire    [63:0]  raw_sub;
 wire    [63:0]  sum_norm;
 wire    [63:0]  diff_norm;
 wire    [63:0]  result_norm;
-wire    [6 :0]  lshift_amt;
+wire    [5 :0]  lshift_amt;
 wire    signed [12:0] exp_big;
 wire    signed [12:0] exp_norm_sub;
 wire    signed [12:0] sum_exp;
 reg             same_sign_q;
-reg             mag0_ge_mag1_q;
 reg             big_sign_q;
 reg     [1 :0]  fine_q;
 reg     [63:0]  big_q;
@@ -106,7 +105,7 @@ endfunction
 
 function [63:0] lshift_stage8;
   input [63:0] value;
-  input [6 :0] shift;
+  input [5 :0] shift;
   reg   [63:0] coarse;
   begin
     case(shift[5:3])
@@ -133,12 +132,12 @@ function [63:0] lshift_stage8;
   end
 endfunction
 
-function [6:0] leading_zero_count;
+function [5:0] leading_zero_count;
   input [63:0] value;
   integer i;
   reg found;
   begin
-    leading_zero_count = 7'd63;
+    leading_zero_count = 6'd63;
     found = 1'b0;
     for(i = 62; i >= 0; i = i - 1) begin
       if(!found && value[i]) begin
@@ -167,7 +166,6 @@ assign small_coarse = rshift_sticky_coarse(small_ext, exp_diff[12:2]);
 always @(posedge forever_cpuclk or negedge cpurst_b) begin
   if(!cpurst_b) begin
     same_sign_q <= 1'b0;
-    mag0_ge_mag1_q <= 1'b0;
     big_sign_q <= 1'b0;
     fine_q <= 2'b0;
     big_q <= 64'b0;
@@ -175,7 +173,6 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     exp_big_q <= 13'sd0;
   end else if(align_cancel) begin
     same_sign_q <= 1'b0;
-    mag0_ge_mag1_q <= 1'b0;
     big_sign_q <= 1'b0;
     fine_q <= 2'b0;
     big_q <= 64'b0;
@@ -183,7 +180,6 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     exp_big_q <= 13'sd0;
   end else begin
     same_sign_q <= same_sign;
-    mag0_ge_mag1_q <= mag0_ge_mag1;
     big_sign_q <= mag0_ge_mag1 ? op0_sign : op1_sign;
     fine_q <= exp_diff[1:0];
     big_q <= big_ext;
@@ -194,7 +190,7 @@ end
 
 assign small_aligned = rshift_sticky_fine(small_coarse_q, fine_q);
 
-assign raw_add = {1'b0, big_q} + {1'b0, small_aligned};
+assign raw_add = big_q + small_aligned;
 assign raw_sub = big_q - small_aligned;
 
 assign sum_carry = raw_add[63];
@@ -207,7 +203,7 @@ wire add_zero_pre = !same_sign_q && (raw_sub == 64'b0);
 assign lshift_amt = leading_zero_count(raw_sub);
 assign diff_norm = add_zero_pre ? 64'b0
                  : lshift_stage8(raw_sub, lshift_amt);
-assign exp_norm_sub = exp_big_q - {6'b0, lshift_amt};
+assign exp_norm_sub = exp_big_q - {7'b0, lshift_amt};
 
 assign result_norm = same_sign_q ? sum_norm : diff_norm;
 

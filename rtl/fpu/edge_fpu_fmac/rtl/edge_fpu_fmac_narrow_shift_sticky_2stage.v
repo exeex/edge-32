@@ -21,9 +21,7 @@ assign shift_saturate = shift_amt[12:0] >= 13'd27;
 assign coarse_amt[2:0] = shift_amt[5:3];
 assign fine_amt[2:0] = shift_amt[2:0];
 
-always @(coarse_amt[2:0]
-      or shift_in[26:0]
-      or shift_saturate)
+always @*
 begin
   if(shift_saturate) begin
     coarse_data[26:0] = {26'b0, |shift_in[26:0]};
@@ -42,9 +40,7 @@ begin
   end
 end
 
-always @(coarse_data[26:0]
-      or fine_amt[2:0]
-      or shift_saturate)
+always @*
 begin
   if(shift_saturate) begin
     fine_data[26:0] = coarse_data[26:0];

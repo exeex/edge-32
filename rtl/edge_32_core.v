@@ -55,8 +55,8 @@ module edge_32_core #(
   wire [PC_WIDTH-1:0] parcel_pc; wire [31:0] parcel_inst;
   wire if_valid, if_ready, if_error, if_is_64b;
   wire [PC_WIDTH-1:0] if_pc; wire [63:0] if_inst;
-  wire id_valid, id_error, id_is_64b;
-  wire [PC_WIDTH-1:0] id_pc; wire [63:0] id_inst;
+  wire id_is_64b;
+  wire [63:0] id_inst;
   wire ex_valid, ex_error, ex_is_64b;
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
   wire [31:0] ex_rs1_value, ex_rs2_value;
@@ -169,24 +169,23 @@ module edge_32_core #(
     .branch_issue_jal_imm(imm_j),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
-  wire mul_ready,mul_result_valid,mul_busy; wire [31:0] mul_result;
-  wire [6:0] mul_latency;
+  wire mul_ready,mul_result_valid; wire [31:0] mul_result;
   wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
   generate if (MULDIV_ASAP7) begin: g_muldiv_asap7
   edge_32_muldiv_asap7 muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
-    .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
-    .op_latency(mul_latency));
+    .result_valid(mul_result_valid),.result_value(mul_result),.busy(),
+    .op_latency());
   end else begin: g_muldiv_portable
   edge_32_muldiv muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
-    .result_valid(mul_result_valid),.result_value(mul_result),.busy(mul_busy),
-    .op_latency(mul_latency));
+    .result_valid(mul_result_valid),.result_value(mul_result),.busy(),
+    .op_latency());
   end endgenerate
 
-  wire lsu_ready,lsu_done,lsu_error,lsu_busy; wire [31:0] lsu_value;
+  wire lsu_ready,lsu_done,lsu_error; wire [31:0] lsu_value;
   wire [31:0] lsu_mem_addr;
   wire lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
   wire [31:0] fpu_store_value;
@@ -208,11 +207,11 @@ module edge_32_core #(
     .mem_req_wstrb(dmem_req_wstrb),.mem_req_size(dmem_req_size),
     .mem_req_signed(dmem_req_signed),.mem_resp_valid(dmem_resp_valid),
     .mem_resp_error(dmem_resp_error),.mem_resp_rdata(dmem_resp_rdata),
-    .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy(lsu_busy));
+    .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
   assign dmem_req_addr={32'd0,lsu_mem_addr};
 
   wire fpu_ready, fpu_done, fpu_gpr_write;
-  wire [4:0] fpu_rd; wire [63:0] fpu_value; wire [4:0] fpu_fflags;
+  wire [63:0] fpu_value; wire [4:0] fpu_fflags;
   generate if(ENABLE_FPU) begin: g_fpu
     edge_fpu_alu fpu_alu(
       .clk(clk),.reset_n(reset_n),
@@ -221,14 +220,14 @@ module edge_32_core #(
       .issue_gpr_src({32'd0,ex_rs1_value}),.issue_frm(frm_q),
       .issue_legal(fpu_legal),
       .complete_valid(fpu_done),.complete_gpr_write(fpu_gpr_write),
-      .complete_rd(fpu_rd),.complete_value(fpu_value),
+      .complete_rd(),.complete_value(fpu_value),
       .complete_fflags(fpu_fflags),
       .load_write_valid(ex_issue_ok&&is_fp_load&&lsu_done&&!lsu_error),
       .load_write_rd(rd),.load_write_value(fp_load_value),
       .store_read_rs(ex_inst[24:20]),.store_read_value(fpu_store_value));
   end else begin: g_no_fpu
     assign fpu_ready=1'b0; assign fpu_done=1'b0;
-    assign fpu_gpr_write=1'b0; assign fpu_rd=5'b0;
+    assign fpu_gpr_write=1'b0;
     assign fpu_value=64'b0; assign fpu_fflags=5'b0;
     assign fpu_legal=1'b0; assign fpu_store_value=32'b0;
   end endgenerate
@@ -323,8 +322,8 @@ module edge_32_core #(
     .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
-    .id_valid(id_valid),.id_pc(id_pc), .id_inst(id_inst),
-    .id_is_64b(id_is_64b),.id_error(id_error),.id_rs1(id_rs1),.id_rs2(id_rs2),
+    .id_valid(),.id_pc(), .id_inst(id_inst),
+    .id_is_64b(id_is_64b),.id_error(),.id_rs1(id_rs1),.id_rs2(id_rs2),
     .id_rs1_raw(id_rs1_raw),.id_rs2_raw(id_rs2_raw),.ex_valid(ex_valid),
     .id_op_class(id_decoded_class),.id_legal(id_decoded_legal),
     .id_writes_gpr(id_decoded_writes_gpr),
