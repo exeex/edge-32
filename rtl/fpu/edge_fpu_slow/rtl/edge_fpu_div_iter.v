@@ -1,6 +1,6 @@
 // FP32 restoring divider. The parent owns transaction scheduling and cancel.
 module edge_fpu_div_iter (
-  input wire clk, reset_n, cancel, load, step,
+  input wire clk, cancel, load, step,
   input wire [23:0] numerator, denominator,
   output wire last,
   output wire [31:0] result_sig
@@ -13,12 +13,9 @@ module edge_fpu_div_iter (
   wire [31:0] quot_next = {quot_r[30:0], take};
   assign last = step && !cancel && (iter_r == 1);
   assign result_sig = {quot_next[31:1], quot_next[0] | (|rem_sub)};
-  always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-      rem_r <= 0;
-      quot_r <= 0;
-      iter_r <= 0;
-    end else if (!cancel) begin
+  // PREP load initializes all recurrence state before the first step.
+  always @(posedge clk) begin
+    if (!cancel) begin
       if (load) begin
         rem_r <= {1'b0, numerator};
         quot_r <= 0;

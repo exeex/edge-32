@@ -1,6 +1,6 @@
 // FP32 radix-2 square root. The parent owns transaction scheduling and cancel.
 module edge_fpu_sqrt_iter (
-  input wire clk, reset_n, cancel, load, step,
+  input wire clk, cancel, load, step,
   input wire [23:0] significand,
   input wire exponent_even,
   output wire last,
@@ -19,13 +19,9 @@ module edge_fpu_sqrt_iter (
   wire [31:0] root_next = {root_r[30:0], take};
   assign last = step && !cancel && (iter_r == 1);
   assign result_sig = {root_next[31:1], root_next[0] | (|rem_next)};
-  always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-      rad_r <= 0;
-      rem_r <= 0;
-      root_r <= 0;
-      iter_r <= 0;
-    end else if (!cancel) begin
+  // PREP load initializes all recurrence state before the first step.
+  always @(posedge clk) begin
+    if (!cancel) begin
       if (load) begin
         rad_r <= {40'b0, significand} << (exponent_even ? 38 : 37);
         rem_r <= 0;
