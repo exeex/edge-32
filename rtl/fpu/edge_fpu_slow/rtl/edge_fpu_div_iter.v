@@ -12,7 +12,10 @@ module edge_fpu_div_iter (
   wire [24:0] rem_sub = take ? rem_r - {1'b0, denominator} : rem_r;
   wire [31:0] quot_next = {quot_r[30:0], take};
   assign last = step && !cancel && (iter_r == 1);
-  assign result_sig = {quot_next[31:1], quot_next[0] | (|rem_sub)};
+  // denominator is normalized and nonzero. If take=1, rem_r is nonzero;
+  // otherwise rem_sub=rem_r. Thus take | (|rem_sub) equals |rem_r,
+  // avoiding compare/subtract delay on the final jammed quotient bit.
+  assign result_sig = {quot_next[31:1], |rem_r};
   // PREP load initializes all recurrence state before the first step.
   always @(posedge clk) begin
     if (!cancel) begin
