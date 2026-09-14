@@ -3,8 +3,9 @@
 // Single-issue architectural FPU boundary.  The owner supplies one decoded
 // instruction at a time; this leaf owns the FPR file, FP decode and the
 // variable-latency execution-unit selection.  Issue/retire policy stays in the
-// surrounding core (edge-rv or edge-rv-lite).
-module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
+// surrounding core. EXTERNAL_FPR_WRITEBACK delegates all FPR commit to WB.
+module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
+  parameter EXTERNAL_FPR_WRITEBACK = 0) (
   input  wire        clk,
   input  wire        reset_n,
   input  wire        cancel,
@@ -76,10 +77,11 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   assign store_read_value=fpr[store_read_rs];
   // One FPR write port. Compute completion has priority; an independent load
   // producer must hold valid/address/data until load_write_ready is asserted.
-  // The integrated core serializes both producers under its single EX owner.
+  // External-WB mode disables the internal compute write; the owner returns
+  // both compute and load results through this single commit port.
   wire compute_done=fmac_done||misc_done||cvt_done||slow_done;
   wire live_completion=busy_q&&!cancelled_q&&!cancel;
-  wire compute_write=live_completion &&
+  wire compute_write=!EXTERNAL_FPR_WRITEBACK && live_completion &&
     (fmac_done||slow_done||(misc_done&&misc_domain)||(cvt_done&&cvt_domain));
   wire [31:0] compute_write_value=fmac_done ? fmac_value:slow_done ? slow_value:
                                 misc_done ? misc_value[31:0]:cvt_value[31:0];

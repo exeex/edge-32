@@ -1,6 +1,5 @@
 `timescale 1ns/1ps
-// Standard single-issue three-stage pipeline register/control slice:
-// external fetch (IF) -> decode/register-read (ID) -> execute/writeback (EX).
+// IF/ID/EX slice of the four-stage core. Registered WB is owned by the core.
 module edge_32_pipeline #(
   parameter PC_WIDTH = 32,
   parameter VALUE_WIDTH = 32
@@ -21,14 +20,11 @@ module edge_32_pipeline #(
   output wire [63:0]            id_inst,
   output wire                   id_is_64b,
   output wire                   id_error,
-  input  wire [4:0]             id_rs1,
-  input  wire [4:0]             id_rs2,
-  input  wire [VALUE_WIDTH-1:0] id_rs1_raw,
-  input  wire [VALUE_WIDTH-1:0] id_rs2_raw,
-  input  wire [3:0]             id_op_class,
+  input  wire [VALUE_WIDTH-1:0] id_rs1_value,
+  input  wire [VALUE_WIDTH-1:0] id_rs2_value,
   input  wire                   id_legal,
-  input  wire                   id_writes_gpr,
   input  wire                   id_csr_write,
+  input  wire                   id_stall,
 
   output wire                   ex_valid,
   output wire [PC_WIDTH-1:0]    ex_pc,
@@ -37,13 +33,8 @@ module edge_32_pipeline #(
   output wire                   ex_error,
   output wire [VALUE_WIDTH-1:0] ex_rs1_value,
   output wire [VALUE_WIDTH-1:0] ex_rs2_value,
-  output wire [3:0]             ex_op_class,
   output wire                   ex_legal,
-  output wire                   ex_writes_gpr,
   input  wire                   ex_done,
-  input  wire                   ex_write_valid,
-  input  wire [4:0]             ex_write_rd,
-  input  wire [VALUE_WIDTH-1:0] ex_write_value,
   input  wire                   ex_redirect_valid
 );
   reg id_valid_q;
@@ -58,21 +49,12 @@ module edge_32_pipeline #(
   reg ex_error_q;
   reg [VALUE_WIDTH-1:0] ex_rs1_q;
   reg [VALUE_WIDTH-1:0] ex_rs2_q;
-  reg [3:0] ex_op_class_q;
   reg ex_legal_q;
-  reg ex_writes_gpr_q;
 
   wire ex_blocked = ex_valid_q && !ex_done;
-  wire id_can_advance = !ex_blocked;
-  wire forward_rs1 = ex_valid_q && ex_done && ex_write_valid &&
-                     (ex_write_rd != 5'd0) && (id_rs1 == ex_write_rd);
-  wire forward_rs2 = ex_valid_q && ex_done && ex_write_valid &&
-                     (ex_write_rd != 5'd0) && (id_rs2 == ex_write_rd);
-
-  // Let the CSR writer advance to EX, but leave ID empty for its writeback
-  // cycle. The next instruction enters ID on the commit edge and therefore
-  // reads updated CSR state without an EX-to-ID CSR bypass. A blocked EX
-  // naturally extends the wait; redirect takes priority and flushes the writer.
+  wire id_can_advance = !ex_blocked && !id_stall;
+  // A CSR writer leaves an admission bubble. The core separately holds ID
+  // through pending EX/WB CSR updates with id_stall; no stale FRM is captured.
   wire csr_interlock = id_valid_q && !id_error_q && id_csr_write;
   assign fetch_ready = id_can_advance && !ex_redirect_valid && !csr_interlock;
   assign id_valid = id_valid_q;
@@ -88,9 +70,7 @@ module edge_32_pipeline #(
   assign ex_error = ex_error_q;
   assign ex_rs1_value = ex_rs1_q;
   assign ex_rs2_value = ex_rs2_q;
-  assign ex_op_class = ex_op_class_q;
   assign ex_legal = ex_legal_q;
-  assign ex_writes_gpr = ex_writes_gpr_q;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
@@ -100,9 +80,10 @@ module edge_32_pipeline #(
       // The resolving EX instruction completes; all younger ID/IF work dies.
       id_valid_q <= 1'b0;
       ex_valid_q <= 1'b0;
-    end else if (id_can_advance) begin
-      ex_valid_q <= id_valid_q;
-      id_valid_q <= fetch_valid && fetch_ready;
+    end else begin
+      // Completing EX must drain even when a dependency keeps ID resident.
+      if (!ex_blocked) ex_valid_q <= id_can_advance && id_valid_q;
+      if (id_can_advance) id_valid_q <= fetch_valid && fetch_ready;
     end
   end
   // Valid bits cancel work on reset/flush. Payload is unobservable while
@@ -114,11 +95,9 @@ module edge_32_pipeline #(
       ex_inst_q <= id_inst_q;
       ex_is_64b_q <= id_is_64b_q;
       ex_error_q <= id_error_q;
-      ex_rs1_q <= forward_rs1 ? ex_write_value : id_rs1_raw;
-      ex_rs2_q <= forward_rs2 ? ex_write_value : id_rs2_raw;
-      ex_op_class_q <= id_op_class;
+      ex_rs1_q <= id_rs1_value;
+      ex_rs2_q <= id_rs2_value;
       ex_legal_q <= id_legal;
-      ex_writes_gpr_q <= id_writes_gpr;
       if (fetch_valid && fetch_ready) begin
         id_pc_q <= fetch_pc;
         id_inst_q <= fetch_inst;

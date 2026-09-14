@@ -107,8 +107,7 @@ module edge_32_div_srt4_native (
   input  wire [2:0]             funct3,
   output reg                    result_valid,
   output reg  [31:0]            result_value,
-  output wire                   busy,
-  output wire [6:0]             op_latency
+  output wire                   busy
 );
   localparam [3:0] STATE_IDLE = 4'd0;
   localparam [3:0] STATE_FAST = 4'd1;
@@ -385,14 +384,6 @@ module edge_32_div_srt4_native (
 
   assign op_ready = (state_r == STATE_IDLE) && !result_valid;
   assign busy = (state_r != STATE_IDLE) || result_valid;
-  // Each pass through the two-slice ring consumes two radix-4 digits.  Exit
-  // at the first pass boundary after all requested digits have completed.
-  wire [4:0] input_rounds = input_scale_even[5:1];
-  wire [3:0] ring_passes = input_rounds[4:1] + input_rounds[0];
-  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd11;
-  assign op_latency = fast_case ? 7'd1 :
-                      input_rounds == 5'd0 ? 7'd11 : ring_latency;
-
   reg [3:0] state_next;
   reg [RING_STAGES-1:0] ring_valid_next;
   reg ring_qds_phase_next;

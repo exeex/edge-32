@@ -67,16 +67,9 @@ module edge_32_frontend #(
       running_q <= AUTO_START;
       request_pending_q <= 1'b0;
       request_killed_q <= 1'b0;
-      request_pc_q <= RESET_PC;
       fifo_count_q <= 2'd0;
       fifo_read_q <= 1'b0;
       fifo_write_q <= 1'b0;
-      fifo_pc_q[0] <= RESET_PC;
-      fifo_pc_q[1] <= RESET_PC;
-      fifo_inst_q[0] <= 32'h0000_0013;
-      fifo_inst_q[1] <= 32'h0000_0013;
-      fifo_error_q[0] <= 1'b0;
-      fifo_error_q[1] <= 1'b0;
     end else if (fetch_start_i) begin
       running_q <= 1'b1;
       fetch_pc_q <= boot_pc;
@@ -104,7 +97,6 @@ module edge_32_frontend #(
       if (request_fire) begin
         request_pending_q <= 1'b1;
         request_killed_q <= 1'b0;
-        request_pc_q <= fetch_pc_q;
         fetch_pc_q <= fetch_pc_q + {{(PC_WIDTH-3){1'b0}}, 3'd4};
       end
       if (response_fire) begin
@@ -115,9 +107,6 @@ module edge_32_frontend #(
       if (request_fire) request_pending_q <= 1'b1;
 
       if (response_push) begin
-        fifo_pc_q[fifo_write_q] <= request_pc_q;
-        fifo_inst_q[fifo_write_q] <= imem_resp_data;
-        fifo_error_q[fifo_write_q] <= imem_resp_error;
         fifo_write_q <= ~fifo_write_q;
       end
       if (output_pop) fifo_read_q <= ~fifo_read_q;
@@ -128,11 +117,23 @@ module edge_32_frontend #(
       endcase
 
       if (redirect_valid) begin
-        if (redirect_valid) fetch_pc_q <= redirect_pc;
+        fetch_pc_q <= redirect_pc;
         fifo_count_q <= 2'd0;
         fifo_read_q <= 1'b0;
         fifo_write_q <= 1'b0;
         if (request_pending_q && !response_fire) request_killed_q <= 1'b1;
+      end
+    end
+  end
+  // Ownership, not payload reset, cancels outstanding/FIFO contents.
+  // Keep the same start/stop/halt priority and crossing request/response edge.
+  always @(posedge clk) begin
+    if (!fetch_start_i && !fetch_stop_i && !halt) begin
+      if (request_fire) request_pc_q <= fetch_pc_q;
+      if (response_push) begin
+        fifo_pc_q[fifo_write_q] <= request_pc_q;
+        fifo_inst_q[fifo_write_q] <= imem_resp_data;
+        fifo_error_q[fifo_write_q] <= imem_resp_error;
       end
     end
   end

@@ -77,28 +77,14 @@ module edge_32_lsu #(
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       state_q <= IDLE;
-      store_q <= 1'b0;
-      fp_q <= 1'b0;
-      funct3_q <= 3'd0;
-      addr_q <= 32'd0;
-      store_data_q <= 32'd0;
       op_done <= 1'b0;
-      op_error <= 1'b0;
-      op_load_value <= 32'd0;
     end else begin
       op_done <= 1'b0;
       if (op_valid && op_ready) begin
         if (incoming_unsupported || incoming_misaligned) begin
           state_q <= IDLE;
           op_done <= 1'b1;
-          op_error <= 1'b1;
-          op_load_value <= 32'd0;
         end else begin
-          store_q <= op_store;
-          fp_q <= op_fp;
-          funct3_q <= op_funct3;
-          addr_q <= incoming_addr;
-          store_data_q <= op_store_data;
           state_q <= REQUEST;
         end
       end
@@ -106,8 +92,6 @@ module edge_32_lsu #(
         if (store_q && STORE_ACK_ON_ACCEPT) begin
           state_q <= IDLE;
           op_done <= 1'b1;
-          op_error <= 1'b0;
-          op_load_value <= 32'd0;
         end else begin
           state_q <= RESPONSE;
         end
@@ -115,11 +99,32 @@ module edge_32_lsu #(
       if ((state_q == RESPONSE) && mem_resp_valid) begin
         state_q <= IDLE;
         op_done <= 1'b1;
-        op_error <= mem_resp_error;
-        op_load_value <= store_q ? 32'd0 :
-                         (MEM_RESP_FORMATTED ? mem_resp_rdata[31:0] :
-                                               formatted_load);
       end
+    end
+  end
+  // state_q owns request fields; op_done owns result/error fields. Invalid
+  // payload is unspecified. Accepted requests remain stable under backpressure.
+  always @(posedge clk) begin
+    if (op_valid && op_ready) begin
+      if (incoming_unsupported || incoming_misaligned) begin
+        op_error <= 1'b1;
+        op_load_value <= 32'd0;
+      end else begin
+        store_q <= op_store;
+        fp_q <= op_fp;
+        funct3_q <= op_funct3;
+        addr_q <= incoming_addr;
+        store_data_q <= op_store_data;
+      end
+    end
+    if ((state_q == REQUEST) && mem_req_ready && store_q && STORE_ACK_ON_ACCEPT) begin
+      op_error <= 1'b0;
+      op_load_value <= 32'd0;
+    end
+    if ((state_q == RESPONSE) && mem_resp_valid) begin
+      op_error <= mem_resp_error;
+      op_load_value <= store_q ? 32'd0 :
+        (MEM_RESP_FORMATTED ? mem_resp_rdata[31:0] : formatted_load);
     end
   end
 endmodule

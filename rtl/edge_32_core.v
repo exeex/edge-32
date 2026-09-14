@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Bootable RV32IM_Zba three-stage core. Variable-latency EX freezes IF/ID.
+// RV32IM_Zba IF/predecode -> ID/read -> EX/execute -> WB/retire core.
 module edge_32_core #(
   parameter PC_WIDTH = 32,
   parameter DMEM_RESP_FORMATTED = 0,
@@ -37,13 +37,11 @@ module edge_32_core #(
   output wire [63:0] debug_x31, output wire [63:0] cycle_count,
   output wire [63:0] instret_count
 );
-  reg [31:0] gpr [0:31];
-  reg [63:0] cycle_q, instret_q;
+  wire [63:0] cycle_q, instret_q;
   reg [4:0] fflags_q;
   reg [2:0] frm_q;
   reg mem_started_q, mul_started_q, fpu_started_q, accel_started_q;
   reg cache_started_q, icache_invalidate_started_q;
-  integer ri;
   wire core_start_i = AUTO_START ? 1'b0 : core_start;
   wire core_force_stop_i = AUTO_START ? 1'b0 : core_force_stop;
 
@@ -53,7 +51,7 @@ module edge_32_core #(
   wire [PC_WIDTH-1:0] if_pc; wire [63:0] if_inst;
   wire id_is_64b;
   wire [63:0] id_inst;
-  wire ex_valid, ex_error, ex_is_64b;
+  wire ex_valid, ex_error;
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
   wire [31:0] ex_rs1_value, ex_rs2_value;
   wire id_capture_enable;
@@ -73,17 +71,18 @@ module edge_32_core #(
       ex_fsrc2_q <= id_fsrc2;
     end
   end
-  wire [3:0] id_decoded_class;
-  wire id_decoded_legal;
-  edge_32_decode id_decode(
-    .inst(id_inst), .inst_is_64b(id_is_64b), .op_class(id_decoded_class),
-    .legal(id_decoded_legal), .rd(), .rs1(), .rs2(),
+  reg [3:0] id_decoded_class;
+  reg id_decoded_legal;
+  wire [3:0] if_decoded_class;
+  wire if_decoded_legal;
+  edge_32_decode if_decode(
+    .inst(if_inst), .inst_is_64b(if_is_64b), .op_class(if_decoded_class),
+    .legal(if_decoded_legal), .rd(), .rs1(), .rs2(),
     .writes_gpr(), .accel_subop(),
     .accel_needs_capture(), .accel_capture_src_gpr());
-  wire id_csr_write;
-  wire [4:0] id_rs1, id_rs2;
-  wire [31:0] id_rs1_raw=id_rs1==0 ? 0 : gpr[id_rs1];
-  wire [31:0] id_rs2_raw=id_rs2==0 ? 0 : gpr[id_rs2];
+  reg id_csr_write;
+  reg [4:0] id_rs1, id_rs2;
+  wire [31:0] id_rs1_value, id_rs2_value, gpr_debug_x31;
   wire decoded_legal;
 
   wire is_lui;
@@ -129,26 +128,39 @@ module edge_32_core #(
   reg [56:0] ex_issue_control_q;
   wire [31:0] id_alu_imm, id_mem_imm, id_branch_imm, id_jump_imm;
   reg [31:0] ex_alu_imm_q, ex_mem_imm_q, ex_branch_imm_q, ex_jump_imm_q;
-  wire id_issue_legal, id_writes_gpr, id_writes_fpr;
-  wire [4:0] id_write_rd;
-  wire id_rd_gpr, id_rd_fpr;
-  wire [1:0] id_uses_gpr;
-  wire [2:0] id_uses_fpr;
-  wire [4:0] id_frs0, id_frs1, id_frs2;
-  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) id_register_decode(
-    .inst(id_inst),.inst_is_64b(id_is_64b),
-    .read_gpr0(id_rs1),.read_gpr1(id_rs2),
-    .read_fpr0(id_frs0),.read_fpr1(id_frs1),.read_fpr2(id_frs2),
-    .uses_gpr(id_uses_gpr),.uses_fpr(id_uses_fpr),
-    .write_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
-    .csr_write(id_csr_write));
+  wire id_issue_legal;
+  reg [4:0] id_write_rd;
+  reg id_rd_gpr, id_rd_fpr;
+  reg [4:0] id_frs0, id_frs1, id_frs2;
+  reg [1:0] id_uses_gpr;
+  reg [2:0] id_uses_fpr;
+  wire [4:0] if_rs1, if_rs2, if_frs0, if_frs1, if_frs2, if_write_rd;
+  wire [1:0] if_uses_gpr;
+  wire [2:0] if_uses_fpr;
+  wire if_rd_gpr, if_rd_fpr, if_csr_write;
+  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) if_register_decode(
+    .inst(if_inst),.inst_is_64b(if_is_64b),
+    .read_gpr0(if_rs1),.read_gpr1(if_rs2),
+    .read_fpr0(if_frs0),.read_fpr1(if_frs1),.read_fpr2(if_frs2),
+    .uses_gpr(if_uses_gpr),.uses_fpr(if_uses_fpr),
+    .write_rd(if_write_rd),.rd_gpr(if_rd_gpr),.rd_fpr(if_rd_fpr),
+    .csr_write(if_csr_write));
+  always @(posedge clk) begin
+    if(if_valid && if_ready) begin
+      {id_rs1,id_rs2,id_frs0,id_frs1,id_frs2,id_write_rd} <=
+        {if_rs1,if_rs2,if_frs0,if_frs1,if_frs2,if_write_rd};
+      {id_uses_gpr,id_uses_fpr,id_rd_gpr,id_rd_fpr,id_csr_write} <=
+        {if_uses_gpr,if_uses_fpr,if_rd_gpr,if_rd_fpr,if_csr_write};
+      id_decoded_class<=if_decoded_class; id_decoded_legal<=if_decoded_legal;
+    end
+  end
   edge_32_issue_decode #(.ENABLE_FPU(ENABLE_FPU)) id_issue_decode(
     .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
     .register_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
     .fpu_control(id_fpu_control),
     .control(id_issue_control),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
     .branch_imm(id_branch_imm),.jump_imm(id_jump_imm),
-    .writes_gpr(id_writes_gpr),.writes_fpr(id_writes_fpr),
+    .writes_gpr(),.writes_fpr(),
     .issue_legal(id_issue_legal));
   assign {is_lui,is_auipc,is_jal,is_jalr,is_branch,is_load,
     is_store,is_fp_load,is_fp_store,is_fp_compute,is_muldiv,is_cycle,
@@ -164,10 +176,44 @@ module edge_32_core #(
       ex_branch_imm_q<=id_branch_imm; ex_jump_imm_q<=id_jump_imm;
     end
   end
+  // One registered completion slot. EX can complete while old WB retires.
+  reg wb_pending_q;
+  reg [31:0] wb_fast_value_q, wb_other_value_q;
+  reg wb_fast_q;
+  wire [31:0] wb_value_q=wb_fast_q ? wb_fast_value_q:wb_other_value_q;
+  reg [4:0] wb_rd_q, wb_fflags_q;
+  reg wb_gpr_q, wb_fpr_q, wb_fault_q, wb_halt_q, wb_fp_flags_q;
+  reg wb_fp_csr_q, wb_csr_fflags_q, wb_csr_frm_q;
+  reg [7:0] wb_fp_csr_value_q;
+  reg wb_icache_header_q, wb_dcache_header_q;
+  reg [31:0] wb_header_value_q;
+  wire wb_commit=wb_pending_q&&!halted&&!core_start_i&&!core_force_stop_i;
+  edge_32_counter64 cycle_counter(.clk(clk),.reset_n(reset_n),
+    .enable(1'b1),.value(cycle_q));
+  edge_32_counter64 retire_counter(.clk(clk),.reset_n(reset_n),
+    .enable(wb_commit&&!wb_fault_q),.value(instret_q));
+  wire wb_terminal=wb_pending_q&&(wb_fault_q||wb_halt_q);
+  wire wb_valid=wb_commit&&!wb_fault_q&&wb_gpr_q;
+  wire wb_fpr_valid=wb_commit&&!wb_fault_q&&wb_fpr_q;
+  // A result still in EX cannot bypass the new WB register boundary.
+  wire id_gpr_hazard=ex_valid&&ex_writes_gpr&&(rd!=0)&&
+    ((id_uses_gpr[0]&&id_rs1==rd)||(id_uses_gpr[1]&&id_rs2==rd));
+  wire id_fpr_hazard=ex_valid&&ex_writes_fpr&&
+    ((id_uses_fpr[0]&&id_frs0==rd)||(id_uses_fpr[1]&&id_frs1==rd)||
+     (id_uses_fpr[2]&&id_frs2==rd));
+  // Dynamic FRM and header state are read only after the older CSR commits.
+  wire id_reads_fp_csr=ENABLE_FPU&&(id_inst[6:0]==7'h73)&&
+    (id_inst[14:12]!=0)&&((id_inst[31:20]==12'h001)||
+    (id_inst[31:20]==12'h002)||(id_inst[31:20]==12'h003));
+  wire id_csr_hazard=(id_reads_fp_csr&&ex_valid&&is_fp_compute)||
+    (ex_valid&&csr_write&&
+    (is_fp_csr||is_icache_header_csr||is_dcache_header_csr)) ||
+    (wb_pending_q&&(wb_fp_csr_q||wb_icache_header_q||wb_dcache_header_q));
+  wire id_stall=id_gpr_hazard||id_fpr_hazard||id_csr_hazard;
   wire is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
   wire fpu_legal;
   wire ex_legal=decoded_legal;
-  wire ex_issue_ok=ex_valid&&!halted&&!ex_error&&ex_legal&&
+  wire ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_error&&ex_legal&&
                    !core_start_i&&!core_force_stop_i;
   wire [31:0] fast_result;
   edge_32_alu #(.PC_WIDTH(PC_WIDTH)) fast_alu(
@@ -193,8 +239,7 @@ module edge_32_core #(
   edge_32_muldiv_asap7 muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
-    .result_valid(mul_result_valid),.result_value(mul_result),.busy(),
-    .op_latency());
+    .result_valid(mul_result_valid),.result_value(mul_result),.busy());
 
 
   wire lsu_ready,lsu_done,lsu_error; wire [31:0] lsu_value;
@@ -225,7 +270,7 @@ module edge_32_core #(
   wire fpu_ready, fpu_done, fpu_gpr_write, fpr_load_ready;
   wire [31:0] fpu_value; wire [4:0] fpu_fflags;
   generate if(ENABLE_FPU) begin: g_fpu
-    edge_fpu_alu #(.GPR_WIDTH(32),.PREDECODED(1)) fpu_alu(
+    edge_fpu_alu #(.GPR_WIDTH(32),.PREDECODED(1),.EXTERNAL_FPR_WRITEBACK(1)) fpu_alu(
       .clk(clk),.reset_n(reset_n),
       .cancel(core_start_i||core_force_stop_i),
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
@@ -238,8 +283,8 @@ module edge_32_core #(
       .complete_valid(fpu_done),.complete_gpr_write(fpu_gpr_write),
       .complete_rd(),.complete_value(fpu_value),
       .complete_fflags(fpu_fflags),
-      .load_write_valid(ex_issue_ok&&is_fp_load&&lsu_done&&!lsu_error),
-      .load_write_ready(fpr_load_ready),.load_write_rd(rd),.load_write_value(fp_load_value),
+      .load_write_valid(wb_fpr_valid),
+      .load_write_ready(fpr_load_ready),.load_write_rd(wb_rd_q),.load_write_value(wb_value_q),
       .store_read_rs(5'd0),.store_read_value());
     assign fpu_store_value=ex_fsrc1_q;
   end else begin: g_no_fpu
@@ -282,7 +327,7 @@ module edge_32_core #(
     (is_accel&&accel_done&&accel_resp_error);
   wire terminal_complete=ex_done&&
     (ex_faulting||is_ebreak||is_edge_break);
-  wire frontend_stop=halted||terminal_complete;
+  wire frontend_stop=halted||terminal_complete||wb_terminal;
   wire ex_control=is_jal||is_jalr||is_branch;
   wire branch_redirect=fast_done&&ex_control&&branch_taken;
   wire redirect=branch_redirect||fence_i_done;
@@ -299,14 +344,14 @@ module edge_32_core #(
     (f3[1:0]==2'b10)?(address_header_old|address_header_source):
                        (address_header_old&~address_header_source);
   wire address_header_write=csr_write;
-  wire [31:0] wb_value=is_edge_break?ex_rs1_value:is_accel?accel_resp_value[31:0]:
+  wire [31:0] ex_result=is_edge_break?ex_rs1_value:is_accel?accel_resp_value[31:0]:
     is_fp_compute?fpu_value:is_muldiv?mul_result:
-    is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
-    is_instret?instret_q[31:0]:is_fp_csr?
+    is_fp_load?fp_load_value:is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
+    is_instret?(instret_q[31:0]+{31'd0,(wb_commit&&!wb_fault_q)}):is_fp_csr?
     (csr_fflags ? {27'd0,fflags_q} :
      csr_frm ? {29'd0,frm_q} : {24'd0,frm_q,fflags_q}):
     is_hardware_id?EDGE_ASIC_ID[31:0]:
-    is_address_header_csr?address_header_old:fast_result;
+    is_address_header_csr?address_header_old:32'd0;
   wire [31:0] fp_csr_source=f3[2]?{27'd0,csr_uimm}:ex_rs1_value;
   wire [7:0] fp_csr_old=(csr_fflags)?
                         {3'd0,fflags_q}:
@@ -317,10 +362,33 @@ module edge_32_core #(
                          (fp_csr_old|fp_csr_source[7:0]):
                          (fp_csr_old&~fp_csr_source[7:0]);
   wire fp_csr_write=csr_write;
-  // One architectural GPR write port. Edge break uses the same port at x31.
-  wire wb_valid=ex_valid&&ex_done&&!halted&&!ex_faulting&&ex_writes_gpr&&
-                !core_start_i&&!core_force_stop_i;
+  always @(posedge clk or negedge reset_n) begin
+    if(!reset_n) wb_pending_q<=1'b0;
+    else if(core_start_i||core_force_stop_i||halted) wb_pending_q<=1'b0;
+    else wb_pending_q<=ex_done;
+  end
+  // WB payload has no reset; pending owns its visibility and cancellation.
+  always @(posedge clk) begin
+    if(ex_done) begin
+      wb_fast_value_q<=fast_result; wb_other_value_q<=ex_result;
+      wb_fast_q<=is_fast_class; wb_rd_q<=rd;
+      wb_gpr_q<=ex_writes_gpr; wb_fpr_q<=ex_writes_fpr;
+      wb_fault_q<=ex_faulting; wb_halt_q<=is_ebreak||is_edge_break;
+      wb_fp_flags_q<=is_fp_compute; wb_fflags_q<=fpu_fflags;
+      wb_fp_csr_q<=is_fp_csr&&fp_csr_write;
+      wb_csr_fflags_q<=csr_fflags; wb_csr_frm_q<=csr_frm;
+      wb_fp_csr_value_q<=fp_csr_new;
+      wb_icache_header_q<=is_icache_header_csr&&address_header_write;
+      wb_dcache_header_q<=is_dcache_header_csr&&address_header_write;
+      wb_header_value_q<=address_header_new;
+    end
+  end
 
+  edge_32_gpr gpr_file(
+    .clk(clk),.reset_n(reset_n),.read_rs1(id_rs1),.read_rs2(id_rs2),
+    .read_value1(id_rs1_value),.read_value2(id_rs2_value),
+    .write_valid(wb_valid),.write_rd(wb_rd_q),.write_value(wb_value_q),
+    .debug_x31(gpr_debug_x31));
 
   edge_32_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
     .clk(clk),.reset_n(reset_n),.boot_pc(boot_pc),
@@ -343,24 +411,21 @@ module edge_32_core #(
     .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
     .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
-    .id_is_64b(id_is_64b),.id_error(),.id_rs1(id_rs1),.id_rs2(id_rs2),
-    .id_rs1_raw(id_rs1_raw),.id_rs2_raw(id_rs2_raw),.ex_valid(ex_valid),
-    .id_op_class(id_decoded_class),.id_legal(id_issue_legal),
-    .id_writes_gpr(id_writes_gpr),.id_csr_write(id_csr_write),
-    .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(ex_is_64b),.ex_error(ex_error),
+    .id_is_64b(id_is_64b),.id_error(),
+    .id_rs1_value(id_rs1_value),.id_rs2_value(id_rs2_value),.ex_valid(ex_valid),
+    .id_legal(id_issue_legal),
+    .id_csr_write(id_csr_write),.id_stall(id_stall),
+    .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(),.ex_error(ex_error),
     .ex_rs1_value(ex_rs1_value),.ex_rs2_value(ex_rs2_value),.ex_done(ex_done),
-    .ex_op_class(),.ex_legal(decoded_legal),
-    .ex_writes_gpr(),
-    .ex_write_valid(wb_valid),.ex_write_rd(rd),.ex_write_value(wb_value),
-    .ex_redirect_valid(redirect||terminal_complete||halted||core_start_i||
+    .ex_legal(decoded_legal),
+    .ex_redirect_valid(redirect||terminal_complete||wb_terminal||halted||core_start_i||
                        core_force_stop_i));
 
-  assign debug_x31={32'd0,gpr[31]};
+  assign debug_x31={32'd0,gpr_debug_x31};
   assign cycle_count=cycle_q; assign instret_count=instret_q;
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
-      for(ri=0;ri<32;ri=ri+1) gpr[ri]<=0;
-      cycle_q<=0; instret_q<=0; mem_started_q<=0; mul_started_q<=0;
+      mem_started_q<=0; mul_started_q<=0;
       fflags_q<=0; frm_q<=0;
       icache_address_header_q<=0; dcache_address_header_q<=0;
       fpu_started_q<=0;
@@ -368,7 +433,6 @@ module edge_32_core #(
       icache_invalidate_started_q<=0;
       halted<=0; illegal<=0;
     end else begin
-      cycle_q<=cycle_q+1;
       if(core_start_i) begin halted<=0; illegal<=0; end
       if(core_start_i||core_force_stop_i) begin
         mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0;
@@ -385,26 +449,26 @@ module edge_32_core #(
         mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0; accel_started_q<=0;
         cache_started_q<=0;
         icache_invalidate_started_q<=0;
-        if(ex_valid&&!ex_faulting) instret_q<=instret_q+1;
-        if(wb_valid) gpr[rd]<=wb_value;
-        if(!ex_faulting&&is_fp_csr&&fp_csr_write) begin
-          if(csr_fflags)
-            fflags_q<=fp_csr_new[4:0];
-          else if(csr_frm)
-            frm_q<=fp_csr_new[2:0];
+      end
+      if(wb_commit) begin
+        if(!wb_fault_q&&wb_fp_csr_q) begin
+          if(wb_csr_fflags_q)
+            fflags_q<=wb_fp_csr_value_q[4:0];
+          else if(wb_csr_frm_q)
+            frm_q<=wb_fp_csr_value_q[2:0];
           else begin
-            fflags_q<=fp_csr_new[4:0];
-            frm_q<=fp_csr_new[7:5];
+            fflags_q<=wb_fp_csr_value_q[4:0];
+            frm_q<=wb_fp_csr_value_q[7:5];
           end
         end
-        if(!ex_faulting&&is_icache_header_csr&&address_header_write)
-          icache_address_header_q<=address_header_new;
-        if(!ex_faulting&&is_dcache_header_csr&&address_header_write)
-          dcache_address_header_q<=address_header_new;
-        if(!ex_faulting&&is_fp_compute&&fpu_done)
-          fflags_q<=fflags_q|fpu_fflags;
-        if(!ex_faulting&&(is_ebreak||is_edge_break)) halted<=1;
-        if(ex_faulting) begin illegal<=1; halted<=1; end
+        if(!wb_fault_q&&wb_icache_header_q)
+          icache_address_header_q<=wb_header_value_q;
+        if(!wb_fault_q&&wb_dcache_header_q)
+          dcache_address_header_q<=wb_header_value_q;
+        if(!wb_fault_q&&wb_fp_flags_q)
+          fflags_q<=fflags_q|wb_fflags_q;
+        if(!wb_fault_q&&wb_halt_q) halted<=1;
+        if(wb_fault_q) begin illegal<=1; halted<=1; end
       end
     end
   end

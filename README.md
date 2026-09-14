@@ -22,6 +22,64 @@ addresses are 32 bits; cache/AXI and accelerator interfaces retain their
 explicit product widths. Historical RV64 migration code is not a selectable
 CPU implementation.
 
+## Current pipeline and register files
+
+The maintained core uses four stages: **IF/predecode → ID/read → EX/execute →
+WB/retire**. The imported three-stage RV64 rationale later in this document is
+historical; it does not describe the current Edge32 pipeline.
+
+| Stage | Responsibility |
+| --- | --- |
+| IF | Predecode source/destination indices, register banks, source-use masks and coarse instruction class; capture them with the admitted instruction. |
+| ID | Resolve legality, destination write authorization, result-source controls and dynamic rounding mode; select GPR/FPR operands and interlock on unavailable EX results or pending CSR state. |
+| EX | Issue captured operands to the selected unit and retain ownership until completion. |
+| WB | Accept aligned result, rd, bank and valid; commit register/CSR state and retirement, and forward registered results to ID. |
+
+The ID issue packet carries the destination and mux controls through EX.
+Completion supplies readiness and data; it does not re-decode rd. A younger
+instruction's controls cannot overwrite an occupied older WB slot.
+
+`edge_32_gpr` owns the 32-entry integer register file: 31 writable 32-bit FF
+words plus constant x0, with two logical read operands and one write port.
+Equal source indices share the first resolved read, and registered WB bypass
+covers either operand. `debug_x31` observes committed storage only.
+
+The 32 × 32-bit FPR file remains inside `edge_fpu_alu`, with three logical
+read ports and one functional write port; f0 is writable. Integrated Edge32
+selects `EXTERNAL_FPR_WRITEBACK=1`: compute and load results both commit through
+registered WB, and direct compute writes are disabled. Standalone FPU mode
+retains its compute/load write arbitration for module testing.
+
+Both files use FF storage. Read muxes settle within the ID cycle; the existing
+ID-to-EX registers capture operands at the clock edge. There is one clock
+domain, with no added asynchronous handshake or BRAM read-latency assumption.
+GPR and FPR dependencies are separate. A matching EX destination stalls ID
+until the producer reaches WB; there is no live EX-result-to-ID data bypass.
+An independent instruction can enter EX while an older instruction commits in
+WB. Variable-latency execution still has one EX owner, not an out-of-order
+scoreboard or multiple outstanding completion queue.
+
+Branches flush younger work in EX while retaining their own WB result. Faults,
+register/CSR updates, flags, halt and instret become architectural at WB.
+Start/force-stop cancels pending pipeline/WB ownership while preserving committed
+register state. Pipeline payloads use valid ownership rather than numerical
+reset; architectural register files retain their reset-to-zero behavior.
+The exact 64-bit cycle/instret counters use segmented increments with registered
+carry predicates, without delaying their visible values.
+
+The 2026-09-15 integration checkpoint passes 320 CTests. Against the preceding
+three-stage GPR version, matched 1 GHz ASAP7 pre-CTS placement-RC setup slack
+improves from +4.82 ps to +158.12 ps; repaired area changes from 3702 to 3735 µm².
+The remaining worst path is inside the divider. The +200 ps setup contract is
+still unmet; this is not routed signoff or FPGA Fmax evidence. A dependency
+microtest grows from 12 to 15 cycles, so clock margin alone does not establish
+workload speedup.
+
+The composed workspace owns detailed contracts, tests and APR evidence in
+`src/test-32/edge_core/rtl/` and
+`src/test-32/physical/openroad/rv32-four-stage-20260915.md`. Public RTL and
+integration filelists live in this repository.
+
 ## Migration acceptance criteria
 
 - RV32I integer and control-flow directed tests pass.
@@ -33,7 +91,7 @@ CPU implementation.
 - Documentation, filelists, CMake targets, and synthesis tops use `edge-32`
   names once their corresponding RTL boundary has migrated.
 
-## Current Edge32 Tensor checkpoint
+## Historical Edge32 Tensor checkpoint (2026-08-21)
 
 The following checkpoint records the first same-source 64x64 Tensor runs on
 Edge32. Both Edge32 images use `rv32imf_zba` with the `ilp32f` ABI and include
@@ -79,7 +137,12 @@ ctest --test-dir build/cmake-harness \
   --output-on-failure -V
 ```
 
-## Imported design rationale
+## Imported design rationale (historical RV64 three-stage experiment)
+
+The remainder preserves the earlier edge-rv-lite experiment, including its
+architecture and benchmark values. Use the current pipeline section above for
+maintained Edge32 behavior; the historical performance figures were not rerun
+as part of the four-stage change.
 
 ## Abstract
 

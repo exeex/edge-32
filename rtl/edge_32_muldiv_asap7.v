@@ -10,7 +10,7 @@ module edge_32_mul_asap7 (
   input wire [31:0] src0, input wire [31:0] src1,
   input wire [2:0] funct3,
   output wire result_valid, output wire [31:0] result_value,
-  output wire busy, output wire [6:0] op_latency
+  output wire busy
 );
   wire high_result = funct3 != 3'b000;
   wire lhs_signed = (funct3 == 3'b001) || (funct3 == 3'b010);
@@ -45,19 +45,19 @@ module edge_32_mul_asap7 (
   assign result_valid = lane_valid && valid_pipe_q[5];
   assign result_value = high_pipe_q[5] ? multiply_high :
                                               magnitude_product[31:0];
-  assign op_latency = 7'd6;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       valid_pipe_q <= 6'd0;
-      high_pipe_q <= 6'd0;
-      negative_pipe_q <= 6'd0;
     end else begin
       valid_pipe_q <= {valid_pipe_q[4:0], accept};
-      high_pipe_q <= {high_pipe_q[4:0], accept && high_result};
-      negative_pipe_q <= {negative_pipe_q[4:0],
-                          accept && (lhs_negative ^ rhs_negative)};
     end
+  end
+  // Mode/sign travel beside valid; bubbles and reset invalidate them without
+  // resetting or qualifying the numerical result selection pipeline.
+  always @(posedge clk) begin
+    high_pipe_q <= {high_pipe_q[4:0], high_result};
+    negative_pipe_q <= {negative_pipe_q[4:0], lhs_negative ^ rhs_negative};
   end
 endmodule
 
@@ -71,13 +71,13 @@ module edge_32_div_asap7 (
   input wire [31:0] src0, input wire [31:0] src1,
   input wire [2:0] funct3,
   output wire result_valid, output wire [31:0] result_value,
-  output wire busy, output wire [6:0] op_latency
+  output wire busy
 );
   edge_32_div_srt4_native srt4 (
     .clk(clk), .reset_n(reset_n), .op_valid(op_valid), .op_ready(op_ready),
     .src0(src0), .src1(src1), .funct3(funct3),
     .result_valid(result_valid), .result_value(result_value),
-    .busy(busy), .op_latency(op_latency)
+    .busy(busy)
   );
 endmodule
 
@@ -90,29 +90,25 @@ module edge_32_muldiv_asap7 (
   input wire [31:0] src0, input wire [31:0] src1,
   input wire [2:0] funct3,
   output wire result_valid, output wire [31:0] result_value,
-  output wire busy, output wire [6:0] op_latency
+  output wire busy
 );
   wire select_div = funct3[2];
   wire mul_ready, mul_valid, mul_busy;
   wire [31:0] mul_value;
-  wire [6:0] mul_latency;
   wire div_ready, div_valid, div_busy;
   wire [31:0] div_value;
-  wire [6:0] div_latency;
 
   edge_32_mul_asap7 multiply (
     .clk(clk), .reset_n(reset_n),
     .op_valid(op_valid && !select_div && !div_busy), .op_ready(mul_ready),
     .src0(src0), .src1(src1), .funct3(funct3),
-    .result_valid(mul_valid), .result_value(mul_value), .busy(mul_busy),
-    .op_latency(mul_latency)
+    .result_valid(mul_valid), .result_value(mul_value), .busy(mul_busy)
   );
   edge_32_div_asap7 divide (
     .clk(clk), .reset_n(reset_n),
     .op_valid(op_valid && select_div && !mul_busy), .op_ready(div_ready),
     .src0(src0), .src1(src1), .funct3(funct3),
-    .result_valid(div_valid), .result_value(div_value), .busy(div_busy),
-    .op_latency(div_latency)
+    .result_valid(div_valid), .result_value(div_value), .busy(div_busy)
   );
 
   assign op_ready = select_div ? (!mul_busy && div_ready) :
@@ -120,5 +116,4 @@ module edge_32_muldiv_asap7 (
   assign result_valid = mul_valid || div_valid;
   assign result_value = mul_valid ? mul_value : div_value;
   assign busy = mul_busy || div_busy;
-  assign op_latency = select_div ? div_latency : mul_latency;
 endmodule

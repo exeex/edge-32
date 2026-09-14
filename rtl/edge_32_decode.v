@@ -174,7 +174,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
     alu_op,writes_gpr,writes_fpr};
 endmodule
 
-// Early ID register routing. Deliberately has no legality, operation-class,
+// Early IF register routing (captured with the admitted ID instruction). Deliberately has no legality, operation-class,
 // rounding-mode or semantic FP-control input. Invalid encodings may request
 // reads; only the parallel sideband authorizes EX issue and writes.
 module edge_32_register_decode #(parameter ENABLE_FPU=0)(
