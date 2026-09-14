@@ -7,6 +7,7 @@
 module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   input  wire        clk,
   input  wire        reset_n,
+  input  wire        cancel,
   input  wire        issue_valid,
   output wire        issue_ready,
   input  wire [31:0] issue_inst,
@@ -29,6 +30,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   output reg  [GPR_WIDTH-1:0] complete_value,
   output reg  [4:0]  complete_fflags,
   input  wire        load_write_valid,
+  output wire        load_write_ready,
   input  wire [4:0]  load_write_rd,
   input  wire [31:0] load_write_value,
   input  wire [4:0]  store_read_rs,
@@ -41,6 +43,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
 
   reg [31:0] fpr [0:31];
   reg busy_q;
+  reg cancelled_q;
   reg [4:0] pending_rd_q;
   integer i;
 
@@ -69,13 +72,26 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   wire cvt_ready, cvt_done, cvt_domain; wire [GPR_WIDTH-1:0] cvt_value; wire [4:0] cvt_flags;
   wire slow_ready, slow_done; wire [31:0] slow_value; wire [4:0] slow_flags;
   wire fire=issue_valid&&issue_ready&&issue_legal;
-  assign issue_ready=!busy_q && (!fmac_op||!fmac_stall) && (!slow_op||slow_ready);
+  assign issue_ready=!cancel&&!busy_q && (!fmac_op||!fmac_stall) && (!slow_op||slow_ready);
   assign store_read_value=fpr[store_read_rs];
-  // ID reads bypass a load completing on the same capture edge. FPU writes
-  // occur before complete_valid releases EX, so they are already visible.
-  assign read_fsrc0=(load_write_valid && load_write_rd==read_frs0) ? load_write_value : fpr[read_frs0];
-  assign read_fsrc1=(load_write_valid && load_write_rd==read_frs1) ? load_write_value : fpr[read_frs1];
-  assign read_fsrc2=(load_write_valid && load_write_rd==read_frs2) ? load_write_value : fpr[read_frs2];
+  // One FPR write port. Compute completion has priority; an independent load
+  // producer must hold valid/address/data until load_write_ready is asserted.
+  // The integrated core serializes both producers under its single EX owner.
+  wire compute_done=fmac_done||misc_done||cvt_done||slow_done;
+  wire live_completion=busy_q&&!cancelled_q&&!cancel;
+  wire compute_write=live_completion &&
+    (fmac_done||slow_done||(misc_done&&misc_domain)||(cvt_done&&cvt_domain));
+  wire [31:0] compute_write_value=fmac_done ? fmac_value:slow_done ? slow_value:
+                                misc_done ? misc_value[31:0]:cvt_value[31:0];
+  assign load_write_ready=reset_n&&!cancel&&!compute_write;
+  wire load_write_fire=load_write_valid&&load_write_ready;
+  wire fpr_write_valid=compute_write||load_write_fire;
+  wire [4:0] fpr_write_rd=compute_write ? pending_rd_q:load_write_rd;
+  wire [31:0] fpr_write_value=compute_write ? compute_write_value:load_write_value;
+  // Explicit write-through bypass on every ID read port, including f0.
+  assign read_fsrc0=(fpr_write_valid && fpr_write_rd==read_frs0) ? fpr_write_value : fpr[read_frs0];
+  assign read_fsrc1=(fpr_write_valid && fpr_write_rd==read_frs1) ? fpr_write_value : fpr[read_frs1];
+  assign read_fsrc2=(fpr_write_valid && fpr_write_rd==read_frs2) ? fpr_write_value : fpr[read_frs2];
 
   edge_fpu_fmac #(.PREDECODED(1)) fmac(.cpurst_b(reset_n),.forever_cpuclk(clk),.fmac_cancel(1'b0),
     .fmac_inst_vld(fire&&fmac_op),.fmac_func(20'b0),.fmac_ctrl(fmac_ctrl),.fmac_rm(rm),
@@ -114,24 +130,25 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
 
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
-      busy_q<=0; complete_valid<=0; complete_gpr_write<=0; complete_rd<=0;
+      busy_q<=0; cancelled_q<=0; complete_valid<=0; complete_gpr_write<=0; complete_rd<=0;
       complete_value<=0; complete_fflags<=0; pending_rd_q<=0;
       for(i=0;i<32;i=i+1) fpr[i]<=0;
     end else begin
       complete_valid<=0;
-      if(load_write_valid) fpr[load_write_rd]<=load_write_value;
-      if(fire) begin busy_q<=1; pending_rd_q<=rd; end
-      if(fmac_done||misc_done||cvt_done||slow_done) begin
-        busy_q<=0; complete_valid<=1; complete_rd<=pending_rd_q;
+      if(fpr_write_valid) fpr[fpr_write_rd]<=fpr_write_value;
+      // Cancel only ownership/results, not architectural FPR state. Units
+      // drain normally; keep busy until their old completion is consumed.
+      if(cancel && busy_q) cancelled_q<=1;
+      if(fire) begin busy_q<=1; cancelled_q<=0; pending_rd_q<=rd; end
+      if(compute_done && busy_q) busy_q<=0;
+      if(compute_done && live_completion) begin
+        complete_valid<=1; complete_rd<=pending_rd_q;
         complete_gpr_write=(misc_done&& !misc_domain)||(cvt_done&&!cvt_domain);
         complete_value<=fmac_done?fmac_value:slow_done?slow_value:
                         misc_done?misc_value:cvt_value;
         complete_fflags<=fmac_done?fmac_flags:slow_done?slow_flags:
                          misc_done?misc_flags:cvt_flags;
-        if(fmac_done) fpr[pending_rd_q]<=fmac_value;
-        else if(slow_done) fpr[pending_rd_q]<=slow_value;
-        else if(misc_done&&misc_domain) fpr[pending_rd_q]<=misc_value[31:0];
-        else if(cvt_done&&cvt_domain) fpr[pending_rd_q]<=cvt_value[31:0];
+
       end
     end
   end
