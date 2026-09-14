@@ -73,7 +73,7 @@ module edge_32_pipeline #(
   // cycle. The next instruction enters ID on the commit edge and therefore
   // reads updated CSR state without an EX-to-ID CSR bypass. A blocked EX
   // naturally extends the wait; redirect takes priority and flushes the writer.
-  wire csr_interlock = id_valid_q && !id_error_q && id_legal && id_csr_write;
+  wire csr_interlock = id_valid_q && !id_error_q && id_csr_write;
   assign fetch_ready = id_can_advance && !ex_redirect_valid && !csr_interlock;
   assign id_valid = id_valid_q;
   assign id_capture_enable = id_can_advance && !ex_redirect_valid;

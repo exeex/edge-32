@@ -75,20 +75,12 @@ module edge_32_core #(
   end
   wire [3:0] id_decoded_class;
   wire id_decoded_legal;
-  wire id_decoded_writes_gpr;
-  wire id_decoded_needs_capture;
-  wire [4:0] id_decoded_capture_src_gpr;
   edge_32_decode id_decode(
     .inst(id_inst), .inst_is_64b(id_is_64b), .op_class(id_decoded_class),
     .legal(id_decoded_legal), .rd(), .rs1(), .rs2(),
-    .writes_gpr(id_decoded_writes_gpr), .accel_subop(),
-    .accel_needs_capture(id_decoded_needs_capture),
-    .accel_capture_src_gpr(id_decoded_capture_src_gpr));
-  // CSRRW[I] always writes, including x0/uimm=0. CSRRS/CSRRC[I] write
-  // only for a nonzero encoded source (not a nonzero register value).
-  wire id_csr_write=!id_is_64b && (id_inst[6:0]==7'h73) &&
-    (id_inst[13:12]!=2'b00) &&
-    ((id_inst[13:12]==2'b01)||(id_inst[19:15]!=5'd0));
+    .writes_gpr(), .accel_subop(),
+    .accel_needs_capture(), .accel_capture_src_gpr());
+  wire id_csr_write;
   wire [4:0] id_rs1, id_rs2;
   wire [31:0] id_rs1_raw=id_rs1==0 ? 0 : gpr[id_rs1];
   wire [31:0] id_rs2_raw=id_rs2==0 ? 0 : gpr[id_rs2];
@@ -139,20 +131,24 @@ module edge_32_core #(
   reg [31:0] ex_alu_imm_q, ex_mem_imm_q, ex_branch_imm_q, ex_jump_imm_q;
   wire id_issue_legal, id_writes_gpr, id_writes_fpr;
   wire [4:0] id_write_rd;
+  wire id_rd_gpr, id_rd_fpr;
   wire [1:0] id_uses_gpr;
   wire [2:0] id_uses_fpr;
   wire [4:0] id_frs0, id_frs1, id_frs2;
-  edge_32_issue_decode #(.ENABLE_FPU(ENABLE_FPU)) id_issue_decode(
-    .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
-    .decoded_writes_gpr(id_decoded_writes_gpr),
-    .accel_needs_capture(id_decoded_needs_capture),
-    .accel_capture_src_gpr(id_decoded_capture_src_gpr),.fpu_control(id_fpu_control),
-    .control(id_issue_control),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
-    .branch_imm(id_branch_imm),.jump_imm(id_jump_imm),
+  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) id_register_decode(
+    .inst(id_inst),.inst_is_64b(id_is_64b),
     .read_gpr0(id_rs1),.read_gpr1(id_rs2),
     .read_fpr0(id_frs0),.read_fpr1(id_frs1),.read_fpr2(id_frs2),
     .uses_gpr(id_uses_gpr),.uses_fpr(id_uses_fpr),
-    .write_rd(id_write_rd),.writes_gpr(id_writes_gpr),.writes_fpr(id_writes_fpr),
+    .write_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
+    .csr_write(id_csr_write));
+  edge_32_issue_decode #(.ENABLE_FPU(ENABLE_FPU)) id_issue_decode(
+    .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
+    .register_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
+    .fpu_control(id_fpu_control),
+    .control(id_issue_control),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
+    .branch_imm(id_branch_imm),.jump_imm(id_jump_imm),
+    .writes_gpr(id_writes_gpr),.writes_fpr(id_writes_fpr),
     .issue_legal(id_issue_legal));
   assign {is_lui,is_auipc,is_jal,is_jalr,is_branch,is_load,
     is_store,is_fp_load,is_fp_store,is_fp_compute,is_muldiv,is_cycle,

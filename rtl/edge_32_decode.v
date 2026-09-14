@@ -65,18 +65,16 @@ module edge_32_decode (
     .accel_is_sync(), .accel_is_getcsr());
 endmodule
 
-// ID resolves register domains and the complete scalar execution packet.
-// The core captures this packet with operands; EX performs no opcode decode.
+// Parallel semantic sideband. It does not drive register read addresses.
+// EX consumes the registered packet and legality to authorize issue.
 module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   input wire [63:0] inst, input wire [3:0] op_class,
-  input wire decoded_legal, input wire decoded_writes_gpr,
-  input wire accel_needs_capture, input wire [4:0] accel_capture_src_gpr,
+  input wire decoded_legal,
+  input wire [4:0] register_rd, input wire rd_gpr, rd_fpr,
   input wire [31:0] fpu_control,
   output wire [56:0] control,
   output wire [31:0] alu_imm, mem_imm, branch_imm, jump_imm,
-  output wire [4:0] read_gpr0, read_gpr1, read_fpr0, read_fpr1, read_fpr2,
-  output wire [1:0] uses_gpr, output wire [2:0] uses_fpr,
-  output wire [4:0] write_rd, output wire writes_gpr, writes_fpr,
+  output wire writes_gpr, writes_fpr,
   output wire issue_legal
 );
   localparam [3:0] A_IMM=0, A_OP=1, A_IMM32=2, A_OP32=3,
@@ -152,35 +150,10 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
     else if(is_jalr) alu_op=A_JALR; else if(is_branch) alu_op=A_BRANCH;
   end
 
-  wire fp_gpr_source=(fpu_control[26] && fpu_control[14:13]==2'd2) ||
-    (fpu_control[25] && (fpu_control[18:15]==4'd5 || fpu_control[18:15]==4'd7));
-  wire fp_gpr_dest=(fpu_control[26] && fpu_control[14:13]==2'd1) ||
-    (fpu_control[25] && (fpu_control[18:15]==4'd2 || fpu_control[18:15]==4'd3 ||
-                        fpu_control[18:15]==4'd4 || fpu_control[18:15]==4'd6));
-  wire fp_second=fpu_control[28] || (fpu_control[27] && !fpu_control[12]) ||
-    (fpu_control[25] && fpu_control[18:15]<=4'd2);
+  wire [4:0] write_rd=register_rd;
   assign issue_legal=decoded_issue_legal;
-  assign uses_gpr[0]=issue_legal && (is_opimm||is_op||is_opimm32||is_op32||
-    is_jalr||is_branch||is_int_mem||is_fp_mem||is_edge_cache||is_accel||
-    is_edge_break||(is_csr_op&&!f3[2])||(is_fp_compute&&fp_gpr_source));
-  assign uses_gpr[1]=issue_legal && (is_op||is_op32||is_branch||is_store||
-    (is_accel&&accel_needs_capture));
-  assign uses_fpr[0]=issue_legal && ENABLE_FPU && is_fp_compute && !fp_gpr_source;
-  assign uses_fpr[1]=issue_legal && ENABLE_FPU &&
-    (is_fp_store||(is_fp_compute&&fp_second));
-  assign uses_fpr[2]=issue_legal && ENABLE_FPU && is_fp_compute &&
-    fpu_control[28] && fpu_control[21];
-  assign read_gpr0=uses_gpr[0] ? inst[19:15]:5'd0;
-  assign read_gpr1=uses_gpr[1] ?
-    (is_accel ? accel_capture_src_gpr:inst[24:20]):5'd0;
-  assign read_fpr0=uses_fpr[0] ? inst[19:15]:5'd0;
-  assign read_fpr1=uses_fpr[1] ? inst[24:20]:5'd0;
-  assign read_fpr2=uses_fpr[2] ? inst[31:27]:5'd0;
-  assign write_rd=is_edge_break ? 5'd31:rd;
-  assign writes_gpr=issue_legal && (write_rd!=0) &&
-    (is_edge_break||(is_fp_compute ? fp_gpr_dest:decoded_writes_gpr));
-  assign writes_fpr=issue_legal && ENABLE_FPU &&
-    (is_fp_load||(is_fp_compute&&!fp_gpr_dest));
+  assign writes_gpr=issue_legal && rd_gpr;
+  assign writes_fpr=issue_legal && rd_fpr;
   wire csr_fflags=inst[31:20]==12'h001;
   wire csr_frm=inst[31:20]==12'h002;
   wire csr_write=(f3[1:0]==2'b01)||(inst[19:15]!=5'd0);
@@ -199,4 +172,74 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
     is_supported_system,is_accel,csr_fflags,csr_frm,csr_write,cache_is_va,
     cache_kind,f3,funct7_bit5,shamt,csr_uimm,write_rd,
     alu_op,writes_gpr,writes_fpr};
+endmodule
+
+// Early ID register routing. Deliberately has no legality, operation-class,
+// rounding-mode or semantic FP-control input. Invalid encodings may request
+// reads; only the parallel sideband authorizes EX issue and writes.
+module edge_32_register_decode #(parameter ENABLE_FPU=0)(
+  input wire [63:0] inst, input wire inst_is_64b,
+  output wire [4:0] read_gpr0, read_gpr1, read_fpr0, read_fpr1, read_fpr2,
+  output wire [1:0] uses_gpr, output wire [2:0] uses_fpr,
+  output wire [4:0] write_rd, output wire rd_gpr, rd_fpr,
+  output wire csr_write
+);
+  wire [6:0] opc=inst[6:0];
+  wire [2:0] f3=inst[14:12];
+  wire [4:0] fp_family=inst[31:27];
+  wire op_imm=(opc==7'h13)||(opc==7'h1b);
+  wire op_reg=(opc==7'h33)||(opc==7'h3b);
+  wire fp_op=ENABLE_FPU&&(opc==7'h53);
+  wire fp_fma=ENABLE_FPU&&((opc==7'h43)||(opc==7'h47)||
+                          (opc==7'h4b)||(opc==7'h4f));
+  wire fp_load=ENABLE_FPU&&(opc==7'h07);
+  wire fp_store=ENABLE_FPU&&(opc==7'h27);
+  // Source/destination domains depend on the operation family, not on format,
+  // rounding validity or reserved-field checks performed in the sideband.
+  wire fp_from_gpr=fp_op&&((fp_family==5'b11010)||(fp_family==5'b11110));
+  wire fp_to_gpr=fp_op&&((fp_family==5'b11000)||(fp_family==5'b11100)||
+                        (fp_family==5'b10100));
+  wire fp_two=fp_op&&((fp_family==5'b00000)||(fp_family==5'b00001)||
+    (fp_family==5'b00010)||(fp_family==5'b00011)||(fp_family==5'b00100)||
+    (fp_family==5'b00101)||(fp_family==5'b10100));
+  wire csr_op=(opc==7'h73)&&(f3[1:0]!=0);
+  wire edge_break=(opc==7'h73)&&(f3==3'b001)&&(inst[11:7]==0)&&
+                  (inst[31:20]==12'h7e0);
+  wire accel=(opc==7'h3f);
+  wire tensor=!inst_is_64b||inst[39];
+  wire [6:0] subop=inst_is_64b ? inst[38:32]:inst[31:25];
+  reg tensor_capture;
+  always @* begin
+    case(subop)
+      7'h01,7'h03,7'h04,7'h05,7'h06,7'h07,7'h08,
+      7'h11,7'h12,7'h13,7'h14,7'h17,7'h18,7'h1a,7'h1d,
+      7'h21,7'h22,7'h23,7'h24,7'h28,7'h29,7'h2a,7'h2b,7'h2c:
+        tensor_capture=1'b1;
+      default: tensor_capture=1'b0;
+    endcase
+  end
+  wire accel_capture=accel&&(!tensor||tensor_capture);
+  wire [4:0] capture_src=!inst_is_64b ? inst[19:15]:
+    !tensor ? inst[47:43]:(subop==7'h01) ? inst[11:7]:inst[19:15];
+  assign uses_gpr[0]=op_imm||op_reg||(opc==7'h67)||(opc==7'h63)||
+    (opc==7'h03)||(opc==7'h23)||fp_load||fp_store||(opc==7'h0b)||accel||
+    (csr_op&&!f3[2])||fp_from_gpr;
+  assign uses_gpr[1]=op_reg||(opc==7'h63)||(opc==7'h23)||accel_capture;
+  assign uses_fpr[0]=fp_fma||(fp_op&&!fp_from_gpr);
+  assign uses_fpr[1]=fp_fma||fp_two||fp_store;
+  assign uses_fpr[2]=fp_fma;
+  assign read_gpr0=uses_gpr[0] ? inst[19:15]:5'd0;
+  assign read_gpr1=uses_gpr[1] ? (accel ? capture_src:inst[24:20]):5'd0;
+  assign read_fpr0=uses_fpr[0] ? inst[19:15]:5'd0;
+  assign read_fpr1=uses_fpr[1] ? inst[24:20]:5'd0;
+  assign read_fpr2=uses_fpr[2] ? inst[31:27]:5'd0;
+  assign write_rd=edge_break ? 5'd31:inst[11:7];
+  assign rd_gpr=(write_rd!=0)&&(op_imm||op_reg||(opc==7'h37)||
+    (opc==7'h17)||(opc==7'h6f)||(opc==7'h67)||
+    (opc==7'h03)||csr_op||fp_to_gpr||
+    (accel&&inst_is_64b&&tensor&&(subop==7'h2f)));
+  assign rd_fpr=fp_load||fp_fma||(fp_op&&!fp_to_gpr);
+  // Conservatively interlock a CSR writer without waiting for legality.
+  assign csr_write=!inst_is_64b&&csr_op&&
+    ((f3[1:0]==2'b01)||(inst[19:15]!=0));
 endmodule
