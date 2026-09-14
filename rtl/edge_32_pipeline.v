@@ -76,7 +76,7 @@ module edge_32_pipeline #(
   wire csr_interlock = id_valid_q && !id_error_q && id_legal && id_csr_write;
   assign fetch_ready = id_can_advance && !ex_redirect_valid && !csr_interlock;
   assign id_valid = id_valid_q;
-  assign id_capture_enable = reset_n && id_can_advance && !ex_redirect_valid;
+  assign id_capture_enable = id_can_advance && !ex_redirect_valid;
   assign id_pc = id_pc_q;
   assign id_inst = id_inst_q;
   assign id_is_64b = id_is_64b_q;
@@ -96,25 +96,20 @@ module edge_32_pipeline #(
     if (!reset_n) begin
       id_valid_q <= 1'b0;
       ex_valid_q <= 1'b0;
-      id_pc_q <= {PC_WIDTH{1'b0}};
-      ex_pc_q <= {PC_WIDTH{1'b0}};
-      id_inst_q <= 64'h0000_0000_0000_0013;
-      ex_inst_q <= 64'h0000_0000_0000_0013;
-      id_is_64b_q <= 1'b0;
-      ex_is_64b_q <= 1'b0;
-      id_error_q <= 1'b0;
-      ex_error_q <= 1'b0;
-      ex_rs1_q <= {VALUE_WIDTH{1'b0}};
-      ex_rs2_q <= {VALUE_WIDTH{1'b0}};
-      ex_op_class_q <= 4'd15;
-      ex_legal_q <= 1'b0;
-      ex_writes_gpr_q <= 1'b0;
     end else if (ex_redirect_valid) begin
       // The resolving EX instruction completes; all younger ID/IF work dies.
       id_valid_q <= 1'b0;
       ex_valid_q <= 1'b0;
     end else if (id_can_advance) begin
       ex_valid_q <= id_valid_q;
+      id_valid_q <= fetch_valid && fetch_ready;
+    end
+  end
+  // Valid bits cancel work on reset/flush. Payload is unobservable while
+  // invalid, so reset must not zero instructions/operands ahead of arithmetic.
+  // Keep the same stall and redirect hold boundary (including terminal debug).
+  always @(posedge clk) begin
+    if (id_capture_enable) begin
       ex_pc_q <= id_pc_q;
       ex_inst_q <= id_inst_q;
       ex_is_64b_q <= id_is_64b_q;
@@ -124,7 +119,6 @@ module edge_32_pipeline #(
       ex_op_class_q <= id_op_class;
       ex_legal_q <= id_legal;
       ex_writes_gpr_q <= id_writes_gpr;
-      id_valid_q <= fetch_valid && fetch_ready;
       if (fetch_valid && fetch_ready) begin
         id_pc_q <= fetch_pc;
         id_inst_q <= fetch_inst;

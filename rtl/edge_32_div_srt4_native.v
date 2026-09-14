@@ -123,6 +123,7 @@ module edge_32_div_srt4_native (
   localparam [3:0] STATE_CORRECT_HIGH = 4'd10;
   localparam [3:0] STATE_COMBINE_HIGH = 4'd11;
   localparam [3:0] STATE_SIGN_HIGH = 4'd12;
+  localparam [3:0] STATE_PREPARE = 4'd13;
   localparam integer RING_STAGES = 2;
 
   function [4:0] msb_index32;
@@ -160,6 +161,12 @@ module edge_32_div_srt4_native (
     end
   endfunction
 
+  // Admission stage owns magnitude/exponent preparation and special cases.
+  // PREPARE consumes only captured data, never changing live request pins.
+  reg [31:0] dividend_mag;
+  reg [31:0] divisor_mag;
+  reg [5:0] scale_even;
+  reg [4:0] divisor_msb;
   reg [3:0] state_r;
   reg [5:0] scale_r;
   reg [34:0] aligned_divisor_r;
@@ -247,21 +254,21 @@ module edge_32_div_srt4_native (
                                (~src0 + 32'd1) : src0;
   wire [31:0] src1_full_abs = signed_op && src1_sign ?
                                (~src1 + 32'd1) : src1;
-  wire [31:0] dividend_mag = src0_full_abs;
-  wire [31:0] divisor_mag = src1_full_abs;
-  wire divide_by_zero = divisor_mag == 32'd0;
+  wire [31:0] input_dividend_mag = src0_full_abs;
+  wire [31:0] input_divisor_mag = src1_full_abs;
+  wire divide_by_zero = src1 == 32'd0;
   wire signed_overflow = signed_op &&
     (src0 == 32'h8000_0000) && (src1 == 32'hffff_ffff);
-  wire magnitude_lt = dividend_mag < divisor_mag;
-  wire magnitude_zero = dividend_mag == 32'd0;
+  wire magnitude_lt = input_dividend_mag < input_divisor_mag;
+  wire magnitude_zero = src0 == 32'd0;
   wire fast_case = divide_by_zero || signed_overflow || magnitude_lt ||
                    magnitude_zero;
 
-  wire [4:0] dividend_msb = msb_index32(dividend_mag);
-  wire [4:0] divisor_msb = msb_index32(divisor_mag);
-  wire [5:0] exponent_difference = {1'b0, dividend_msb} -
-                                   {1'b0, divisor_msb};
-  wire [5:0] scale_even = exponent_difference + exponent_difference[0];
+  wire [4:0] input_dividend_msb = msb_index32(input_dividend_mag);
+  wire [4:0] input_divisor_msb = msb_index32(input_divisor_mag);
+  wire [5:0] exponent_difference = {1'b0, input_dividend_msb} -
+                                   {1'b0, input_divisor_msb};
+  wire [5:0] input_scale_even = exponent_difference + exponent_difference[0];
   wire [4:0] srt_rounds = scale_even[5:1];
   wire [34:0] aligned_divisor =
     {3'b000, divisor_mag} << scale_even;
@@ -380,10 +387,11 @@ module edge_32_div_srt4_native (
   assign busy = (state_r != STATE_IDLE) || result_valid;
   // Each pass through the two-slice ring consumes two radix-4 digits.  Exit
   // at the first pass boundary after all requested digits have completed.
-  wire [3:0] ring_passes = srt_rounds[4:1] + srt_rounds[0];
-  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd10;
+  wire [4:0] input_rounds = input_scale_even[5:1];
+  wire [3:0] ring_passes = input_rounds[4:1] + input_rounds[0];
+  wire [6:0] ring_latency = {ring_passes, 2'b00} + 7'd11;
   assign op_latency = fast_case ? 7'd1 :
-                      srt_rounds == 5'd0 ? 7'd10 : ring_latency;
+                      input_rounds == 5'd0 ? 7'd11 : ring_latency;
 
   reg [3:0] state_next;
   reg [RING_STAGES-1:0] ring_valid_next;
@@ -399,7 +407,11 @@ module edge_32_div_srt4_native (
       STATE_IDLE: if (op_valid) begin
         if (fast_case)
           state_next = STATE_FAST;
-        else if (srt_rounds == 0)
+        else
+          state_next = STATE_PREPARE;
+      end
+      STATE_PREPARE: begin
+        if (srt_rounds == 0)
           state_next = STATE_COMBINE_LOW;
         else begin
           state_next = STATE_ITER;
@@ -479,6 +491,13 @@ module edge_32_div_srt4_native (
           if (fast_case) begin
             fast_value_r <= fast_value;
           end else begin
+            dividend_mag <= input_dividend_mag;
+            divisor_mag <= input_divisor_mag;
+            divisor_msb <= input_divisor_msb;
+            scale_even <= input_scale_even;
+          end
+        end
+        STATE_PREPARE: begin
             scale_r <= remainder_scale;
             aligned_divisor_r <= normalized_divisor;
             divisor_select_r <=
@@ -501,7 +520,6 @@ module edge_32_div_srt4_native (
               ring_q_neg2_r[0] <= 1'b0;
             end
 `endif
-          end
         end
         STATE_FAST: begin
           result_value <= fast_value_r;
