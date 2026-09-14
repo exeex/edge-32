@@ -47,7 +47,7 @@ module edge_32_core #(
 
   wire parcel_valid, parcel_ready, parcel_error;
   wire [PC_WIDTH-1:0] parcel_pc; wire [31:0] parcel_inst;
-  wire if_valid, if_ready, if_error, if_is_64b;
+  wire if_valid, if_ready, if_capacity_ready, if_error, if_is_64b;
   wire [PC_WIDTH-1:0] if_pc; wire [63:0] if_inst;
   wire id_is_64b;
   wire [63:0] id_inst;
@@ -396,7 +396,9 @@ module edge_32_core #(
     .imem_req_valid(imem_req_valid),.imem_req_ready(imem_req_ready),
     .imem_req_addr(imem_req_addr),.imem_resp_valid(imem_resp_valid),
     .imem_resp_data(imem_resp_data),.imem_resp_error(imem_resp_error),
-    .op_valid(parcel_valid),.op_ready(parcel_ready),.op_pc(parcel_pc),
+    .op_valid(parcel_valid),.op_ready(parcel_ready),
+    .op_capacity_ready(if_capacity_ready && !core_start_i && !core_force_stop_i &&
+                       !frontend_stop),.op_pc(parcel_pc),
     .op_inst(parcel_inst), .op_error(parcel_error), .halt(frontend_stop),
     .redirect_valid(redirect),.redirect_pc(redirect_pc));
   edge_32_instruction_assembler assembler(
@@ -408,7 +410,8 @@ module edge_32_core #(
     .flush(redirect||frontend_stop||core_start_i||core_force_stop_i));
   edge_32_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
     .clk(clk),.reset_n(reset_n),
-    .fetch_valid(if_valid),.fetch_ready(if_ready),.fetch_pc(if_pc),
+    .fetch_valid(if_valid),.fetch_ready(if_ready),
+    .fetch_capacity_ready(if_capacity_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
     .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
     .id_is_64b(id_is_64b),.id_error(),

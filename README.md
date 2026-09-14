@@ -87,6 +87,13 @@ an area benefit but does not meet the 1 GHz timing contract. Full comparison:
 `src/test-32/physical/openroad/rv32-gpr-valid-broadcast-20260915.md` in the
 composed workspace.
 
+The subsequent branch/IF capacity split keeps that GPR design and separates
+FIFO-space prediction from redirect-qualified admission. All 320 tests pass.
+At the same pre-CTS settings, core setup improves to +123.30 ps and area is
+3598 µm²; branch-to-request and branch-to-register margins are +305.69 and
++228.33 ps. The remaining +200 ps contract misses are reset distribution and
+the divider. Details: `src/test-32/physical/openroad/rv32-branch-capacity-20260915.md`.
+
 The composed workspace owns detailed contracts, tests and APR evidence in
 `src/test-32/edge_core/rtl/` and
 `src/test-32/physical/openroad/rv32-four-stage-20260915.md`. Public RTL and

@@ -9,6 +9,7 @@ module edge_32_pipeline #(
 
   input  wire                   fetch_valid,
   output wire                   fetch_ready,
+  output wire                   fetch_capacity_ready,
   input  wire [PC_WIDTH-1:0]    fetch_pc,
   input  wire [63:0]            fetch_inst,
   input  wire                   fetch_is_64b,
@@ -56,7 +57,10 @@ module edge_32_pipeline #(
   // A CSR writer leaves an admission bubble. The core separately holds ID
   // through pending EX/WB CSR updates with id_stall; no stale FRM is captured.
   wire csr_interlock = id_valid_q && !id_error_q && id_csr_write;
-  assign fetch_ready = id_can_advance && !ex_redirect_valid && !csr_interlock;
+  // Capacity may be computed before the resolving branch. Actual admission
+  // still waits for redirect qualification through fetch_ready.
+  assign fetch_capacity_ready = id_can_advance && !csr_interlock;
+  assign fetch_ready = fetch_capacity_ready && !ex_redirect_valid;
   assign id_valid = id_valid_q;
   assign id_capture_enable = id_can_advance && !ex_redirect_valid;
   assign id_pc = id_pc_q;

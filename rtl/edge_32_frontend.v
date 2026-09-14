@@ -19,6 +19,7 @@ module edge_32_frontend #(
   input  wire                imem_resp_error,
   output wire                op_valid,
   input  wire                op_ready,
+  input  wire                op_capacity_ready,
   output wire [PC_WIDTH-1:0] op_pc,
   output wire [31:0]         op_inst,
   output wire                op_error,
@@ -48,8 +49,12 @@ module edge_32_frontend #(
                        !redirect_valid && !halt && !fetch_stop_i;
   wire output_pop = op_valid && op_ready;
   wire [2:0] reserved_count = {1'b0, fifo_count_q} + request_pending_q;
+  // Capacity is parallel to redirect/flush qualification. The producer must
+  // make capacity_ready match op_ready whenever requests are permitted.
+  // Only the real valid/ready handshake changes FIFO ownership.
+  wire capacity_pop = (fifo_count_q != 0) && op_capacity_ready;
   wire reservation_space = (reserved_count < 3'd2) ||
-                           (output_pop && (reserved_count == 3'd2));
+                           (capacity_pop && (reserved_count == 3'd2));
   // A response and the next request may cross. The two-entry IF FIFO provides
   // the skid slot required when EX starts a variable-latency stall.
   assign imem_req_valid = (!request_pending_q || response_fire) &&
