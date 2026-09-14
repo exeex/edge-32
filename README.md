@@ -8,20 +8,19 @@ The maintained instruction classifier is now owned here. Legacy edge-rv and
 edge-rv-lite integrations may temporarily consume that leaf for compatibility,
 but Edge32 production targets must not source the old classifier path.
 
-Edge32 also owns the radix-4 Booth and carry-select leaves selected by its
-native ASAP7 mul/div implementation. Its Verilator and OpenROAD targets resolve
-those primitives from `rtl/muldiv` rather than the retiring edge-rv tree.
+Edge32 uses one RV32M implementation: `edge_32_muldiv_asap7`, with its
+radix-4 Booth multiplier, carry-select leaves and native SRT4 divider.
+The core, product filelists, Verilator, synthesis and APR all use that path.
+There is no portable mul/div fallback or experimental divider selector.
 
 The CPU-side accelerator command emitter, `edge_accel_pipe`, is also owned by
 Edge32. It terminates instruction encoding and scalar snapshot semantics;
 `edge-asic` begins at the emitted accelerator command interface.
 
-The imported baseline is still RV64. Until the RV32 migration tests pass, the
-existing `edge_rv_lite_*` RTL names and RV64 behavior are intentionally kept as
-the reference implementation. The migration will change the architectural
-register, address, LSU, CSR, M-extension, software image, and top-level bus
-contracts together; accelerator instructions may remain 64-bit where required
-by the Edge product protocol.
+The maintained scalar path is RV32IMF with Zba. Registers and effective scalar
+addresses are 32 bits; cache/AXI and accelerator interfaces retain their
+explicit product widths. Historical RV64 migration code is not a selectable
+CPU implementation.
 
 ## Migration acceptance criteria
 

@@ -465,22 +465,6 @@ module edge_32_div_srt4_native (
   end
 
   integer ring_i;
-`ifdef EDGE32_QDS_LATCH
-  // QDS is evaluated during the high half-cycle.  The latch closes before
-  // the carry-save update edge, so the update stage sees a stable digit while
-  // borrowing the otherwise unused high phase.  Keep CLK ungated so CTS and
-  // latch timing analysis see the primary clock, not a derived enable.
-  always_latch begin
-    if (clk) begin
-      for (ring_i = 0; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
-        ring_q_pos2_r[ring_i] <= ring_q_pos2_next[ring_i];
-        ring_q_pos1_r[ring_i] <= ring_q_pos1_next[ring_i];
-        ring_q_neg1_r[ring_i] <= ring_q_neg1_next[ring_i];
-        ring_q_neg2_r[ring_i] <= ring_q_neg2_next[ring_i];
-      end
-    end
-  end
-`endif
 
   always @(posedge clk) begin
       case (state_r)
@@ -512,28 +496,24 @@ module edge_32_div_srt4_native (
             ring_qpos_r[0] <= choose_initial_zero ? 35'd0 :
                               choose_initial_two ? 35'd2 : 35'd1;
             ring_qneg_r[0] <= 35'd0;
-`ifndef EDGE32_QDS_LATCH
             if (srt_rounds != 0) begin
               ring_q_pos2_r[0] <= 1'b0;
               ring_q_pos1_r[0] <= 1'b0;
               ring_q_neg1_r[0] <= 1'b0;
               ring_q_neg2_r[0] <= 1'b0;
             end
-`endif
         end
         STATE_FAST: begin
           result_value <= fast_value_r;
         end
         STATE_ITER: begin
           if (ring_qds_phase_r) begin
-`ifndef EDGE32_QDS_LATCH
             for (ring_i = 0; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
               ring_q_pos2_r[ring_i] <= ring_q_pos2_next[ring_i];
               ring_q_pos1_r[ring_i] <= ring_q_pos1_next[ring_i];
               ring_q_neg1_r[ring_i] <= ring_q_neg1_next[ring_i];
               ring_q_neg2_r[ring_i] <= ring_q_neg2_next[ring_i];
             end
-`endif
           end else begin
             for (ring_i = 1; ring_i < RING_STAGES; ring_i = ring_i + 1) begin
             ring_rounds_r[ring_i] <= ring_rounds_next[ring_i-1];

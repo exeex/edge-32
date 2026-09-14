@@ -1,8 +1,14 @@
+${EDGE32_ROOT}/rtl/muldiv/edge_mul32_booth_code_33.v
+${EDGE32_ROOT}/rtl/muldiv/edge_mul32_booth_compressor.v
+${EDGE32_ROOT}/rtl/muldiv/edge_add16_carry_select8.v
+${EDGE32_ROOT}/rtl/muldiv/edge_add64_carry_select16.v
+${EDGE32_ROOT}/rtl/muldiv/edge_mul32_booth_lane.v
+${EDGE32_ROOT}/rtl/edge_32_div_srt4_native.v
+${EDGE32_ROOT}/rtl/edge_32_muldiv_asap7.v
 # Edge-32-owned scalar, FPU, and cache units. Parent defines EDGE32_ROOT.
 ${ROOT_DIR}/synth/rtl/edge32_fpga_ram.v
 ${EDGE32_ROOT}/rtl/edge_32_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_branch.v
-${EDGE32_ROOT}/rtl/edge_32_muldiv.v
 ${EDGE32_ROOT}/rtl/edge_instruction_classifier.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_misc/edge_fpu_misc.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_cvt/edge_fpu_cvt.v
