@@ -1,9 +1,10 @@
-module edge_fpu_fmac(
+module edge_fpu_fmac # (parameter PREDECODED=0)(
   cpurst_b,
   forever_cpuclk,
   fmac_cancel,
   fmac_inst_vld,
   fmac_func,
+  fmac_ctrl,
   fmac_rm,
   fmac_src0,
   fmac_src1,
@@ -17,6 +18,7 @@ module edge_fpu_fmac(
   fmac_wb_vld
 );
 
+input [5:0] fmac_ctrl;
 input           cpurst_b;
 input           forever_cpuclk;
 input           fmac_cancel;
@@ -100,6 +102,12 @@ always @(posedge forever_cpuclk) begin
     fmac_dst_reg_q[4:0] <= fmac_dst_reg[4:0];
 end
 
+generate if(PREDECODED) begin: decoded_operand_controls
+ assign {fmac_fadd,fmac_fsub,fmac_fmul,fmac_fmadd,fmac_neg_product,fmac_neg_addend}=fmac_ctrl;
+ assign fmac_mac_a=fmac_src0;
+ assign fmac_mac_b=(fmac_fadd||fmac_fsub) ? 32'h3f800000 : fmac_src1;
+ assign fmac_mac_c=fmac_fmul ? 32'b0 : (fmac_fadd||fmac_fsub) ? fmac_src1 : fmac_src2;
+end else begin: legacy_func_decode
 edge_fpu_fmac_prep  x_edge_fpu_fmac_prep (
   .fmac_func    (fmac_func ),
   .fmac_src0    (fmac_src0 ),
@@ -119,6 +127,8 @@ assign fmac_neg_product = fmac_fmadd && fmac_func[2];
 assign fmac_neg_addend = fmac_fmadd
                        ? (fmac_func[2] ^ fmac_func[1])
                        : fmac_fsub;
+
+end endgenerate
 
 // Classify raw operands in parallel with mode decode. Only four-bit class
 // metadata is selected; exceptional policy never waits for a 32-bit mux.

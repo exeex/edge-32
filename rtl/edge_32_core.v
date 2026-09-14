@@ -63,10 +63,15 @@ module edge_32_core #(
   wire id_capture_enable;
   wire [31:0] id_fsrc0, id_fsrc1, id_fsrc2;
   reg [31:0] ex_fsrc0_q, ex_fsrc1_q, ex_fsrc2_q;
+  wire [28:0] id_fpu_control;
+  reg [28:0] ex_fpu_control_q;
+  edge_fpu_id_decode #(.GPR_WIDTH(32)) id_fp_decode(
+    .inst(id_inst[31:0]),.frm(frm_q),.control(id_fpu_control));
   // Same ID->EX advance/stall/flush boundary as GPR operands. EX valid owns
   // observability; these numerical payload registers do not need reset.
   always @(posedge clk) begin
     if (id_capture_enable) begin
+      ex_fpu_control_q <= id_fpu_control;
       ex_fsrc0_q <= id_fsrc0;
       ex_fsrc1_q <= id_fsrc1;
       ex_fsrc2_q <= id_fsrc2;
@@ -84,6 +89,11 @@ module edge_32_core #(
     .writes_gpr(id_decoded_writes_gpr), .accel_subop(),
     .accel_needs_capture(id_decoded_needs_capture),
     .accel_capture_src_gpr(id_decoded_capture_src_gpr));
+  // CSRRW[I] always writes, including x0/uimm=0. CSRRS/CSRRC[I] write
+  // only for a nonzero encoded source (not a nonzero register value).
+  wire id_csr_write=!id_is_64b && (id_inst[6:0]==7'h73) &&
+    (id_inst[13:12]!=2'b00) &&
+    ((id_inst[13:12]==2'b01)||(id_inst[19:15]!=5'd0));
   wire id_is_accel=(id_inst[6:0]==7'h3f)&&(id_decoded_class==4'd8);
   wire [4:0] id_rs1=id_scalar_rs1;
   wire [4:0] id_rs2=id_is_accel ?
@@ -225,11 +235,11 @@ module edge_32_core #(
   wire fpu_ready, fpu_done, fpu_gpr_write;
   wire [31:0] fpu_value; wire [4:0] fpu_fflags;
   generate if(ENABLE_FPU) begin: g_fpu
-    edge_fpu_alu #(.GPR_WIDTH(32)) fpu_alu(
+    edge_fpu_alu #(.GPR_WIDTH(32),.PREDECODED(1)) fpu_alu(
       .clk(clk),.reset_n(reset_n),
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
-      .issue_ready(fpu_ready),.issue_inst(ex_inst[31:0]),
-      .issue_gpr_src(ex_rs1_value),.issue_frm(frm_q),
+      .issue_ready(fpu_ready),.issue_inst(32'b0),.issue_control(ex_fpu_control_q),
+      .issue_gpr_src(ex_rs1_value),.issue_frm(3'b0),
       .issue_fsrc0(ex_fsrc0_q),.issue_fsrc1(ex_fsrc1_q),.issue_fsrc2(ex_fsrc2_q),
       .read_frs0(id_inst[19:15]),.read_frs1(id_inst[24:20]),.read_frs2(id_inst[31:27]),
       .read_fsrc0(id_fsrc0),.read_fsrc1(id_fsrc1),.read_fsrc2(id_fsrc2),
@@ -343,7 +353,7 @@ module edge_32_core #(
     .id_is_64b(id_is_64b),.id_error(),.id_rs1(id_rs1),.id_rs2(id_rs2),
     .id_rs1_raw(id_rs1_raw),.id_rs2_raw(id_rs2_raw),.ex_valid(ex_valid),
     .id_op_class(id_decoded_class),.id_legal(id_decoded_legal),
-    .id_writes_gpr(id_decoded_writes_gpr),
+    .id_writes_gpr(id_decoded_writes_gpr),.id_csr_write(id_csr_write),
     .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(ex_is_64b),.ex_error(ex_error),
     .ex_rs1_value(ex_rs1_value),.ex_rs2_value(ex_rs2_value),.ex_done(ex_done),
     .ex_op_class(decoded_class),.ex_legal(decoded_legal),
