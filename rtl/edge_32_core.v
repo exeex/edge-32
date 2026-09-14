@@ -63,8 +63,8 @@ module edge_32_core #(
   wire id_capture_enable;
   wire [31:0] id_fsrc0, id_fsrc1, id_fsrc2;
   reg [31:0] ex_fsrc0_q, ex_fsrc1_q, ex_fsrc2_q;
-  wire [28:0] id_fpu_control;
-  reg [28:0] ex_fpu_control_q;
+  wire [31:0] id_fpu_control;
+  reg [31:0] ex_fpu_control_q;
   edge_fpu_id_decode #(.GPR_WIDTH(32)) id_fp_decode(
     .inst(id_inst[31:0]),.frm(frm_q),.control(id_fpu_control));
   // Same ID->EX advance/stall/flush boundary as GPR operands. EX valid owns

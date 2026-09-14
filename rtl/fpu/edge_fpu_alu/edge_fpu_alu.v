@@ -10,7 +10,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   input  wire        issue_valid,
   output wire        issue_ready,
   input  wire [31:0] issue_inst,
-  input wire [28:0] issue_control,
+  input wire [31:0] issue_control,
   input  wire [GPR_WIDTH-1:0] issue_gpr_src,
   input  wire [31:0] issue_fsrc0,
   input  wire [31:0] issue_fsrc1,
@@ -44,7 +44,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   reg [4:0] pending_rd_q;
   integer i;
 
-  wire [28:0] control;
+  wire [31:0] control;
   generate if(PREDECODED) begin: decoded_input
     assign control=issue_control;
   end else begin: legacy_instruction_input
@@ -55,10 +55,9 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
   wire [3:0] misc_sel;
   wire [1:0] cvt_sel,fmt,int_type;
   wire slow_sqrt;
-  wire [2:0] funct3;
+  wire [2:0] funct3, rm;
   wire [4:0] rd;
-  assign {units,fmac_ctrl,misc_sel,cvt_sel,slow_sqrt,fmt,int_type,funct3,rd}=control;
-  wire [2:0] rm=funct3;
+  assign {funct3,units,fmac_ctrl,misc_sel,cvt_sel,slow_sqrt,fmt,int_type,rm,rd}=control;
   wire fmac_op=units[3];
   wire slow_op=units[2];
   wire cvt_op=units[1];
@@ -139,11 +138,11 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0) (
 endmodule
 
 // ID decode with architectural FRM; packet is fully resolved.
-// [28:25] units {FMAC,SLOW,CVT,MISC}; [24:19] FMAC {add,sub,mul,madd,negP,negC};
+// [31:29] raw funct3; [28:25] units {FMAC,SLOW,CVT,MISC}; [24:19] FMAC {add,sub,mul,madd,negP,negC};
 // [18:15] misc op; [14:13] cvt op; [12] sqrt; [11:10] fmt;
-// [9:8] int type; [7:5] resolved rm (raw funct3 for legal MISC); [4:0] rd.
+// [9:8] int type; [7:5] resolved rm, independent of operation funct3; [4:0] rd.
 module edge_fpu_id_decode #(parameter GPR_WIDTH=32)(
- input wire [31:0] inst,input wire [2:0] frm,output wire [28:0] control);
+ input wire [31:0] inst,input wire [2:0] frm,output wire [31:0] control);
   localparam [3:0] MISC_SGNJ=0, MISC_MINMAX=1, MISC_CMP=2,
     MISC_CLASS=3, MISC_MV_X_F=4, MISC_MV_F_X=5,
     MISC_MV_X_FP4=6, MISC_MV_FP4_X=7;
@@ -157,7 +156,7 @@ module edge_fpu_id_decode #(parameter GPR_WIDTH=32)(
   wire op_fp=opcode==7'h53;
   wire rounding_rm_valid=(funct3<=3'b100)||
                          ((funct3==3'b111)&&(frm<=3'b100));
-  wire [2:0] rm=funct3==3'b111 ? frm:funct3;
+  wire [2:0] instruction_rm=funct3==3'b111 ? frm:funct3;
   wire fmac_basic=op_fp&&((inst[31:27]==5'b00000)||
     (inst[31:27]==5'b00001)||(inst[31:27]==5'b00010));
   wire fmac_op=(op_madd||fmac_basic)&&rounding_rm_valid;
@@ -175,8 +174,13 @@ module edge_fpu_id_decode #(parameter GPR_WIDTH=32)(
   wire misc_mvf=misc_move_fmt&&op_fp&&(inst[31:27]==5'b11110)&&(rs2==0)&&(funct3==0);
   wire misc_x_fp4=op_fp&&(inst[31:25]==7'b1110011)&&(rs2==0)&&(funct3==0);
   wire misc_fp4_x=op_fp&&(inst[31:25]==7'b1111011)&&(rs2==0)&&(funct3==0);
-  wire misc_op=((inst[26:25]!=2'b11)&&(misc_sgnj||misc_minmax||
-    misc_cmp||misc_class||misc_mvx||misc_mvf))||misc_x_fp4||misc_fp4_x;
+  // FMV.X.H narrows the physical FP32 FPR representation. Its funct3 is
+  // an operation encoding, so this conversion takes architectural FRM in ID.
+  wire misc_half_round=misc_mvx&&(inst[26:25]==2'b10);
+  wire [2:0] rm=misc_half_round ? frm:instruction_rm;
+  wire misc_op=(!misc_half_round || frm<=3'b100) &&
+    (((inst[26:25]!=2'b11)&&(misc_sgnj||misc_minmax||
+    misc_cmp||misc_class||misc_mvx||misc_mvf))||misc_x_fp4||misc_fp4_x);
   wire cvt_f2f=op_fp&&(inst[31:27]==5'b01000)&&(rs2[4:2]==0)&&(rs2[1:0]!=3);
   wire cvt_f2i=op_fp&&(inst[31:27]==5'b11000)&&(rs2[4:2]==0)&&
     ((GPR_WIDTH != 32)||!rs2[1]);
@@ -216,7 +220,7 @@ module edge_fpu_id_decode #(parameter GPR_WIDTH=32)(
  wire madd_mode=op_madd;
  wire neg_p=madd_mode && fmac_func[2];
  wire neg_c=madd_mode ? (fmac_func[2]^fmac_func[1]) : sub_mode;
- assign control={fmac_op,slow_op,cvt_op,misc_op,
+ assign control={funct3,fmac_op,slow_op,cvt_op,misc_op,
    add_mode,sub_mode,mul_mode,madd_mode,neg_p,neg_c,
    misc_sel,cvt_sel,slow_sqrt,inst[26:25],rs2[1:0],rm,rd};
 endmodule
