@@ -31,7 +31,7 @@ module edge_fpu_cvt #(
   localparam META_WIDTH = 43 + SEQ_ID_WIDTH + EPOCH_WIDTH + REG_INDEX_WIDTH + 1;
   reg [META_WIDTH-1:0] meta_q [0:1];
   reg [1:0] valid_q;
-  wire word_in = !cvt_issue_int_type[1];
+  wire word_in = (GPR_WIDTH == 32) || !cvt_issue_int_type[1];
   wire unsigned_in = cvt_issue_int_type[0];
   wire [63:0] gsrc64 = cvt_issue_gsrc;
   wire integer_sign = !unsigned_in && (word_in ? gsrc64[31] : gsrc64[63]);
@@ -43,7 +43,7 @@ module edge_fpu_cvt #(
     ((!unsigned_in && gsrc64[63]) ? (~gsrc64[63:32]+{31'b0,magnitude_high_carry}) : gsrc64[63:32]);
   wire input_nan = (&cvt_issue_fsrc[30:23]) && (|cvt_issue_fsrc[22:0]);
   // Includes NaN/Inf and finite exponent overflow. Does not gate arithmetic.
-  wire input_nv = cvt_issue_fsrc[30:23] > 8'd190;
+  wire input_nv = cvt_issue_fsrc[30:23] > ((GPR_WIDTH == 32) ? 8'd158 : 8'd190);
 
   wire [23:0] sig_in = {|cvt_issue_fsrc[30:23],cvt_issue_fsrc[22:0]};
   wire [7:0] exp_in = (cvt_issue_fsrc[30:23]==0)?8'd1:cvt_issue_fsrc[30:23];
@@ -113,8 +113,16 @@ module edge_fpu_cvt #(
   wire [63:0] fp_normalized = magnitude_q0 << (6'd63-msb);
   wire [63:0] f2i_rounded = f2i_mag_q0 + {{63{1'b0}},f2i_inc_q0};
   // -(m+inc) = ~m + !inc: rounding and negation share one carry chain.
-  wire [63:0] f2i_signed = (meta_q[0][35] ? ~f2i_mag_q0 : f2i_mag_q0)
-    + {{63{1'b0}},(meta_q[0][35] ? !f2i_inc_q0 : f2i_inc_q0)};
+  wire [63:0] f2i_signed;
+  generate if(GPR_WIDTH == 32) begin: rv32_integer
+    wire [31:0] signed_word =
+      (meta_q[0][35] ? ~f2i_mag_q0[31:0] : f2i_mag_q0[31:0])
+      + {31'b0,(meta_q[0][35] ? !f2i_inc_q0 : f2i_inc_q0)};
+    assign f2i_signed = {{32{signed_word[31]}},signed_word};
+  end else begin: wide_integer
+    assign f2i_signed = (meta_q[0][35] ? ~f2i_mag_q0 : f2i_mag_q0)
+      + {{63{1'b0}},(meta_q[0][35] ? !f2i_inc_q0 : f2i_inc_q0)};
+  end endgenerate
   wire fp_increment = round_increment(meta_q[1][38:36],meta_q[1][34],
                                      fp_main_q1[0],fp_guard_q1,fp_sticky_q1);
   wire [24:0] fp_rounded = {1'b0,fp_main_q1}+{{24{1'b0}},fp_increment};
@@ -155,7 +163,7 @@ module edge_fpu_cvt #(
   always @(posedge forever_cpuclk) begin
     // S1: I2F absolute value; F2I alignment and guard/sticky. Classify once.
     magnitude_q0<={magnitude_high,magnitude_low};
-    f2i_mag_q0<=f2i_mag;
+    f2i_mag_q0<=(GPR_WIDTH == 32) ? {32'b0,f2i_mag[31:0]} : f2i_mag;
     f2i_inc_q0<=round_increment(cvt_issue_rm,cvt_issue_fsrc[31],
                                 f2i_mag[0],f2i_guard,f2i_sticky);
     f2i_nx_q0<=f2i_guard || f2i_sticky;

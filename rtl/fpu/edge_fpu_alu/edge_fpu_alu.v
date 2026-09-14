@@ -10,7 +10,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   input  wire        issue_valid,
   output wire        issue_ready,
   input  wire [31:0] issue_inst,
-  input  wire [63:0] issue_gpr_src,
+  input  wire [GPR_WIDTH-1:0] issue_gpr_src,
   input  wire [31:0] issue_fsrc0,
   input  wire [31:0] issue_fsrc1,
   input  wire [31:0] issue_fsrc2,
@@ -25,7 +25,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   output reg         complete_valid,
   output reg         complete_gpr_write,
   output reg  [4:0]  complete_rd,
-  output reg  [63:0] complete_value,
+  output reg  [GPR_WIDTH-1:0] complete_value,
   output reg  [4:0]  complete_fflags,
   input  wire        load_write_valid,
   input  wire [4:0]  load_write_rd,
@@ -72,8 +72,10 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   wire misc_op=((issue_inst[26:25]!=2'b11)&&(misc_sgnj||misc_minmax||
     misc_cmp||misc_class||misc_mvx||misc_mvf))||misc_x_fp4||misc_fp4_x;
   wire cvt_f2f=op_fp&&(issue_inst[31:27]==5'b01000)&&(rs2[4:2]==0)&&(rs2[1:0]!=3);
-  wire cvt_f2i=op_fp&&(issue_inst[31:27]==5'b11000)&&(rs2[4:2]==0);
-  wire cvt_i2f=op_fp&&(issue_inst[31:27]==5'b11010)&&(rs2[4:2]==0);
+  wire cvt_f2i=op_fp&&(issue_inst[31:27]==5'b11000)&&(rs2[4:2]==0)&&
+    ((GPR_WIDTH != 32)||!rs2[1]);
+  wire cvt_i2f=op_fp&&(issue_inst[31:27]==5'b11010)&&(rs2[4:2]==0)&&
+    ((GPR_WIDTH != 32)||!rs2[1]);
   wire cvt_op=(issue_inst[26:25]!=2'b11)&&rounding_rm_valid&&
               (cvt_f2f||cvt_f2i||cvt_i2f);
   assign issue_legal=fmac_op||slow_op||misc_op||cvt_op;
@@ -102,8 +104,8 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
   end
 
   wire fmac_stall, fmac_done; wire [31:0] fmac_value; wire [4:0] fmac_flags;
-  wire misc_ready, misc_done, misc_domain; wire [63:0] misc_value; wire [4:0] misc_flags;
-  wire cvt_ready, cvt_done, cvt_domain; wire [63:0] cvt_value; wire [4:0] cvt_flags;
+  wire misc_ready, misc_done, misc_domain; wire [GPR_WIDTH-1:0] misc_value; wire [4:0] misc_flags;
+  wire cvt_ready, cvt_done, cvt_domain; wire [GPR_WIDTH-1:0] cvt_value; wire [4:0] cvt_flags;
   wire slow_ready, slow_done; wire [31:0] slow_value; wire [4:0] slow_flags;
   wire fire=issue_valid&&issue_ready&&issue_legal;
   assign issue_ready=!busy_q && (!fmac_op||!fmac_stall) && (!slow_op||slow_ready);
@@ -120,7 +122,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
     .fmac_dst_reg(rd),.fmac_dst_vld(1'b1),.fmac_stall(fmac_stall),
     .fmac_wb_data(fmac_value),.fmac_wb_fflags(fmac_flags),.fmac_wb_reg(),
     .fmac_wb_vld(fmac_done));
-  edge_fpu_misc #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1)) misc(
+  edge_fpu_misc #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1),.VALUE_WIDTH(GPR_WIDTH)) misc(
     .forever_cpuclk(clk),.cpurst_b(reset_n),.misc_issue_valid(fire&&misc_op),
     .misc_issue_ready(misc_ready),.misc_issue_seq_id(1'b0),.misc_issue_epoch(1'b0),
     .misc_issue_op(misc_sel),.misc_issue_fmt(issue_inst[26:25]),.misc_issue_rm(rm),
@@ -130,7 +132,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
     .misc_complete_seq_id(),.misc_complete_epoch(),.misc_complete_rd(),
     .misc_complete_rd_bank(),.misc_complete_domain(misc_domain),
     .misc_complete_value(misc_value),.misc_complete_fflags(misc_flags));
-  edge_fpu_cvt #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1),.GPR_WIDTH(GPR_WIDTH)) cvt(
+  edge_fpu_cvt #(.SEQ_ID_WIDTH(1),.EPOCH_WIDTH(1),.VALUE_WIDTH(GPR_WIDTH),.GPR_WIDTH(GPR_WIDTH)) cvt(
     .forever_cpuclk(clk),.cpurst_b(reset_n),.cvt_issue_valid(fire&&cvt_op),
     .cvt_issue_ready(cvt_ready),.cvt_issue_seq_id(1'b0),.cvt_issue_epoch(1'b0),
     .cvt_issue_op(cvt_sel),.cvt_issue_int_type(rs2[1:0]),.cvt_issue_rm(rm),
@@ -161,7 +163,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64) (
       if(fmac_done||misc_done||cvt_done||slow_done) begin
         busy_q<=0; complete_valid<=1; complete_rd<=pending_rd_q;
         complete_gpr_write=(misc_done&& !misc_domain)||(cvt_done&&!cvt_domain);
-        complete_value<=fmac_done?{32'b0,fmac_value}:slow_done?{32'b0,slow_value}:
+        complete_value<=fmac_done?fmac_value:slow_done?slow_value:
                         misc_done?misc_value:cvt_value;
         complete_fflags<=fmac_done?fmac_flags:slow_done?slow_flags:
                          misc_done?misc_flags:cvt_flags;

@@ -223,13 +223,13 @@ module edge_32_core #(
   assign dmem_req_addr={32'd0,lsu_mem_addr};
 
   wire fpu_ready, fpu_done, fpu_gpr_write;
-  wire [63:0] fpu_value; wire [4:0] fpu_fflags;
+  wire [31:0] fpu_value; wire [4:0] fpu_fflags;
   generate if(ENABLE_FPU) begin: g_fpu
     edge_fpu_alu #(.GPR_WIDTH(32)) fpu_alu(
       .clk(clk),.reset_n(reset_n),
       .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
       .issue_ready(fpu_ready),.issue_inst(ex_inst[31:0]),
-      .issue_gpr_src({32'd0,ex_rs1_value}),.issue_frm(frm_q),
+      .issue_gpr_src(ex_rs1_value),.issue_frm(frm_q),
       .issue_fsrc0(ex_fsrc0_q),.issue_fsrc1(ex_fsrc1_q),.issue_fsrc2(ex_fsrc2_q),
       .read_frs0(id_inst[19:15]),.read_frs1(id_inst[24:20]),.read_frs2(id_inst[31:27]),
       .read_fsrc0(id_fsrc0),.read_fsrc1(id_fsrc1),.read_fsrc2(id_fsrc2),
@@ -245,7 +245,7 @@ module edge_32_core #(
     assign id_fsrc0=0; assign id_fsrc1=0; assign id_fsrc2=0;
     assign fpu_ready=1'b0; assign fpu_done=1'b0;
     assign fpu_gpr_write=1'b0;
-    assign fpu_value=64'b0; assign fpu_fflags=5'b0;
+    assign fpu_value=32'b0; assign fpu_fflags=5'b0;
     assign fpu_legal=1'b0; assign fpu_store_value=32'b0;
   end endgenerate
   wire fpu_start=ex_issue_ok&&is_fp_compute&&!fpu_started_q&&fpu_ready;
@@ -297,7 +297,7 @@ module edge_32_core #(
                        (address_header_old&~address_header_source);
   wire address_header_write=(f3[1:0]==2'b01)||(ex_inst[19:15]!=5'd0);
   wire [31:0] wb_value=is_accel?accel_resp_value[31:0]:
-    is_fp_compute?fpu_value[31:0]:is_muldiv?mul_result:
+    is_fp_compute?fpu_value:is_muldiv?mul_result:
     is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
     is_instret?instret_q[31:0]:is_fp_csr?
     (ex_inst[31:20]==12'h001 ? {27'd0,fflags_q} :
