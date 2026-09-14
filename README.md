@@ -41,8 +41,12 @@ instruction's controls cannot overwrite an occupied older WB slot.
 
 `edge_32_gpr` owns the 32-entry integer register file: 31 writable 32-bit FF
 words plus constant x0, with two logical read operands and one write port.
-Equal source indices share the first resolved read, and registered WB bypass
-covers either operand. `debug_x31` observes committed storage only.
+Two independent read muxes naturally broadcast a word when source indices
+match, and registered WB bypass covers either operand. Storage selection and WB address comparison run in
+parallel; the output mux resolves bypass priority. The 992 numerical FFs have
+no reset, while 31 entry initialization bits reset to hide stale contents.
+Unwritten entries and x0 read zero; `debug_x31` applies the same initialization
+mask and observes committed storage only.
 
 The 32 × 32-bit FPR file remains inside `edge_fpu_alu`, with three logical
 read ports and one functional write port; f0 is writable. Integrated Edge32
@@ -74,6 +78,14 @@ The remaining worst path is inside the divider. The +200 ps setup contract is
 still unmet; this is not routed signoff or FPGA Fmax evidence. A dependency
 microtest grows from 12 to 15 cycles, so clock margin alone does not establish
 workload speedup.
+
+A subsequent GPR initialization/broadcast experiment retains the same architecture
+and passes all 320 tests. It reduces full-core area to 3600 µm² (about 3.6%),
+with GPR-attributed area 746 → 602 µm². Setup becomes -20.78 ps, with the worst
+path from EX rs1 through branch logic to `imem_req_valid`; this candidate has
+an area benefit but does not meet the 1 GHz timing contract. Full comparison:
+`src/test-32/physical/openroad/rv32-gpr-valid-broadcast-20260915.md` in the
+composed workspace.
 
 The composed workspace owns detailed contracts, tests and APR evidence in
 `src/test-32/edge_core/rtl/` and

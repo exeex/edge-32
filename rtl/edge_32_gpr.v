@@ -9,27 +9,36 @@ module edge_32_gpr (
   input wire [31:0] write_value,
   output wire [31:0] debug_x31
 );
-  reg [31:0] regs_q [0:31];
-  integer i;
+  // Keep the numerical bank in FFs on FPGA; reset only visibility metadata.
+  wire [31:0] regs_q [0:31];
+  wire [31:0] initialized_q;
   wire write_enable = write_valid && (write_rd != 5'd0);
-  wire same_source = read_rs1 == read_rs2;
   wire forward1 = write_enable && (read_rs1 == write_rd);
   wire forward2 = write_enable && (read_rs2 == write_rd);
-  // Select storage only when needed. Equal sources share the first resolved
-  // operand, including its bypass. x0 never consumes a stored register value.
-  wire [4:0] slot1 = forward1 ? 5'd0 : read_rs1;
-  wire [4:0] slot2 = (same_source || forward2) ? 5'd0 : read_rs2;
-  wire [31:0] value1 = (slot1 == 5'd0) ? 32'd0 : regs_q[slot1];
-  wire [31:0] value2 = (slot2 == 5'd0) ? 32'd0 : regs_q[slot2];
+  // Read storage in parallel with WB comparison; resolve bypass at the output.
+  // Both FF read muxes may select the same entry; no read arbitration is needed.
+  wire [4:0] slot1 = read_rs1;
+  wire [4:0] slot2 = read_rs2;
+  wire [31:0] value1 = ((slot1 == 5'd0) || !initialized_q[slot1]) ? 32'd0 : regs_q[slot1];
+  wire [31:0] value2 = ((slot2 == 5'd0) || !initialized_q[slot2]) ? 32'd0 : regs_q[slot2];
   assign read_value1 = forward1 ? write_value : value1;
-  assign read_value2 = same_source ? read_value1 :
-                       forward2 ? write_value : value2;
-  assign debug_x31 = regs_q[31];
-  always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-      for (i=0; i<32; i=i+1) regs_q[i] <= 32'd0;
-    end else if (write_enable) begin
-      regs_q[write_rd] <= write_value;
-    end
-  end
+  assign read_value2 = forward2 ? write_value : value2;
+  assign debug_x31 = initialized_q[31] ? regs_q[31] : 32'd0;
+  // Decode the committed destination once per entry for both payload and valid.
+  // x0 has no physical payload or initialization flop.
+  assign regs_q[0] = 32'd0;
+  assign initialized_q[0] = 1'b0;
+  genvar entry;
+  generate for (entry=1; entry<32; entry=entry+1) begin : g_entry
+    (* ram_style = "registers" *) reg [31:0] data_q;
+    reg initialized;
+    assign regs_q[entry] = data_q;
+    assign initialized_q[entry] = initialized;
+    wire write_entry = write_enable && (write_rd == entry);
+    always @(posedge clk)
+      if (write_entry) data_q <= write_value;
+    always @(posedge clk or negedge reset_n)
+      if (!reset_n) initialized <= 1'b0;
+      else if (write_entry) initialized <= 1'b1;
+  end endgenerate
 endmodule
