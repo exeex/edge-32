@@ -45,14 +45,14 @@ module edge_32_core #(
 
   wire parcel_valid, parcel_ready, parcel_error;
   wire [PC_WIDTH-1:0] parcel_pc; wire [31:0] parcel_inst;
-  wire if_valid, if_ready, if_capacity_ready, if_error, if_is_64b;
-  wire [PC_WIDTH-1:0] if_pc; wire [63:0] if_inst;
-  wire id_is_64b, id_error;
+  wire if_valid, if_ready, if_capacity_ready, if_error;
+  wire [PC_WIDTH-1:0] if_pc; wire [31:0] if_inst;
+  wire id_error;
   wire ex_decode_fault_q;
   wire id_terminal_break;
-  wire [63:0] id_inst;
+  wire [31:0] id_inst;
   wire ex_valid, ex_error;
-  wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
+  wire [PC_WIDTH-1:0] ex_pc; wire [31:0] ex_inst;
   wire [31:0] ex_rs1_value, ex_rs2_value;
   wire id_capture_enable;
   wire [31:0] id_fpu_control;
@@ -61,7 +61,7 @@ module edge_32_core #(
   wire [3:0] if_decoded_class;
   wire if_decoded_legal;
   edge_32_decode if_decode(
-    .inst(if_inst), .inst_is_64b(if_is_64b), .op_class(if_decoded_class),
+    .inst(if_inst),  .op_class(if_decoded_class),
     .legal(if_decoded_legal), .rd(), .rs1(), .rs2(),
     .writes_gpr(), .accel_subop(),
     .accel_needs_capture(), .accel_capture_src_gpr());
@@ -124,7 +124,7 @@ module edge_32_core #(
   wire if_rd_gpr, if_rd_fpr, if_csr_write;
   edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU),
     .UNMASKED_GPR_READ(1)) if_register_decode(
-    .inst(if_inst),.inst_is_64b(if_is_64b),
+    .inst(if_inst),
     .read_gpr0(if_rs1),.read_gpr1(if_rs2),
     .read_fpr0(if_frs0),.read_fpr1(if_frs1),.read_fpr2(if_frs2),
     .uses_gpr(),.uses_fpr(if_uses_fpr),
@@ -142,7 +142,7 @@ module edge_32_core #(
   // IF captures candidate indices without source-use decoding. ID decides
   // whether operands participate in hazards and the EX issue packet.
   edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) id_gpr_use_decode(
-    .inst(id_inst),.inst_is_64b(id_is_64b),.uses_gpr(id_uses_gpr),
+    .inst(id_inst),.uses_gpr(id_uses_gpr),
     .read_gpr0(),.read_gpr1(),.read_fpr0(),.read_fpr1(),.read_fpr2(),
     .uses_fpr(),.write_rd(),.rd_gpr(),.rd_fpr(),.csr_write());
   edge_32_issue_decode #(.ENABLE_FPU(ENABLE_FPU)) id_issue_decode(
@@ -392,20 +392,20 @@ module edge_32_core #(
     .parcel_ready(parcel_ready), .parcel_pc(parcel_pc),
     .parcel_data(parcel_inst), .parcel_error(parcel_error),
     .op_valid(if_valid), .op_ready(if_ready), .op_pc(if_pc),
-    .op_inst(if_inst), .op_is_64b(if_is_64b), .op_error(if_error),
+    .op_inst(if_inst),  .op_error(if_error),
     .flush(redirect||frontend_stop||core_start_i||core_force_stop_i));
   edge_32_pipeline #(.PC_WIDTH(PC_WIDTH),.VALUE_WIDTH(32)) pipeline(
     .clk(clk),.reset_n(reset_n),
     .fetch_valid(if_valid),.fetch_ready(if_ready),
     .fetch_capacity_ready(if_capacity_ready),.fetch_pc(if_pc),
-    .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
+    .fetch_inst(if_inst),.fetch_error(if_error),
     .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
-    .id_is_64b(id_is_64b),.id_error(id_error),
+    .id_error(id_error),
     .id_rs1_value(id_uses_gpr[0] ? id_rs1_value : 32'd0),
     .id_rs2_value(id_uses_gpr[1] ? id_rs2_value : 32'd0),.ex_valid(ex_valid),
     .id_legal(id_issue_legal),
     .id_csr_write(id_csr_write),.id_stall(id_stall),
-    .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(),.ex_error(ex_error),
+    .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_error(ex_error),
     .ex_rs1_value(ex_rs1_value),.ex_rs2_value(ex_rs2_value),.ex_done(ex_release_ready),
     .ex_legal(decoded_legal),
     .ex_redirect_valid(redirect||terminal_complete||wb_terminal||halted||core_start_i||

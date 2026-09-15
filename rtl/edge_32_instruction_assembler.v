@@ -15,15 +15,13 @@ module edge_32_instruction_assembler #(
   output wire                 op_valid,
   input  wire                 op_ready,
   output wire [PC_WIDTH-1:0]  op_pc,
-  output wire [63:0]          op_inst,
-  output wire                 op_is_64b,
+  output wire [31:0]          op_inst,
   output wire                 op_error,
   input  wire                 flush
 );
   assign op_valid = parcel_valid && !flush;
   assign op_pc = parcel_pc;
-  assign op_inst = {32'b0, parcel_data};
-  assign op_is_64b = 1'b0;
+  assign op_inst = parcel_data;
   assign op_error = parcel_error;
   assign parcel_ready = !flush && op_ready;
 endmodule

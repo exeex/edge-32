@@ -2,11 +2,9 @@
 `define EDGE_INSTRUCTION_CLASSIFIER_V
 `timescale 1ns/1ps
 
-// Stateless instruction-family and accelerator-property classifier shared by
-// the dual-issue Edge frontend and serialized edge-rv-lite control path.
+// Fixed 32-bit instruction-family and ASIC command property classifier.
 module edge_instruction_classifier (
-  input  wire [63:0] inst,
-  input  wire        inst_is_64b,
+  input  wire [31:0] inst,
   output reg  [3:0]  op_class,
   output reg         legal,
   output wire [4:0]  rd,
@@ -14,7 +12,7 @@ module edge_instruction_classifier (
   output wire [4:0]  rs2,
   output reg  [2:0]  scalar_issue_class,
   output reg         writes_gpr,
-  output wire        is_edge64,
+  output wire        is_accel,
   output wire        accel_is_tensor,
   output wire [6:0]  accel_subop,
   output reg         accel_needs_capture,
@@ -34,9 +32,9 @@ module edge_instruction_classifier (
   wire [2:0] funct3=inst[14:12];
   wire [6:0] funct7=inst[31:25];
   assign rd=inst[11:7]; assign rs1=inst[19:15]; assign rs2=inst[24:20];
-  assign is_edge64=inst_is_64b&&(opcode==7'h3f);
-  assign accel_is_tensor=is_edge64&&inst[39];
-  assign accel_subop=inst[38:32];
+  assign is_accel=(opcode==7'h3f);
+  assign accel_is_tensor=is_accel;
+  assign accel_subop=inst[31:25];
 
   wire zba_op=(opcode==7'h33)&&(funct7==7'b0010000)&&
     ((funct3==2)||(funct3==4)||(funct3==6));
@@ -106,23 +104,20 @@ module edge_instruction_classifier (
     accel_needs_capture=1'b0; accel_capture_src_gpr=5'd0;
     accel_needs_base_gpr=1'b0; accel_base_src_gpr=rs1;
     accel_is_sync=1'b0; accel_is_getcsr=1'b0;
-    if(is_edge64) begin
+    if(is_accel) begin
       op_class=CLASS_ACCEL;
-      legal=!accel_is_tensor||tensor_subop_allocated(accel_subop);
-      accel_needs_capture=!accel_is_tensor||
-                          tensor_subop_needs_capture(accel_subop);
-      accel_capture_src_gpr=accel_is_tensor ?
-        ((accel_subop==7'h01)?rd:rs1) : inst[47:43];
-      accel_needs_base_gpr=!accel_is_tensor&&
-        ((accel_subop==7'h03)||(accel_subop==7'h23));
+      legal=tensor_subop_allocated(accel_subop);
+      accel_needs_capture=tensor_subop_needs_capture(accel_subop);
+      accel_capture_src_gpr=rs1;
+      accel_needs_base_gpr=1'b0;
       accel_base_src_gpr=rs1;
-      accel_is_sync=accel_is_tensor&&
+      accel_is_sync=
         ((accel_subop==7'h02)||(accel_subop==7'h16)||
          (accel_subop==7'h26)||(accel_subop==7'h2e));
-      accel_is_getcsr=accel_is_tensor&&(accel_subop==7'h2f);
-      writes_gpr=accel_is_getcsr&&(rd!=0);
-    end else if(inst_is_64b) legal=1'b0;
-    else if(legal_op||legal_op_imm||legal_op32||legal_op_imm32||
+      accel_is_getcsr=(accel_subop==7'h2f);
+      // ASIC getcsr reports through the accelerator CSR result path.
+      writes_gpr=1'b0;
+    end else if(legal_op||legal_op_imm||legal_op32||legal_op_imm32||
             (opcode==7'h37)||(opcode==7'h17)) begin
       op_class=scalar_m?CLASS_MULDIV:CLASS_ALU;
       scalar_issue_class=scalar_m?SCALAR_M:SCALAR_ALU;

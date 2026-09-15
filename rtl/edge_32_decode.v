@@ -2,8 +2,7 @@
 
 // RV32 legality boundary layered on the shared Edge instruction classifier.
 module edge_32_decode (
-  input  wire [63:0] inst,
-  input  wire inst_is_64b,
+  input  wire [31:0] inst,
   output wire [3:0] op_class,
   output wire legal,
   output wire [4:0] rd,
@@ -18,15 +17,12 @@ module edge_32_decode (
   wire [3:0] shared_op_class;
   wire shared_legal;
   wire shared_writes_gpr;
-  wire shared_is_edge64;
   wire shared_accel_needs_capture;
   wire [4:0] shared_accel_capture_src_gpr;
   wire [6:0] opcode = inst[6:0];
   wire [2:0] funct3 = inst[14:12];
   wire [6:0] funct7 = inst[31:25];
-  wire is_asic32 = !inst_is_64b && (opcode == 7'h3f);
-  wire [63:0] classifier_inst = is_asic32 ?
-    {24'b0, 1'b1, funct7, inst[31:0]} : inst;
+  wire is_asic32 = (opcode == 7'h3f);
 
   wire rv32_shift_legal =
     (opcode != 7'h13) ||
@@ -43,8 +39,7 @@ module edge_32_decode (
                            rv32_shift_legal && rv32_load_legal &&
                            rv32_store_legal;
   wire local_legal = is_asic32 ? shared_legal :
-                     shared_is_edge64 ? shared_legal :
-                     (!inst_is_64b && rv32_scalar_legal);
+                     rv32_scalar_legal;
 
   assign legal = local_legal;
   assign op_class = local_legal ? shared_op_class : CLASS_ILLEGAL;
@@ -54,10 +49,10 @@ module edge_32_decode (
                                 shared_accel_capture_src_gpr;
 
   edge_instruction_classifier classifier (
-    .inst(classifier_inst), .inst_is_64b(is_asic32 || inst_is_64b),
+    .inst(inst),
     .op_class(shared_op_class), .legal(shared_legal),
     .rd(rd), .rs1(rs1), .rs2(rs2), .scalar_issue_class(),
-    .writes_gpr(shared_writes_gpr), .is_edge64(shared_is_edge64),
+    .writes_gpr(shared_writes_gpr), .is_accel(),
     .accel_is_tensor(), .accel_subop(accel_subop),
     .accel_needs_capture(shared_accel_needs_capture),
     .accel_capture_src_gpr(shared_accel_capture_src_gpr),
@@ -68,7 +63,7 @@ endmodule
 // Parallel semantic sideband. It does not drive register read addresses.
 // EX consumes the registered packet and legality to authorize issue.
 module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
-  input wire [63:0] inst, input wire [3:0] op_class,
+  input wire [31:0] inst, input wire [3:0] op_class,
   input wire decoded_legal,
   input wire [4:0] register_rd, input wire rd_gpr, rd_fpr,
   input wire [31:0] fpu_control,
@@ -112,7 +107,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire is_fp_csr=ENABLE_FPU&&is_csr_op&&
     ((inst[31:20]==12'h001)||(inst[31:20]==12'h002)||
      (inst[31:20]==12'h003));
-  wire is_ebreak=inst==64'h0000_0000_0010_0073;
+  wire is_ebreak=inst==32'h0010_0073;
   wire is_edge_break=(opc==7'h73)&&(f3==3'b001)&&(rd==5'd0)&&
     (inst[31:20]==12'h7e0);
   // Merge the terminal instruction policy before the ID->EX capture.
@@ -182,7 +177,7 @@ endmodule
 // reads; only the parallel sideband authorizes EX issue and writes.
 module edge_32_register_decode #(parameter ENABLE_FPU=0,
   parameter UNMASKED_GPR_READ=0)(
-  input wire [63:0] inst, input wire inst_is_64b,
+  input wire [31:0] inst,
   output wire [4:0] read_gpr0, read_gpr1, read_fpr0, read_fpr1, read_fpr2,
   output wire [1:0] uses_gpr, output wire [2:0] uses_fpr,
   output wire [4:0] write_rd, output wire rd_gpr, rd_fpr,
@@ -210,8 +205,7 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   wire edge_break=(opc==7'h73)&&(f3==3'b001)&&(inst[11:7]==0)&&
                   (inst[31:20]==12'h7e0);
   wire accel=(opc==7'h3f);
-  wire tensor=!inst_is_64b||inst[39];
-  wire [6:0] subop=inst_is_64b ? inst[38:32]:inst[31:25];
+  wire [6:0] subop=inst[31:25];
   reg tensor_capture;
   always @* begin
     case(subop)
@@ -222,9 +216,8 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
       default: tensor_capture=1'b0;
     endcase
   end
-  wire accel_capture=accel&&(!tensor||tensor_capture);
-  wire [4:0] capture_src=!inst_is_64b ? inst[19:15]:
-    !tensor ? inst[47:43]:(subop==7'h01) ? inst[11:7]:inst[19:15];
+  wire accel_capture=accel&&tensor_capture;
+  wire [4:0] capture_src=inst[19:15];
   assign uses_gpr[0]=op_imm||op_reg||(opc==7'h67)||(opc==7'h63)||
     (opc==7'h03)||(opc==7'h23)||fp_load||fp_store||(opc==7'h0b)||accel||
     (csr_op&&!f3[2])||fp_from_gpr;
@@ -241,10 +234,9 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   assign write_rd=edge_break ? 5'd31:inst[11:7];
   assign rd_gpr=(write_rd!=0)&&(op_imm||op_reg||(opc==7'h37)||
     (opc==7'h17)||(opc==7'h6f)||(opc==7'h67)||
-    (opc==7'h03)||csr_op||fp_to_gpr||
-    (accel&&inst_is_64b&&tensor&&(subop==7'h2f)));
+    (opc==7'h03)||csr_op||fp_to_gpr);
   assign rd_fpr=fp_load||fp_fma||(fp_op&&!fp_to_gpr);
   // Conservatively interlock a CSR writer without waiting for legality.
-  assign csr_write=!inst_is_64b&&csr_op&&
+  assign csr_write=csr_op&&
     ((f3[1:0]==2'b01)||(inst[19:15]!=0));
 endmodule
