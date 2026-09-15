@@ -180,7 +180,8 @@ endmodule
 // Early IF register routing (captured with the admitted ID instruction). Deliberately has no legality, operation-class,
 // rounding-mode or semantic FP-control input. Invalid encodings may request
 // reads; only the parallel sideband authorizes EX issue and writes.
-module edge_32_register_decode #(parameter ENABLE_FPU=0)(
+module edge_32_register_decode #(parameter ENABLE_FPU=0,
+  parameter UNMASKED_GPR_READ=0)(
   input wire [63:0] inst, input wire inst_is_64b,
   output wire [4:0] read_gpr0, read_gpr1, read_fpr0, read_fpr1, read_fpr2,
   output wire [1:0] uses_gpr, output wire [2:0] uses_fpr,
@@ -231,8 +232,9 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0)(
   assign uses_fpr[0]=fp_fma||(fp_op&&!fp_from_gpr);
   assign uses_fpr[1]=fp_fma||fp_two||fp_store;
   assign uses_fpr[2]=fp_fma;
-  assign read_gpr0=uses_gpr[0] ? inst[19:15]:5'd0;
-  assign read_gpr1=uses_gpr[1] ? (accel ? capture_src:inst[24:20]):5'd0;
+  assign read_gpr0=(UNMASKED_GPR_READ || uses_gpr[0]) ? inst[19:15]:5'd0;
+  assign read_gpr1=(UNMASKED_GPR_READ || uses_gpr[1]) ?
+    (accel ? capture_src:inst[24:20]):5'd0;
   assign read_fpr0=uses_fpr[0] ? inst[19:15]:5'd0;
   assign read_fpr1=uses_fpr[1] ? inst[24:20]:5'd0;
   assign read_fpr2=uses_fpr[2] ? inst[31:27]:5'd0;

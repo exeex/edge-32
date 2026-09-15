@@ -42,7 +42,10 @@ module edge_32_mul_asap7 (
 
   assign op_ready = !busy;
   assign busy = |valid_pipe_q;
-  assign result_valid = lane_valid && valid_pipe_q[5];
+  // The lane valid is the same six-edge accept shift as valid_pipe_q.
+  // Export the local owner directly: completion must not detour through the
+  // remote CPA valid/reset cone before returning to pipeline/frontend control.
+  assign result_valid = valid_pipe_q[5];
   assign result_value = high_pipe_q[5] ? multiply_high :
                                               magnitude_product[31:0];
 

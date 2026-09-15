@@ -117,28 +117,34 @@ module edge_32_core #(
   reg [4:0] id_write_rd;
   reg id_rd_gpr, id_rd_fpr;
   reg [4:0] id_frs0, id_frs1, id_frs2;
-  reg [1:0] id_uses_gpr;
+  wire [1:0] id_uses_gpr;
   reg [2:0] id_uses_fpr;
   wire [4:0] if_rs1, if_rs2, if_frs0, if_frs1, if_frs2, if_write_rd;
-  wire [1:0] if_uses_gpr;
   wire [2:0] if_uses_fpr;
   wire if_rd_gpr, if_rd_fpr, if_csr_write;
-  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) if_register_decode(
+  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU),
+    .UNMASKED_GPR_READ(1)) if_register_decode(
     .inst(if_inst),.inst_is_64b(if_is_64b),
     .read_gpr0(if_rs1),.read_gpr1(if_rs2),
     .read_fpr0(if_frs0),.read_fpr1(if_frs1),.read_fpr2(if_frs2),
-    .uses_gpr(if_uses_gpr),.uses_fpr(if_uses_fpr),
+    .uses_gpr(),.uses_fpr(if_uses_fpr),
     .write_rd(if_write_rd),.rd_gpr(if_rd_gpr),.rd_fpr(if_rd_fpr),
     .csr_write(if_csr_write));
   always @(posedge clk) begin
     if(if_valid && if_ready) begin
       {id_rs1,id_rs2,id_frs0,id_frs1,id_frs2,id_write_rd} <=
         {if_rs1,if_rs2,if_frs0,if_frs1,if_frs2,if_write_rd};
-      {id_uses_gpr,id_uses_fpr,id_rd_gpr,id_rd_fpr,id_csr_write} <=
-        {if_uses_gpr,if_uses_fpr,if_rd_gpr,if_rd_fpr,if_csr_write};
+      {id_uses_fpr,id_rd_gpr,id_rd_fpr,id_csr_write} <=
+        {if_uses_fpr,if_rd_gpr,if_rd_fpr,if_csr_write};
       id_decoded_class<=if_decoded_class; id_decoded_legal<=if_decoded_legal;
     end
   end
+  // IF captures candidate indices without source-use decoding. ID decides
+  // whether operands participate in hazards and the EX issue packet.
+  edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) id_gpr_use_decode(
+    .inst(id_inst),.inst_is_64b(id_is_64b),.uses_gpr(id_uses_gpr),
+    .read_gpr0(),.read_gpr1(),.read_fpr0(),.read_fpr1(),.read_fpr2(),
+    .uses_fpr(),.write_rd(),.rd_gpr(),.rd_fpr(),.csr_write());
   edge_32_issue_decode #(.ENABLE_FPU(ENABLE_FPU)) id_issue_decode(
     .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
     .register_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
@@ -392,7 +398,8 @@ module edge_32_core #(
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
     .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
     .id_is_64b(id_is_64b),.id_error(id_error),
-    .id_rs1_value(id_rs1_value),.id_rs2_value(id_rs2_value),.ex_valid(ex_valid),
+    .id_rs1_value(id_uses_gpr[0] ? id_rs1_value : 32'd0),
+    .id_rs2_value(id_uses_gpr[1] ? id_rs2_value : 32'd0),.ex_valid(ex_valid),
     .id_legal(id_issue_legal),
     .id_csr_write(id_csr_write),.id_stall(id_stall),
     .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(),.ex_error(ex_error),
