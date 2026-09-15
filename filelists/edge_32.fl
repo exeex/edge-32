@@ -20,6 +20,7 @@ ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_narrow_fmadd.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_unpack.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/rtl/edge_fpu_fmac_fp32_fused_round_pack.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_fmac/edge_fpu_fmac.v
+${EDGE32_ROOT}/rtl/fpu/edge_32_fpu.v
 ${EDGE32_ROOT}/rtl/fpu/edge_fpu_alu/edge_fpu_alu.v
 ${EDGE32_ROOT}/rtl/edge_32_decode.v
 ${EDGE32_ROOT}/rtl/edge_32_frontend.v

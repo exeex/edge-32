@@ -615,8 +615,23 @@ operation that makes modified code visible.
 
 ## 8. Optional FPU and precision normalization
 
-`ENABLE_FPU` defaults to `0`. Enabling it instantiates the shared single-issue
-`edge_fpu_alu`, FPR file, FP operations, and FPU version 1 in CSR `0xfc0`.
+`ENABLE_FPU` defaults to `0`. Enabling it instantiates `g_fpu.fpu`
+(`edge_32_fpu`), which owns FP ID decode, the three ID-to-EX FPR operands and
+control packet, the shared single-issue `edge_fpu_alu` and FPR file,
+`edge_32_fp_mem_format`, `frm/fflags`, and FP-specific WB metadata.
+CSR `0xfc0` reports FPU version 1 when enabled.
+
+The core retains shared pipeline validity, register dependency checks, LSU
+request ownership, result/destination storage, and retirement authorization.
+The optional owner commits FPR/CSR/flags only with an authorized, nonfaulting
+WB slot. Extraction adds no stage: ID captures operands, EX issues and completes,
+and WB commits with the existing read-through forwarding and cancel behavior.
+
+With `ENABLE_FPU=0`, the owner is absent and FP read/write, memory-format,
+compute, and CSR sideband are constant zero. The scalar core APR source list
+therefore needs no FPU or FP formatter source files. FP formatting belongs to
+the FPU area category whenever enabled; it must not be counted as scalar
+core control or an unclassified “other” leaf.
 
 The FPU is primarily a bring-up, fallback, data-generation, and validation
 facility. FP8, FP16, BF16, and FP32 are memory formats: loads promote them to a

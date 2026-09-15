@@ -38,9 +38,7 @@ module edge_32_core #(
   output wire [63:0] instret_count
 );
   wire [63:0] cycle_q, instret_q;
-  reg [4:0] fflags_q;
-  reg [2:0] frm_q;
-  reg mem_started_q, mul_started_q, fpu_started_q, accel_started_q;
+  reg mem_started_q, mul_started_q, accel_started_q;
   reg cache_started_q, icache_invalidate_started_q;
   wire core_start_i = AUTO_START ? 1'b0 : core_start;
   wire core_force_stop_i = AUTO_START ? 1'b0 : core_force_stop;
@@ -57,22 +55,7 @@ module edge_32_core #(
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
   wire [31:0] ex_rs1_value, ex_rs2_value;
   wire id_capture_enable;
-  wire [31:0] id_fsrc0, id_fsrc1, id_fsrc2;
-  reg [31:0] ex_fsrc0_q, ex_fsrc1_q, ex_fsrc2_q;
   wire [31:0] id_fpu_control;
-  reg [31:0] ex_fpu_control_q;
-  edge_fpu_id_decode #(.GPR_WIDTH(32)) id_fp_decode(
-    .inst(id_inst[31:0]),.frm(frm_q),.control(id_fpu_control));
-  // Same ID->EX advance/stall/flush boundary as GPR operands. EX valid owns
-  // observability; these numerical payload registers do not need reset.
-  always @(posedge clk) begin
-    if (id_capture_enable) begin
-      ex_fpu_control_q <= id_fpu_control;
-      ex_fsrc0_q <= id_fsrc0;
-      ex_fsrc1_q <= id_fsrc1;
-      ex_fsrc2_q <= id_fsrc2;
-    end
-  end
   reg [3:0] id_decoded_class;
   reg id_decoded_legal;
   wire [3:0] if_decoded_class;
@@ -183,10 +166,9 @@ module edge_32_core #(
   reg [31:0] wb_fast_value_q, wb_other_value_q;
   reg wb_fast_q;
   wire [31:0] wb_value_q=wb_fast_q ? wb_fast_value_q:wb_other_value_q;
-  reg [4:0] wb_rd_q, wb_fflags_q;
-  reg wb_gpr_q, wb_fpr_q, wb_fault_q, wb_halt_q, wb_fp_flags_q;
-  reg wb_fp_csr_q, wb_csr_fflags_q, wb_csr_frm_q;
-  reg [7:0] wb_fp_csr_value_q;
+  reg [4:0] wb_rd_q;
+  reg wb_gpr_q, wb_fault_q, wb_halt_q;
+  wire wb_fp_csr_q;
   reg wb_icache_header_q, wb_dcache_header_q;
   reg [31:0] wb_header_value_q;
   wire wb_commit=wb_pending_q&&!halted&&!core_start_i&&!core_force_stop_i;
@@ -196,7 +178,6 @@ module edge_32_core #(
     .enable(wb_commit&&!wb_fault_q),.value(instret_q));
   wire wb_terminal=wb_pending_q&&(wb_fault_q||wb_halt_q);
   wire wb_valid=wb_commit&&!wb_fault_q&&wb_gpr_q;
-  wire wb_fpr_valid=wb_commit&&!wb_fault_q&&wb_fpr_q;
   // A result still in EX cannot bypass the new WB register boundary.
   wire id_gpr_hazard=ex_valid&&ex_writes_gpr&&(rd!=0)&&
     ((id_uses_gpr[0]&&id_rs1==rd)||(id_uses_gpr[1]&&id_rs2==rd));
@@ -213,7 +194,6 @@ module edge_32_core #(
     (wb_pending_q&&(wb_fp_csr_q||wb_icache_header_q||wb_dcache_header_q));
   wire id_stall=id_gpr_hazard||id_fpr_hazard||id_csr_hazard;
   wire is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
-  wire fpu_legal;
   wire ex_legal=decoded_legal;
   wire ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
                    !core_start_i&&!core_force_stop_i;
@@ -247,12 +227,8 @@ module edge_32_core #(
   wire lsu_ready,lsu_done,lsu_error; wire [31:0] lsu_value;
   wire [31:0] lsu_mem_addr;
   wire lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
-  wire [31:0] fpu_store_value;
   wire [31:0] fp_load_value;
   wire [63:0] fp_store_value;
-  edge_32_fp_mem_format fp_mem_format(
-    .funct3(f3),.load_value({32'd0,lsu_value}),.store_fp32(fpu_store_value),
-    .load_fp32(fp_load_value),.store_value(fp_store_value));
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
     .clk(clk),.reset_n(reset_n),.op_valid(lsu_start),
     .op_ready(lsu_ready),.op_store(is_store||is_fp_store),
@@ -269,35 +245,29 @@ module edge_32_core #(
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
   assign dmem_req_addr={32'd0,lsu_mem_addr};
 
-  wire fpu_ready, fpu_done, fpu_gpr_write, fpr_load_ready;
-  wire [31:0] fpu_value; wire [4:0] fpu_fflags;
+  wire fp_compute_complete;
+  wire [31:0] fpu_value, fp_csr_value;
   generate if(ENABLE_FPU) begin: g_fpu
-    edge_fpu_alu #(.GPR_WIDTH(32),.PREDECODED(1),.EXTERNAL_FPR_WRITEBACK(1)) fpu_alu(
-      .clk(clk),.reset_n(reset_n),
-      .cancel(core_start_i||core_force_stop_i),
-      .issue_valid(ex_issue_ok&&is_fp_compute&&!fpu_started_q),
-      .issue_ready(fpu_ready),.issue_inst(32'b0),.issue_control(ex_fpu_control_q),
-      .issue_gpr_src(ex_rs1_value),.issue_frm(3'b0),
-      .issue_fsrc0(ex_fsrc0_q),.issue_fsrc1(ex_fsrc1_q),.issue_fsrc2(ex_fsrc2_q),
-      .read_frs0(id_frs0),.read_frs1(id_frs1),.read_frs2(id_frs2),
-      .read_fsrc0(id_fsrc0),.read_fsrc1(id_fsrc1),.read_fsrc2(id_fsrc2),
-      .issue_legal(fpu_legal),
-      .complete_valid(fpu_done),.complete_gpr_write(fpu_gpr_write),
-      .complete_rd(),.complete_value(fpu_value),
-      .complete_fflags(fpu_fflags),
-      .load_write_valid(wb_fpr_valid),
-      .load_write_ready(fpr_load_ready),.load_write_rd(wb_rd_q),.load_write_value(wb_value_q),
-      .store_read_rs(5'd0),.store_read_value());
-    assign fpu_store_value=ex_fsrc1_q;
+    edge_32_fpu fpu(
+      .clk(clk),.reset_n(reset_n),.cancel(core_start_i||core_force_stop_i),
+      .id_capture_enable(id_capture_enable),.id_inst(id_inst[31:0]),
+      .id_frs0(id_frs0),.id_frs1(id_frs1),.id_frs2(id_frs2),
+      .id_fpu_control(id_fpu_control),.ex_issue_ok(ex_issue_ok),.ex_done(ex_done),
+      .is_fp_compute(is_fp_compute),.ex_writes_fpr(ex_writes_fpr),
+      .is_fp_csr(is_fp_csr),.csr_fflags(csr_fflags),.csr_frm(csr_frm),
+      .csr_write(csr_write),.f3(f3),.csr_uimm(csr_uimm),
+      .ex_rs1_value(ex_rs1_value),.lsu_value(lsu_value),
+      .fp_compute_complete(fp_compute_complete),.fpu_value(fpu_value),
+      .fp_load_value(fp_load_value),.fp_store_value(fp_store_value),
+      .fp_csr_value(fp_csr_value),.wb_commit(wb_commit),.wb_fault_q(wb_fault_q),
+      .wb_rd_q(wb_rd_q),.wb_value_q(wb_value_q),.wb_fp_csr_q(wb_fp_csr_q));
   end else begin: g_no_fpu
-    assign id_fsrc0=0; assign id_fsrc1=0; assign id_fsrc2=0;
-    assign fpr_load_ready=1'b0;
-    assign fpu_ready=1'b0; assign fpu_done=1'b0;
-    assign fpu_gpr_write=1'b0;
-    assign fpu_value=32'b0; assign fpu_fflags=5'b0;
-    assign fpu_legal=1'b0; assign fpu_store_value=32'b0;
+    assign id_fpu_control=32'd0;
+    assign fp_compute_complete=1'b0;
+    assign fpu_value=32'd0; assign fp_csr_value=32'd0;
+    assign fp_load_value=32'd0; assign fp_store_value=64'd0;
+    assign wb_fp_csr_q=1'b0;
   end endgenerate
-  wire fpu_start=ex_issue_ok&&is_fp_compute&&!fpu_started_q&&fpu_ready;
 
   assign accel_req_valid=ex_issue_ok&&is_accel&&!accel_started_q;
   assign accel_req_inst=ex_inst[31:0];
@@ -322,7 +292,7 @@ module edge_32_core #(
   wire ex_done=ex_valid&&!halted&&!core_start_i&&!core_force_stop_i&&
     (fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||
      ((is_int_mem||is_fp_mem)&&mem_started_q&&lsu_done)||
-     (is_fp_compute&&fpu_started_q&&fpu_done)||
+     fp_compute_complete||
      accel_done||cache_done||fence_i_done||ex_decode_fault_q);
   wire ex_faulting=ex_decode_fault_q||
     ((is_int_mem||is_fp_mem)&&lsu_done&&lsu_error)||
@@ -361,20 +331,9 @@ module edge_32_core #(
     is_fp_compute?fpu_value:is_muldiv?mul_result:
     is_fp_load?fp_load_value:is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
     is_instret?(instret_q[31:0]+{31'd0,(wb_commit&&!wb_fault_q)}):is_fp_csr?
-    (csr_fflags ? {27'd0,fflags_q} :
-     csr_frm ? {29'd0,frm_q} : {24'd0,frm_q,fflags_q}):
+    fp_csr_value:
     is_hardware_id?EDGE_ASIC_ID[31:0]:
     is_address_header_csr?address_header_old:32'd0;
-  wire [31:0] fp_csr_source=f3[2]?{27'd0,csr_uimm}:ex_rs1_value;
-  wire [7:0] fp_csr_old=(csr_fflags)?
-                        {3'd0,fflags_q}:
-                        (csr_frm)?
-                        {5'd0,frm_q}:{frm_q,fflags_q};
-  wire [7:0] fp_csr_new=(f3[1:0]==2'b01)?fp_csr_source[7:0]:
-                         (f3[1:0]==2'b10)?
-                         (fp_csr_old|fp_csr_source[7:0]):
-                         (fp_csr_old&~fp_csr_source[7:0]);
-  wire fp_csr_write=csr_write;
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) wb_pending_q<=1'b0;
     else if(core_start_i||core_force_stop_i||halted) wb_pending_q<=1'b0;
@@ -385,12 +344,8 @@ module edge_32_core #(
     if(ex_done) begin
       wb_fast_value_q<=fast_result; wb_other_value_q<=ex_result;
       wb_fast_q<=is_fast_class; wb_rd_q<=rd;
-      wb_gpr_q<=ex_writes_gpr; wb_fpr_q<=ex_writes_fpr;
+      wb_gpr_q<=ex_writes_gpr;
       wb_fault_q<=ex_faulting; wb_halt_q<=is_terminal_break;
-      wb_fp_flags_q<=is_fp_compute; wb_fflags_q<=fpu_fflags;
-      wb_fp_csr_q<=is_fp_csr&&fp_csr_write;
-      wb_csr_fflags_q<=csr_fflags; wb_csr_frm_q<=csr_frm;
-      wb_fp_csr_value_q<=fp_csr_new;
       wb_icache_header_q<=is_icache_header_csr&&address_header_write;
       wb_dcache_header_q<=is_dcache_header_csr&&address_header_write;
       wb_header_value_q<=address_header_new;
@@ -442,47 +397,32 @@ module edge_32_core #(
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
       mem_started_q<=0; mul_started_q<=0;
-      fflags_q<=0; frm_q<=0;
       icache_address_header_q<=0; dcache_address_header_q<=0;
-      fpu_started_q<=0;
       accel_started_q<=0; cache_started_q<=0;
       icache_invalidate_started_q<=0;
       halted<=0; illegal<=0;
     end else begin
       if(core_start_i) begin halted<=0; illegal<=0; end
       if(core_start_i||core_force_stop_i) begin
-        mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0;
+        mem_started_q<=0; mul_started_q<=0;
         accel_started_q<=0; cache_started_q<=0;
         icache_invalidate_started_q<=0;
       end
       if(lsu_start&&lsu_ready) mem_started_q<=1;
       if(mul_start&&mul_ready) mul_started_q<=1;
-      if(fpu_start) fpu_started_q<=1;
       if(accel_req_fire) accel_started_q<=1;
       if(cache_req_fire) cache_started_q<=1;
       if(icache_invalidate_fire) icache_invalidate_started_q<=1;
       if(ex_done&&!halted&&!core_start_i&&!core_force_stop_i) begin
-        mem_started_q<=0; mul_started_q<=0; fpu_started_q<=0; accel_started_q<=0;
+        mem_started_q<=0; mul_started_q<=0; accel_started_q<=0;
         cache_started_q<=0;
         icache_invalidate_started_q<=0;
       end
       if(wb_commit) begin
-        if(!wb_fault_q&&wb_fp_csr_q) begin
-          if(wb_csr_fflags_q)
-            fflags_q<=wb_fp_csr_value_q[4:0];
-          else if(wb_csr_frm_q)
-            frm_q<=wb_fp_csr_value_q[2:0];
-          else begin
-            fflags_q<=wb_fp_csr_value_q[4:0];
-            frm_q<=wb_fp_csr_value_q[7:5];
-          end
-        end
         if(!wb_fault_q&&wb_icache_header_q)
           icache_address_header_q<=wb_header_value_q;
         if(!wb_fault_q&&wb_dcache_header_q)
           dcache_address_header_q<=wb_header_value_q;
-        if(!wb_fault_q&&wb_fp_flags_q)
-          fflags_q<=fflags_q|wb_fflags_q;
         if(!wb_fault_q&&wb_halt_q) halted<=1;
         if(wb_fault_q) begin illegal<=1; halted<=1; end
       end

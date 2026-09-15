@@ -89,10 +89,10 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire is_jal=opc==7'h6f, is_jalr=(opc==7'h67)&&(f3==0);
   wire is_branch=opc==7'h63;
   wire is_load=opc==7'h03, is_store=opc==7'h23;
-  wire is_fp_load=(op_class==4'd5)&&(opc==7'h07);
-  wire is_fp_store=(op_class==4'd5)&&(opc==7'h27);
-  wire is_fp_compute=(opc==7'h53)||(opc==7'h43)||(opc==7'h47)||
-                     (opc==7'h4b)||(opc==7'h4f);
+  wire is_fp_load=ENABLE_FPU&&(op_class==4'd5)&&(opc==7'h07);
+  wire is_fp_store=ENABLE_FPU&&(op_class==4'd5)&&(opc==7'h27);
+  wire is_fp_compute=ENABLE_FPU&&((opc==7'h53)||(opc==7'h43)||(opc==7'h47)||
+                     (opc==7'h4b)||(opc==7'h4f));
   wire is_muldiv=op_class==4'd4;
   wire is_zba=is_op&&(f7==7'b0010000)&&
     ((f3==2)||(f3==4)||(f3==6));
@@ -156,9 +156,9 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire [4:0] write_rd=register_rd;
   assign issue_legal=decoded_issue_legal;
   assign writes_gpr=issue_legal && rd_gpr;
-  assign writes_fpr=issue_legal && rd_fpr;
-  wire csr_fflags=inst[31:20]==12'h001;
-  wire csr_frm=inst[31:20]==12'h002;
+  assign writes_fpr=ENABLE_FPU && issue_legal && rd_fpr;
+  wire csr_fflags=ENABLE_FPU&&(inst[31:20]==12'h001);
+  wire csr_frm=ENABLE_FPU&&(inst[31:20]==12'h002);
   wire csr_write=(f3[1:0]==2'b01)||(inst[19:15]!=5'd0);
   wire cache_is_va=f3==3'b001;
   wire [1:0] cache_kind=inst[21:20];
