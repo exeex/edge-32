@@ -123,6 +123,7 @@ module edge_32_div_srt4_native (
   localparam [3:0] STATE_COMBINE_HIGH = 4'd11;
   localparam [3:0] STATE_SIGN_HIGH = 4'd12;
   localparam [3:0] STATE_PREPARE = 4'd13;
+  localparam [3:0] STATE_CLASSIFY = 4'd14;
   localparam integer RING_STAGES = 2;
 
   function [4:0] msb_index32;
@@ -160,10 +161,12 @@ module edge_32_div_srt4_native (
     end
   endfunction
 
-  // Admission stage owns magnitude/exponent preparation and special cases.
-  // PREPARE consumes only captured data, never changing live request pins.
+  // Admission captures magnitudes and parallel sign/exception sideband.
+  // CLASSIFY separates exponent preparation from the input absolute-value
+  // carry chains. Later stages consume only captured data, never live pins.
   reg [31:0] dividend_mag;
   reg [31:0] divisor_mag;
+  reg input_fast_r;
   reg [5:0] scale_even;
   reg [4:0] divisor_msb;
   reg [3:0] state_r;
@@ -258,13 +261,13 @@ module edge_32_div_srt4_native (
   wire divide_by_zero = src1 == 32'd0;
   wire signed_overflow = signed_op &&
     (src0 == 32'h8000_0000) && (src1 == 32'hffff_ffff);
-  wire magnitude_lt = input_dividend_mag < input_divisor_mag;
+  wire magnitude_lt = dividend_mag < divisor_mag;
   wire magnitude_zero = src0 == 32'd0;
-  wire fast_case = divide_by_zero || signed_overflow || magnitude_lt ||
-                   magnitude_zero;
+  wire input_fast = divide_by_zero || signed_overflow || magnitude_zero;
+  wire fast_case = input_fast_r || magnitude_lt;
 
-  wire [4:0] input_dividend_msb = msb_index32(input_dividend_mag);
-  wire [4:0] input_divisor_msb = msb_index32(input_divisor_mag);
+  wire [4:0] input_dividend_msb = msb_index32(dividend_mag);
+  wire [4:0] input_divisor_msb = msb_index32(divisor_mag);
   wire [5:0] exponent_difference = {1'b0, input_dividend_msb} -
                                    {1'b0, input_divisor_msb};
   wire [5:0] input_scale_even = exponent_difference + exponent_difference[0];
@@ -395,7 +398,9 @@ module edge_32_div_srt4_native (
     ring_qds_phase_next = ring_qds_phase_r;
     result_valid_next = 1'b0;
     case (state_r)
-      STATE_IDLE: if (op_valid) begin
+      STATE_IDLE: if (op_valid && op_ready)
+        state_next = STATE_CLASSIFY;
+      STATE_CLASSIFY: begin
         if (fast_case)
           state_next = STATE_FAST;
         else
@@ -459,18 +464,19 @@ module edge_32_div_srt4_native (
 
   always @(posedge clk) begin
       case (state_r)
-        STATE_IDLE: if (op_valid) begin
+        STATE_IDLE: if (op_valid && op_ready) begin
           rem_r <= is_remainder;
           quotient_negative_r <= signed_op && (src0_sign ^ src1_sign);
           remainder_negative_r <= signed_op && src0_sign;
-          if (fast_case) begin
-            fast_value_r <= fast_value;
-          end else begin
-            dividend_mag <= input_dividend_mag;
-            divisor_mag <= input_divisor_mag;
-            divisor_msb <= input_divisor_msb;
-            scale_even <= input_scale_even;
-          end
+          input_fast_r <= input_fast;
+          fast_value_r <= fast_value;
+          // Numerical candidates are independent of exceptional-case policy.
+          dividend_mag <= input_dividend_mag;
+          divisor_mag <= input_divisor_mag;
+        end
+        STATE_CLASSIFY: begin
+          divisor_msb <= input_divisor_msb;
+          scale_even <= input_scale_even;
         end
         STATE_PREPARE: begin
             scale_r <= remainder_scale;
