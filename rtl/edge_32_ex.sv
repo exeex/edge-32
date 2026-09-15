@@ -1,6 +1,6 @@
 // EX stage: explicit ports; implementation is private to this module.
 module edge_32_ex_stage #(
-  parameter PC_WIDTH=32, parameter DMEM_RESP_FORMATTED=0, parameter ENABLE_FPU=0, parameter AUTO_START=1, parameter [46:0] EDGE_ASIC_ID=47'd0
+  parameter PC_WIDTH=32, parameter DMEM_RESP_FORMATTED=0, parameter ENABLE_FPU=0, parameter [46:0] EDGE_ASIC_ID=47'd0
 )(
   input wire accel_req_ready,
   input wire accel_resp_error,
@@ -85,7 +85,6 @@ module edge_32_ex_stage #(
   wire [31:0] address_header_new;
   wire [31:0] address_header_old;
   wire [31:0] address_header_source;
-  wire address_header_write;
   wire [3:0] alu_op;
   wire branch_redirect;
   wire branch_taken;
@@ -98,16 +97,13 @@ module edge_32_ex_stage #(
   wire csr_fflags;
   wire csr_frm;
   wire [4:0] csr_uimm;
-  reg decoded_legal;
   reg [19:0] ex_imm_q;
   wire ex_control;
   wire ex_decode_fault_q;
-  reg ex_error;
   wire ex_faulting;
   reg [31:0] ex_inst;
   rv32::issue_control_t ex_issue_control_q;
   wire ex_issue_ok;
-  wire ex_legal;
   reg [PC_WIDTH-1:0] ex_pc;
   wire [31:0] ex_result;
   reg [31:0] ex_rs1_value;
@@ -175,7 +171,7 @@ module edge_32_ex_stage #(
   assign ex_wb.writes_gpr = ex_writes_gpr;
   assign ex_wb.fault = ex_faulting;
   assign ex_wb.halt = is_terminal_break;
-  assign ex_wb.writes_icache_header = is_icache_header_csr && address_header_write;
-  assign ex_wb.writes_dcache_header = is_dcache_header_csr && address_header_write;
+  assign ex_wb.writes_icache_header = is_icache_header_csr && csr_write;
+  assign ex_wb.writes_dcache_header = is_dcache_header_csr && csr_write;
   assign ex_wb.header_value = address_header_new;
 endmodule

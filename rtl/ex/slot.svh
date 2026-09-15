@@ -6,9 +6,8 @@
   end
   always @(posedge clk) begin
     if (id_capture_enable) begin
-      ex_pc <= id_pc; ex_inst <= id_inst; ex_error <= id_error;
+      ex_pc <= id_pc; ex_inst <= id_inst;
       ex_rs1_value <= id_uses_gpr[0] ? id_rs1_value : 32'd0;
       ex_rs2_value <= id_uses_gpr[1] ? id_rs2_value : 32'd0;
-      decoded_legal <= id_issue_legal;
     end
   end

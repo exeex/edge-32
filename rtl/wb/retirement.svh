@@ -1,8 +1,5 @@
 // Implementation owned by this stage module.
 
-  assign icache_address_header = icache_address_header_q;
-  assign dcache_address_header = dcache_address_header_q;
-  assign cycle_count=cycle_q; assign instret_count=instret_q;
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
       icache_address_header_q<=0; dcache_address_header_q<=0;

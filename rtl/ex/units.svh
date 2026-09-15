@@ -5,7 +5,6 @@
                 {{20{ex_imm_q[11]}}, ex_imm_q[11:0]};
 // Implementation owned by this stage module.
     assign is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
-    assign ex_legal=decoded_legal;
     assign ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
                    !core_start_i&&!core_force_stop_i;
 

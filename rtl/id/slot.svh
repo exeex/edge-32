@@ -9,7 +9,7 @@
     else if (id_can_advance) id_valid <= if_valid && if_ready;
   end
   always @(posedge clk) begin
-    if (id_capture_enable && if_valid && if_ready) begin
+    if (if_id_fire) begin
       id_pc <= if_pc; id_inst <= if_inst; id_error <= if_error;
     end
   end

@@ -74,8 +74,6 @@ module edge_32_core #(
   wire rv32::issue_control_t id_issue_control;
   wire id_issue_legal;
   wire [PC_WIDTH-1:0] id_pc;
-  wire [31:0] id_rs1_value;
-  wire [31:0] id_rs2_value;
   wire id_terminal_break;
   wire [1:0] id_uses_gpr;
   wire id_valid;
@@ -96,13 +94,17 @@ module edge_32_core #(
   wire is_fp_compute;
   wire is_fp_csr;
   wire is_icache_header_csr;
-  wire [4:0] rd;
+  wire [4:0] ex_rd;
   wire redirect;
   wire [PC_WIDTH-1:0] redirect_pc;
   wire terminal_complete;
   wire wb_fp_csr_q;
 
   // WB outputs: data, lifetime and feedback.
+  assign cycle_count = cycle_q;
+  assign instret_count = instret_q;
+  assign icache_address_header = icache_address_header_q;
+  assign dcache_address_header = dcache_address_header_q;
   wire [63:0] cycle_q;
   wire [31:0] dcache_address_header_q;
   wire [31:0] icache_address_header_q;
@@ -121,8 +123,7 @@ module edge_32_core #(
   wire pipeline_kill = redirect || terminal_complete || wb_terminal || halted ||
                        core_start_i || core_force_stop_i;
 
-  edge_32_if_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED),
-    .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START), .EDGE_ASIC_ID(EDGE_ASIC_ID)) if_stage (
+  edge_32_if_stage #(.PC_WIDTH(PC_WIDTH), .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START)) if_stage (
     .boot_pc(boot_pc),
     .clk(clk),
     .core_force_stop_i(core_force_stop_i),
@@ -159,19 +160,19 @@ module edge_32_core #(
 
   // IF -> GPR local indices; ID -> source use; EX -> RAW; WB -> writeback.
 
+  wire [31:0] id_rs1_value, id_rs2_value;
   wire gpr_stall;
   wire [31:0] gpr_debug_x31;
   assign debug_x31 = {32'd0, gpr_debug_x31};
   edge_32_gpr_read_port gpr_read_port (
     .clk(clk), .reset_n(reset_n), .if_accept(if_valid && if_ready),
     .if_rs1(if_rs1), .if_rs2(if_rs2), .uses_gpr(id_uses_gpr),
-    .ex_valid(ex_valid), .ex_writes_gpr(ex_writes_gpr), .ex_rd(rd),
+    .ex_valid(ex_valid), .ex_writes_gpr(ex_writes_gpr), .ex_rd(ex_rd),
     .gpr_stall(gpr_stall), .read_value1(id_rs1_value), .read_value2(id_rs2_value),
     .write_valid(wb_valid), .write_rd(wb_rd_q), .write_value(wb_value_q),
     .debug_x31(gpr_debug_x31));
 
-  edge_32_id_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED),
-    .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START), .EDGE_ASIC_ID(EDGE_ASIC_ID)) id_stage (
+  edge_32_id_stage #(.PC_WIDTH(PC_WIDTH), .ENABLE_FPU(ENABLE_FPU)) id_stage (
     .clk(clk),
     .gpr_stall(gpr_stall),
     .csr_write(csr_write),
@@ -198,7 +199,7 @@ module edge_32_core #(
     .is_fp_csr(is_fp_csr),
     .is_icache_header_csr(is_icache_header_csr),
     .pipeline_kill(pipeline_kill),
-    .rd(rd),
+    .rd(ex_rd),
     .reset_n(reset_n),
     .wb_dcache_header_q(wb_dcache_header_q),
     .wb_fp_csr_q(wb_fp_csr_q),
@@ -221,8 +222,7 @@ module edge_32_core #(
     .if_ready(if_ready)
   );
 
-  edge_32_ex_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED),
-    .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START), .EDGE_ASIC_ID(EDGE_ASIC_ID)) ex_stage (
+  edge_32_ex_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED), .ENABLE_FPU(ENABLE_FPU), .EDGE_ASIC_ID(EDGE_ASIC_ID)) ex_stage (
     .accel_req_ready(accel_req_ready),
     .accel_resp_error(accel_resp_error),
     .accel_resp_valid(accel_resp_valid),
@@ -294,30 +294,25 @@ module edge_32_core #(
     .is_fp_compute(is_fp_compute),
     .is_fp_csr(is_fp_csr),
     .is_icache_header_csr(is_icache_header_csr),
-    .rd(rd),
+    .rd(ex_rd),
     .redirect(redirect),
     .redirect_pc(redirect_pc),
     .terminal_complete(terminal_complete),
     .wb_fp_csr_q(wb_fp_csr_q)
   );
 
-  edge_32_wb_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED),
-    .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START), .EDGE_ASIC_ID(EDGE_ASIC_ID)) wb_stage (
+  edge_32_wb_stage wb_stage (
     .clk(clk),
     .core_force_stop_i(core_force_stop_i),
     .core_start_i(core_start_i),
     .ex_wb(ex_wb),
     .ex_wb_fire(ex_wb_fire),
     .reset_n(reset_n),
-    .cycle_count(cycle_count),
     .cycle_q(cycle_q),
-    .dcache_address_header(dcache_address_header),
     .dcache_address_header_q(dcache_address_header_q),
     .halted(halted),
-    .icache_address_header(icache_address_header),
     .icache_address_header_q(icache_address_header_q),
     .illegal(illegal),
-    .instret_count(instret_count),
     .instret_q(instret_q),
     .wb_commit(wb_commit),
     .wb_dcache_header_q(wb_dcache_header_q),

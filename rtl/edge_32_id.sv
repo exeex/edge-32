@@ -1,6 +1,6 @@
 // ID stage: explicit ports; implementation is private to this module.
 module edge_32_id_stage #(
-  parameter PC_WIDTH=32, parameter DMEM_RESP_FORMATTED=0, parameter ENABLE_FPU=0, parameter AUTO_START=1, parameter [46:0] EDGE_ASIC_ID=47'd0
+  parameter PC_WIDTH=32, parameter ENABLE_FPU=0
 )(
   input wire clk,
   input wire gpr_stall,

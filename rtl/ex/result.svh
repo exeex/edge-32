@@ -6,7 +6,6 @@
     assign address_header_new=(f3[1:0]==2'b01)?address_header_source:
     (f3[1:0]==2'b10)?(address_header_old|address_header_source):
                        (address_header_old&~address_header_source);
-    assign address_header_write=csr_write;
     assign ex_result=is_edge_break?ex_rs1_value:is_accel?accel_resp_value[31:0]:
     is_fp_compute?fpu_value:is_muldiv?mul_result:
     is_fp_load?fp_load_value:is_load?lsu_value[31:0]:is_cycle?cycle_q[31:0]:
