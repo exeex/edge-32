@@ -304,11 +304,14 @@ module edge_32_core #(
     icache_invalidate_complete;
   wire fast_done=ex_issue_ok&&is_fast_class;
   wire sys_done=ex_issue_ok&&is_supported_system&&!is_fence_i;
-  wire ex_done=ex_valid&&!halted&&!core_start_i&&!core_force_stop_i&&
-    (fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||
+  // Pipeline already owns EX valid and cancels capture on stop/redirect.
+  // Export execution readiness before WB's live-owner/commit qualification.
+  wire ex_release_ready=(fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||
      ((is_int_mem||is_fp_mem)&&mem_started_q&&lsu_done)||
      fp_compute_complete||
      accel_done||cache_done||fence_i_done||ex_decode_fault_q);
+  wire ex_done=ex_valid&&!halted&&!core_start_i&&!core_force_stop_i&&
+               ex_release_ready;
   wire ex_faulting=ex_decode_fault_q||
     ((is_int_mem||is_fp_mem)&&lsu_done&&lsu_error)||
     (is_accel&&accel_done&&accel_resp_error);
@@ -403,7 +406,7 @@ module edge_32_core #(
     .id_legal(id_issue_legal),
     .id_csr_write(id_csr_write),.id_stall(id_stall),
     .ex_pc(ex_pc),.ex_inst(ex_inst),.ex_is_64b(),.ex_error(ex_error),
-    .ex_rs1_value(ex_rs1_value),.ex_rs2_value(ex_rs2_value),.ex_done(ex_done),
+    .ex_rs1_value(ex_rs1_value),.ex_rs2_value(ex_rs2_value),.ex_done(ex_release_ready),
     .ex_legal(decoded_legal),
     .ex_redirect_valid(redirect||terminal_complete||wb_terminal||halted||core_start_i||
                        core_force_stop_i));
