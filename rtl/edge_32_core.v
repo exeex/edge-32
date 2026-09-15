@@ -173,15 +173,6 @@ module edge_32_core #(
   reg wb_fast_q;
   wire [31:0] wb_value_q=wb_fast_q ? wb_fast_value_q:wb_other_value_q;
   reg [4:0] wb_rd_q;
-  reg [31:1] wb_gpr_select_q;
-  genvar gpr_destination;
-  generate for (gpr_destination=1; gpr_destination<32;
-                gpr_destination=gpr_destination+1) begin : g_wb_gpr_decode
-    // EX decodes the destination; WB only gates the registered word select.
-    always @(posedge clk)
-      if (ex_done) wb_gpr_select_q[gpr_destination] <=
-        (rd == gpr_destination[4:0]);
-  end endgenerate
   reg wb_gpr_q, wb_fault_q, wb_halt_q;
   wire wb_fp_csr_q;
   reg wb_icache_header_q, wb_dcache_header_q;
@@ -370,10 +361,10 @@ module edge_32_core #(
     end
   end
 
-  edge_32_gpr #(.PREDECODED_WRITE(1)) gpr_file(
+  edge_32_gpr gpr_file(
     .clk(clk),.reset_n(reset_n),.read_rs1(id_rs1),.read_rs2(id_rs2),
     .read_value1(id_rs1_value),.read_value2(id_rs2_value),
-    .write_valid(wb_valid),.write_rd(wb_rd_q),.write_select(wb_gpr_select_q),.write_value(wb_value_q),
+    .write_valid(wb_valid),.write_rd(wb_rd_q),.write_value(wb_value_q),
     .debug_x31(gpr_debug_x31));
 
   edge_32_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
