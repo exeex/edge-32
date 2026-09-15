@@ -1,9 +1,9 @@
-// Included in edge_32_core; preserves the existing hardware hierarchy.
-  wire is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
-  wire ex_legal=decoded_legal;
-  wire ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
+// Implementation owned by this stage module.
+    assign is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
+    assign ex_legal=decoded_legal;
+    assign ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
                    !core_start_i&&!core_force_stop_i;
-  wire [31:0] fast_result;
+
   edge_32_alu #(.PC_WIDTH(PC_WIDTH)) fast_alu(
     .fast_issue_op(alu_op),.fast_issue_pc(ex_pc),
     .fast_issue_src0_value(ex_rs1_value),
@@ -13,7 +13,7 @@
     .fast_issue_funct7_bit5(funct7_bit5),.fast_issue_funct7_is_m(1'b0),
     .fast_issue_shamt(shamt),
     .fast_result(fast_result));
-  wire branch_taken; wire [PC_WIDTH-1:0] branch_target;
+
   edge_32_branch #(.PC_WIDTH(PC_WIDTH)) branch(
     .branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
     .branch_issue_src0_value(ex_rs1_value),
@@ -22,19 +22,14 @@
     .branch_issue_jal_imm(ex_jump_imm_q),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
-  wire mul_ready,mul_result_valid; wire [31:0] mul_result;
-  wire mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
+    assign mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
   edge_32_muldiv_asap7 muldiv(.clk(clk),.reset_n(reset_n),
     .op_valid(mul_start),.op_ready(mul_ready),
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
     .result_valid(mul_result_valid),.result_value(mul_result),.busy());
 
+    assign lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
 
-  wire lsu_ready,lsu_done,lsu_error; wire [31:0] lsu_value;
-  wire [31:0] lsu_mem_addr;
-  wire lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
-  wire [31:0] fp_load_value;
-  wire [63:0] fp_store_value;
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
     .clk(clk),.reset_n(reset_n),.op_valid(lsu_start),
     .op_ready(lsu_ready),.op_store(is_store||is_fp_store),
@@ -51,8 +46,6 @@
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
   assign dmem_req_addr={32'd0,lsu_mem_addr};
 
-  wire fp_compute_complete;
-  wire [31:0] fpu_value, fp_csr_value;
   generate if(ENABLE_FPU) begin: g_fpu
     edge_32_fpu fpu(
       .clk(clk),.reset_n(reset_n),.cancel(core_start_i||core_force_stop_i),

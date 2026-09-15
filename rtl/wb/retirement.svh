@@ -1,8 +1,7 @@
-// Included in edge_32_core.
-  reg [31:0] icache_address_header_q, dcache_address_header_q;
+// Implementation owned by this stage module.
+
   assign icache_address_header = icache_address_header_q;
   assign dcache_address_header = dcache_address_header_q;
-  assign debug_x31={32'd0,gpr_debug_x31};
   assign cycle_count=cycle_q; assign instret_count=instret_q;
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin

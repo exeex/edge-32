@@ -1,4 +1,4 @@
-// Included in edge_32_core; preserves the existing hardware hierarchy.
+// Implementation owned by this stage module.
   edge_32_decode if_decode(
     .inst(if_inst),  .op_class(if_decoded_class),
     .legal(if_decoded_legal), .rd(), .rs1(), .rs2(),

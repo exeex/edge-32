@@ -43,7 +43,6 @@ ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_banked_data_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_tag_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_dirty_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/edge_dcache.v
-${EDGE32_ROOT}/rtl/edge_32_pipeline.v
 ${EDGE32_ROOT}/rtl/edge_32_gpr.v
 ${EDGE32_ROOT}/rtl/edge_32_counter64.v
 ${EDGE32_ROOT}/rtl/edge_32_core.v

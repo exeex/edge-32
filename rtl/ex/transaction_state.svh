@@ -1,4 +1,4 @@
-// Included in edge_32_core.
+// Implementation owned by this stage module.
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
       mem_started_q<=0; mul_started_q<=0;

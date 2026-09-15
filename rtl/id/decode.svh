@@ -1,4 +1,4 @@
-// Included in edge_32_core; preserves the existing hardware hierarchy.
+// Implementation owned by this stage module.
   // IF captures candidate indices without source-use decoding. ID decides
   // whether operands participate in hazards and the EX issue packet.
   edge_32_register_decode #(.ENABLE_FPU(ENABLE_FPU)) id_gpr_use_decode(

@@ -1,4 +1,4 @@
-// Included in edge_32_core; preserves the existing hardware hierarchy.
+// Implementation owned by this stage module.
   edge_32_frontend #(.PC_WIDTH(PC_WIDTH),.AUTO_START(AUTO_START)) frontend(
     .clk(clk),.reset_n(reset_n),.boot_pc(boot_pc),
     .fetch_start(core_start_i),.fetch_stop(core_force_stop_i),
@@ -11,7 +11,7 @@
     .op_inst(parcel_inst), .op_error(parcel_error), .halt(frontend_stop),
     .redirect_valid(redirect),.redirect_pc(redirect_pc));
   // Fixed 32-bit fetch: cancel actual transfers without changing capacity.
-  wire if_flush = redirect || frontend_stop || core_start_i || core_force_stop_i;
+    assign if_flush = redirect || frontend_stop || core_start_i || core_force_stop_i;
   assign if_valid = parcel_valid && !if_flush;
   assign parcel_ready = if_ready && !if_flush;
   assign if_pc = parcel_pc;

@@ -1,4 +1,4 @@
-// Included in edge_32_core; preserves the existing hardware hierarchy.
+// Implementation owned by this stage module.
   // Named access preserves the ID->EX packet bit layout and capture edge.
   assign is_lui = ex_issue_control_q.is_lui;
   assign is_auipc = ex_issue_control_q.is_auipc;
