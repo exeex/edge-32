@@ -16,7 +16,8 @@
     .fast_issue_funct3(f3),
     .fast_issue_funct7_bit5(funct7_bit5),.fast_issue_funct7_is_m(1'b0),
     .fast_issue_shamt(shamt),
-    .fast_result(fast_result));
+    .fast_result(),.simple_result(fast_result),
+    .complex_result(alu_result),.simple_select(simple_select));
 
   edge_32_branch #(.PC_WIDTH(PC_WIDTH)) branch(
     .branch_issue_op(alu_op),.branch_issue_pc(ex_pc),

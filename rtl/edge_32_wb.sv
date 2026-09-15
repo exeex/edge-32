@@ -20,7 +20,8 @@ module edge_32_wb_stage (
   output wire wb_valid,
   output wire [31:0] wb_value_q
 );
-  reg wb_fast_q;
+  reg wb_fast_q, wb_alu_q;
+  reg [31:0] wb_alu_value_q;
   reg [31:0] wb_fast_value_q;
   reg wb_gpr_q;
   reg wb_halt_q;
@@ -30,6 +31,6 @@ module edge_32_wb_stage (
 `include "wb/completion_state.svh"
 `include "wb/capture.svh"
 `include "wb/retirement.svh"
-  assign wb_value_q = wb_fast_q ? wb_fast_value_q : wb_other_value_q;
+  assign wb_value_q = wb_fast_q ? wb_fast_value_q : wb_alu_q ? wb_alu_value_q : wb_other_value_q;
   assign wb_commit = wb_pending_q && !halted && !core_start_i && !core_force_stop_i;
 endmodule

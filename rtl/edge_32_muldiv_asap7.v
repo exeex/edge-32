@@ -40,7 +40,8 @@ endmodule
 // X={A,B,C} (10/11/11), Y={H,L} (16/16).
 // Only A and H carry the instruction-selected sign; all lower chunks are
 // nonnegative. Two three-product rows are summed in parallel, then combined.
-// Six edges: inputs, products, BC rows, ABC rows, full sum, output.
+// Six edges: inputs, BC products, BC sums plus A products, ABC rows,
+// full sum, output. Late A products avoid delaying their wider results.
 (* keep_hierarchy = "yes" *)
 module edge32_mul3x2_tree (
   input wire clk, input wire reset_n, input wire in_valid,
@@ -51,7 +52,9 @@ module edge32_mul3x2_tree (
   reg signed [10:0] a_q;
   reg signed [11:0] b_q, c_q;
   reg signed [16:0] h_q, l_q;
-  reg signed [28:0] al_q, bl_q, cl_q, ah_q, bh_q, ch_q;
+  reg signed [28:0] bl_q, cl_q, bh_q, ch_q;
+  reg signed [10:0] a_delay_q;
+  reg signed [16:0] h_delay_q, l_delay_q;
   reg signed [28:0] al_delay_q, ah_delay_q;
   reg signed [38:0] bc_l_q, bc_h_q;
   reg signed [48:0] row_l_q, row_h_q;
@@ -68,16 +71,17 @@ module edge32_mul3x2_tree (
     c_q <= {1'b0,src0[10:0]};
     h_q <= {rhs_signed & src1[31],src1[31:16]};
     l_q <= {1'b0,src1[15:0]};
-    al_q <= a_q * l_q;
+    a_delay_q <= a_q;
+    h_delay_q <= h_q;
+    l_delay_q <= l_q;
     bl_q <= b_q * l_q;
     cl_q <= c_q * l_q;
-    ah_q <= a_q * h_q;
     bh_q <= b_q * h_q;
     ch_q <= c_q * h_q;
     bc_l_q <= {{10{cl_q[28]}},cl_q} + ({{10{bl_q[28]}},bl_q} << 11);
     bc_h_q <= {{10{ch_q[28]}},ch_q} + ({{10{bh_q[28]}},bh_q} << 11);
-    al_delay_q <= al_q;
-    ah_delay_q <= ah_q;
+    al_delay_q <= a_delay_q * l_delay_q;
+    ah_delay_q <= a_delay_q * h_delay_q;
     row_l_q <= {{10{bc_l_q[38]}},bc_l_q} + ({{20{al_delay_q[28]}},al_delay_q} << 22);
     row_h_q <= {{10{bc_h_q[38]}},bc_h_q} + ({{20{ah_delay_q[28]}},ah_delay_q} << 22);
     sum_q <= {{15{row_l_q[48]}},row_l_q} + ({{15{row_h_q[48]}},row_h_q} << 16);

@@ -8,6 +8,7 @@
   always @(posedge clk) begin
     if(ex_wb_fire) begin
       wb_fast_value_q<=ex_wb.fast_value; wb_other_value_q<=ex_wb.other_value;
+      wb_alu_value_q<=ex_wb.alu_value; wb_alu_q<=ex_wb.alu;
       wb_fast_q<=ex_wb.fast; wb_rd_q<=ex_wb.rd;
       wb_gpr_q<=ex_wb.writes_gpr;
       wb_fault_q<=ex_wb.fault; wb_halt_q<=ex_wb.halt;

@@ -17,7 +17,9 @@ module edge_32_alu #(
   input  wire fast_issue_funct7_bit5,
   input  wire fast_issue_funct7_is_m,
   input  wire [4:0] fast_issue_shamt,
-  output reg [31:0] fast_result
+  output wire [31:0] fast_result,
+  output reg [31:0] simple_result, complex_result,
+  output wire simple_select
 );
   localparam [OP_WIDTH-1:0] ALU_OP_OP_IMM = 4'd0;
   localparam [OP_WIDTH-1:0] ALU_OP_OP      = 4'd1;
@@ -36,17 +38,26 @@ module edge_32_alu #(
   wire [31:0] rhs = op_imm ? fast_issue_imm : fast_issue_src1_value;
   wire [4:0] shift_amount = op_imm ? fast_issue_shamt : fast_issue_src1_value[4:0];
 
-  // Select operands before arithmetic: OP/OP-IMM, PC-relative and Zba share
-  // one add/subtract datapath. Zba's shifts are fixed wiring plus selection.
+  // Fast add has no Zba shift or subtraction control in its operand cone.
+  wire [31:0] simple_lhs = op_pc ? fast_issue_pc[31:0] : fast_issue_src0_value;
+  wire [31:0] simple_rhs = op_link ? 32'd4 : op_pc ? fast_issue_imm : rhs;
+  wire [31:0] simple_add, complex_add;
   wire [31:0] zba_lhs = fast_issue_funct3 == 3'b010 ? fast_issue_src0_value << 1 :
                         fast_issue_funct3 == 3'b100 ? fast_issue_src0_value << 2 :
                                                     fast_issue_src0_value << 3;
-  wire [31:0] add_lhs = op_pc ? fast_issue_pc[31:0] :
-                       op_zba ? zba_lhs : fast_issue_src0_value;
-  wire [31:0] add_rhs = op_link ? 32'd4 :
-                       op_pc ? fast_issue_imm : rhs;
   wire subtract = op_reg && fast_issue_funct7_bit5;
-  wire [31:0] add_result = add_lhs + (add_rhs ^ {32{subtract}}) + {31'd0, subtract};
+  edge32_alu_add32 fast_adder(.a(simple_lhs),.b(simple_rhs),.cin(1'b0),.sum(simple_add));
+  edge32_alu_add32 complex_adder(
+    .a(op_zba ? zba_lhs : fast_issue_src0_value),
+    .b(rhs ^ {32{subtract}}),.cin(subtract),.sum(complex_add));
+  wire integer_op = op_imm || (op_reg && !fast_issue_funct7_is_m);
+  assign simple_select = (fast_issue_op == ALU_OP_LUI) || op_pc ||
+    (integer_op && ((fast_issue_funct3 == 3'b000 && !subtract) ||
+                    fast_issue_funct3 == 3'b100 || fast_issue_funct3 == 3'b110 ||
+                    fast_issue_funct3 == 3'b111));
+  // Compatibility output for local combinational clients. The core captures
+  // the separate outputs, and performs this selection after the WB registers.
+  assign fast_result = simple_select ? simple_result : complex_result;
 
   // Signed and unsigned comparisons share the magnitude comparison.
   wire less_unsigned = fast_issue_src0_value < rhs;
@@ -68,34 +79,57 @@ module edge_32_alu #(
   end endgenerate
 
   always @* begin
-    fast_result = 32'd0;
+    simple_result = 32'd0;
+    complex_result = 32'd0;
     case (fast_issue_op)
-      ALU_OP_LUI: fast_result = fast_issue_imm;
-      ALU_OP_AUIPC, ALU_OP_JAL, ALU_OP_JALR: fast_result = add_result;
+      ALU_OP_LUI: simple_result = fast_issue_imm;
+      ALU_OP_AUIPC, ALU_OP_JAL, ALU_OP_JALR: simple_result = simple_add;
       ALU_OP_OP_IMM, ALU_OP_OP: begin
-        if (op_imm || !fast_issue_funct7_is_m) begin
+        if (integer_op) begin
           case (fast_issue_funct3)
-            3'b000: fast_result = add_result;
-            3'b001, 3'b101: fast_result = shift_result;
-            3'b010: fast_result = {31'd0, less_signed};
-            3'b011: fast_result = {31'd0, less_unsigned};
-            3'b100: fast_result = fast_issue_src0_value ^ rhs;
-            3'b110: fast_result = fast_issue_src0_value | rhs;
-            3'b111: fast_result = fast_issue_src0_value & rhs;
-            default: fast_result = 32'd0;
+            3'b000: begin
+              simple_result = simple_add;
+              complex_result = complex_add;
+            end
+            3'b001, 3'b101: complex_result = shift_result;
+            3'b010: complex_result = {31'd0, less_signed};
+            3'b011: complex_result = {31'd0, less_unsigned};
+            3'b100: simple_result = fast_issue_src0_value ^ rhs;
+            3'b110: simple_result = fast_issue_src0_value | rhs;
+            3'b111: simple_result = fast_issue_src0_value & rhs;
+            default: begin end
           endcase
         end
       end
       ALU_OP_ZBA: begin
         case (fast_issue_funct3)
-          3'b010, 3'b100, 3'b110: fast_result = add_result;
-          default: fast_result = 32'd0;
+          3'b010, 3'b100, 3'b110: complex_result = complex_add;
+          default: begin end
         endcase
       end
-      default: fast_result = 32'd0;
+      default: begin end
     endcase
   end
-
 endmodule
 
+// Four local 8-bit candidate additions and a parallel group carry network.
+// Bound carry propagation instead of relying on a mapped 32-bit ripple chain.
+module edge32_alu_add32 (
+  input wire [31:0] a,b, input wire cin, output wire [31:0] sum
+);
+  wire [3:0] g,p;
+  wire [3:0] carry;
+  assign carry[0] = cin;
+  assign carry[1] = g[0] | (p[0]&cin);
+  assign carry[2] = g[1] | (p[1]&g[0]) | (p[1]&p[0]&cin);
+  assign carry[3] = g[2] | (p[2]&g[1]) | (p[2]&p[1]&g[0]) | (p[2]&p[1]&p[0]&cin);
+  genvar i;
+  generate for (i=0;i<4;i=i+1) begin: chunk
+    wire [8:0] zero_sum = {1'b0,a[8*i+:8]} + {1'b0,b[8*i+:8]};
+    wire [7:0] one_sum = a[8*i+:8] + b[8*i+:8] + 8'd1;
+    assign g[i] = zero_sum[8];
+    assign p[i] = &(a[8*i+:8] ^ b[8*i+:8]);
+    assign sum[8*i+:8] = carry[i] ? one_sum : zero_sum[7:0];
+  end endgenerate
+endmodule
 `endif

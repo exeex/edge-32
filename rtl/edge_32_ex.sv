@@ -110,7 +110,8 @@ module edge_32_ex_stage #(
   reg [31:0] ex_rs2_value;
   wire [2:0] f3;
   wire fast_done;
-  wire [31:0] fast_result;
+  wire [31:0] fast_result, alu_result;
+  wire simple_select;
   wire fence_i_done;
   wire fp_compute_complete;
   wire [31:0] fp_csr_value;
@@ -166,7 +167,9 @@ module edge_32_ex_stage #(
 `include "ex/slot.svh"
   assign ex_wb.fast_value = fast_result;
   assign ex_wb.other_value = ex_result;
-  assign ex_wb.fast = is_fast_class;
+  assign ex_wb.fast = is_fast_class && simple_select;
+  assign ex_wb.alu = is_fast_class && !simple_select;
+  assign ex_wb.alu_value = alu_result;
   assign ex_wb.rd = rd;
   assign ex_wb.writes_gpr = ex_writes_gpr;
   assign ex_wb.fault = ex_faulting;
