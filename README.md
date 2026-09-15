@@ -32,10 +32,19 @@ historical; it does not describe the current Edge32 pipeline.
 | --- | --- |
 | IF | Predecode source/destination indices, register banks, source-use masks and coarse instruction class; capture them with the admitted instruction. |
 | ID | Resolve legality, destination write authorization, result-source controls and dynamic rounding mode; select GPR/FPR operands and interlock on unavailable EX results or pending CSR state. |
-| EX | Issue captured operands to the selected unit and retain ownership until completion. |
+| EX | Issue captured operands to the selected unit and retain ownership until completion; frontend-local control consumes aligned ID sideband in parallel. |
 | WB | Accept aligned result, rd, bank and valid; commit register/CSR state and retirement, and forward registered results to ID. |
 
 The ID issue packet carries the destination and mux controls through EX.
+ID separately merges fault and break policy for `edge_32_frontend_control`.
+Its two resetless bits capture on the same ID-to-EX edge as operands, with the
+same stall/cancel ownership, but belong beside the frontend physically. Only
+narrow producer-owned memory/accelerator fault events join this local stop
+logic; the normal all-unit completion tree is not an input. Frontend lookahead
+computes both pop/no-pop request candidates from local ownership state, so
+late pipeline capacity only selects a prepared candidate. The remaining
+scalar issue packet is 56 bits. No pipeline stage or retirement cycle is added.
+
 Completion supplies readiness and data; it does not re-decode rd. A younger
 instruction's controls cannot overwrite an occupied older WB slot.
 
@@ -93,6 +102,15 @@ At the same pre-CTS settings, core setup improves to +123.30 ps and area is
 3598 µm²; branch-to-request and branch-to-register margins are +305.69 and
 +228.33 ps. The remaining +200 ps contract misses are reset distribution and
 the divider. Details: `src/test-32/physical/openroad/rv32-branch-capacity-20260915.md`.
+
+The frontend-local terminal sideband and pop/no-pop capacity lookahead retain
+320/320 passing tests. Matched pre-CTS core area is 3588.50 µm² and worst setup
+is +158.69 ps, versus 3598.40 µm² / +123.30 ps before this change. The two
+control FFs are physically at the frontend/pipeline edge, outside the ALU
+cluster, on the existing ID-to-EX clock edge. The remaining +200 ps misses are
+divider (+158.69 ps), reset-to-frontend (+162.73 ps), and the independent ID
+measurement target (+198.78 ps). This is placement-RC evidence, not routed
+signoff. Details: `src/test-32/physical/openroad/rv32-frontend-terminal-20260915.md`.
 
 The composed workspace owns detailed contracts, tests and APR evidence in
 `src/test-32/edge_core/rtl/` and

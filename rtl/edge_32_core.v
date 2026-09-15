@@ -49,7 +49,9 @@ module edge_32_core #(
   wire [PC_WIDTH-1:0] parcel_pc; wire [31:0] parcel_inst;
   wire if_valid, if_ready, if_capacity_ready, if_error, if_is_64b;
   wire [PC_WIDTH-1:0] if_pc; wire [63:0] if_inst;
-  wire id_is_64b;
+  wire id_is_64b, id_error;
+  wire ex_decode_fault_q;
+  wire id_terminal_break;
   wire [63:0] id_inst;
   wire ex_valid, ex_error;
   wire [PC_WIDTH-1:0] ex_pc; wire [63:0] ex_inst;
@@ -102,7 +104,7 @@ module edge_32_core #(
   wire is_icache_header_csr;
   wire is_dcache_header_csr;
   wire is_fp_csr;
-  wire is_ebreak;
+  wire is_terminal_break;
   wire is_edge_break;
   wire is_edge_cache;
   wire is_fast_class;
@@ -124,8 +126,8 @@ module edge_32_core #(
   wire [3:0] alu_op;
   wire ex_writes_gpr;
   wire ex_writes_fpr;
-  wire [56:0] id_issue_control;
-  reg [56:0] ex_issue_control_q;
+  wire [55:0] id_issue_control;
+  reg [55:0] ex_issue_control_q;
   wire [31:0] id_alu_imm, id_mem_imm, id_branch_imm, id_jump_imm;
   reg [31:0] ex_alu_imm_q, ex_mem_imm_q, ex_branch_imm_q, ex_jump_imm_q;
   wire id_issue_legal;
@@ -158,13 +160,13 @@ module edge_32_core #(
     .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
     .register_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
     .fpu_control(id_fpu_control),
-    .control(id_issue_control),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
+    .control(id_issue_control),.terminal_break(id_terminal_break),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
     .branch_imm(id_branch_imm),.jump_imm(id_jump_imm),
     .writes_gpr(),.writes_fpr(),
     .issue_legal(id_issue_legal));
   assign {is_lui,is_auipc,is_jal,is_jalr,is_branch,is_load,
     is_store,is_fp_load,is_fp_store,is_fp_compute,is_muldiv,is_cycle,
-    is_instret,is_hardware_id,is_icache_header_csr,is_dcache_header_csr,is_fp_csr,is_ebreak,
+    is_instret,is_hardware_id,is_icache_header_csr,is_dcache_header_csr,is_fp_csr,
     is_edge_break,is_edge_cache,is_fast_class,is_int_mem,is_fp_mem,is_fence_i,
     is_supported_system,is_accel,csr_fflags,csr_frm,csr_write,cache_is_va,
     cache_kind,f3,funct7_bit5,shamt,csr_uimm,rd,
@@ -213,7 +215,7 @@ module edge_32_core #(
   wire is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
   wire fpu_legal;
   wire ex_legal=decoded_legal;
-  wire ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_error&&ex_legal&&
+  wire ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
                    !core_start_i&&!core_force_stop_i;
   wire [31:0] fast_result;
   edge_32_alu #(.PC_WIDTH(PC_WIDTH)) fast_alu(
@@ -321,12 +323,23 @@ module edge_32_core #(
     (fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||
      ((is_int_mem||is_fp_mem)&&mem_started_q&&lsu_done)||
      (is_fp_compute&&fpu_started_q&&fpu_done)||
-     accel_done||cache_done||fence_i_done||ex_error||!ex_legal);
-  wire ex_faulting=ex_error||!ex_legal||
+     accel_done||cache_done||fence_i_done||ex_decode_fault_q);
+  wire ex_faulting=ex_decode_fault_q||
     ((is_int_mem||is_fp_mem)&&lsu_done&&lsu_error)||
     (is_accel&&accel_done&&accel_resp_error);
-  wire terminal_complete=ex_done&&
-    (ex_faulting||is_ebreak||is_edge_break);
+  // Same ID->EX edge, distinct physical owner beside the frontend. Execution
+  // units export narrow owned fault events; no operand/result bus enters here.
+  wire terminal_complete;
+  edge_32_frontend_control frontend_control(
+    .clk(clk),.id_capture_enable(id_capture_enable),
+    .id_decode_fault(id_error||!id_issue_legal),
+    .id_terminal_break(id_terminal_break),
+    .ex_valid(ex_valid),.halted(halted),.wb_terminal(wb_terminal),
+    .core_start(core_start_i),.core_force_stop(core_force_stop_i),
+    .memory_fault_complete((is_int_mem||is_fp_mem)&&mem_started_q&&lsu_done&&lsu_error),
+    .accel_fault_complete(accel_done&&accel_resp_error),
+    .ex_decode_fault(ex_decode_fault_q),.ex_terminal_break(is_terminal_break),
+    .terminal_complete(terminal_complete));
   wire frontend_stop=halted||terminal_complete||wb_terminal;
   wire ex_control=is_jal||is_jalr||is_branch;
   wire branch_redirect=fast_done&&ex_control&&branch_taken;
@@ -373,7 +386,7 @@ module edge_32_core #(
       wb_fast_value_q<=fast_result; wb_other_value_q<=ex_result;
       wb_fast_q<=is_fast_class; wb_rd_q<=rd;
       wb_gpr_q<=ex_writes_gpr; wb_fpr_q<=ex_writes_fpr;
-      wb_fault_q<=ex_faulting; wb_halt_q<=is_ebreak||is_edge_break;
+      wb_fault_q<=ex_faulting; wb_halt_q<=is_terminal_break;
       wb_fp_flags_q<=is_fp_compute; wb_fflags_q<=fpu_fflags;
       wb_fp_csr_q<=is_fp_csr&&fp_csr_write;
       wb_csr_fflags_q<=csr_fflags; wb_csr_frm_q<=csr_frm;
@@ -397,8 +410,8 @@ module edge_32_core #(
     .imem_req_addr(imem_req_addr),.imem_resp_valid(imem_resp_valid),
     .imem_resp_data(imem_resp_data),.imem_resp_error(imem_resp_error),
     .op_valid(parcel_valid),.op_ready(parcel_ready),
-    .op_capacity_ready(if_capacity_ready && !core_start_i && !core_force_stop_i &&
-                       !frontend_stop),.op_pc(parcel_pc),
+    // Stop/redirect qualify actual transfers at the frontend, after capacity.
+    .op_capacity_ready(if_capacity_ready && !core_start_i && !core_force_stop_i),.op_pc(parcel_pc),
     .op_inst(parcel_inst), .op_error(parcel_error), .halt(frontend_stop),
     .redirect_valid(redirect),.redirect_pc(redirect_pc));
   edge_32_instruction_assembler assembler(
@@ -414,7 +427,7 @@ module edge_32_core #(
     .fetch_capacity_ready(if_capacity_ready),.fetch_pc(if_pc),
     .fetch_inst(if_inst),.fetch_is_64b(if_is_64b),.fetch_error(if_error),
     .id_valid(),.id_capture_enable(id_capture_enable),.id_pc(), .id_inst(id_inst),
-    .id_is_64b(id_is_64b),.id_error(),
+    .id_is_64b(id_is_64b),.id_error(id_error),
     .id_rs1_value(id_rs1_value),.id_rs2_value(id_rs2_value),.ex_valid(ex_valid),
     .id_legal(id_issue_legal),
     .id_csr_write(id_csr_write),.id_stall(id_stall),

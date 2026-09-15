@@ -48,18 +48,19 @@ module edge_32_frontend #(
   wire response_push = response_fire && !request_killed_q &&
                        !redirect_valid && !halt && !fetch_stop_i;
   wire output_pop = op_valid && op_ready;
-  wire [2:0] reserved_count = {1'b0, fifo_count_q} + request_pending_q;
-  // Capacity is parallel to redirect/flush qualification. The producer must
-  // make capacity_ready match op_ready whenever requests are permitted.
-  // Only the real valid/ready handshake changes FIFO ownership.
-  wire capacity_pop = (fifo_count_q != 0) && op_capacity_ready;
-  wire reservation_space = (reserved_count < 3'd2) ||
-                           (capacity_pop && (reserved_count == 3'd2));
-  // A response and the next request may cross. The two-entry IF FIFO provides
-  // the skid slot required when EX starts a variable-latency stall.
-  assign imem_req_valid = (!request_pending_q || response_fire) &&
-                          reservation_space && running_q &&
-                          !redirect_valid && !halt && !fetch_stop_i;
+  wire [2:0] reserved_count;
+  wire request_without_pop, request_with_pop;
+  // Evaluate both local occupancy/response cases before late pipeline capacity.
+  // Preserve this combinational boundary so mapping cannot feed EX completion
+  // back through the occupancy arithmetic. Cancellation remains at the output.
+  edge_32_frontend_capacity capacity(
+    .fifo_count(fifo_count_q),.request_pending(request_pending_q),
+    .response_valid(imem_resp_valid),.running(running_q),
+    .reserved_count(reserved_count),
+    .request_without_pop(request_without_pop),.request_with_pop(request_with_pop));
+  wire request_candidate=op_capacity_ready ? request_with_pop:request_without_pop;
+  assign imem_req_valid=request_candidate &&
+                        !redirect_valid && !halt && !fetch_stop_i;
   assign imem_req_addr = fetch_pc_q;
   assign op_valid = (fifo_count_q != 0) && !redirect_valid && !halt;
   assign op_pc = fifo_pc_q[fifo_read_q];
@@ -142,4 +143,45 @@ module edge_32_frontend #(
       end
     end
   end
+endmodule
+
+// EX-lifetime semantic sideband physically owned by the frontend control cone.
+// Capture beside IF on the same edge as EX operands, using the same enable.
+// The producer's valid cancels stale payload; these two bits need no reset.
+module edge_32_frontend_control (
+  input wire clk, id_capture_enable,
+  input wire id_decode_fault, id_terminal_break,
+  input wire ex_valid, halted, wb_terminal, core_start, core_force_stop,
+  input wire memory_fault_complete, accel_fault_complete,
+  output reg ex_decode_fault, ex_terminal_break,
+  output wire terminal_complete
+);
+  always @(posedge clk) begin
+    if(id_capture_enable) begin
+      ex_decode_fault <= id_decode_fault;
+      ex_terminal_break <= id_terminal_break;
+    end
+  end
+  // Runs in parallel with normal ex_done. Producer-owned fault completions
+  // retain their original qualifications; a break also waits for WB to clear.
+  assign terminal_complete=ex_valid&&!halted&&!core_start&&!core_force_stop&&
+    (ex_decode_fault || (!wb_terminal&&ex_terminal_break) ||
+     memory_fault_complete || accel_fault_complete);
+endmodule
+
+// Local lookahead: no pipeline-ready, branch or terminal input enters here.
+// A response may release the outstanding slot while FIFO credit is evaluated.
+module edge_32_frontend_capacity (
+  input wire [1:0] fifo_count,
+  input wire request_pending, response_valid, running,
+  output wire [2:0] reserved_count,
+  output wire request_without_pop, request_with_pop
+);
+  assign reserved_count={1'b0,fifo_count}+request_pending;
+  wire slot_available=!request_pending||response_valid;
+  wire space_without_pop=reserved_count<3'd2;
+  wire space_with_pop=space_without_pop ||
+                      ((fifo_count!=0)&&(reserved_count==3'd2));
+  assign request_without_pop=slot_available&&running&&space_without_pop;
+  assign request_with_pop=slot_available&&running&&space_with_pop;
 endmodule

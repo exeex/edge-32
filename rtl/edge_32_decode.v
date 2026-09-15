@@ -72,7 +72,8 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   input wire decoded_legal,
   input wire [4:0] register_rd, input wire rd_gpr, rd_fpr,
   input wire [31:0] fpu_control,
-  output wire [56:0] control,
+  output wire [55:0] control,
+  output wire terminal_break,
   output wire [31:0] alu_imm, mem_imm, branch_imm, jump_imm,
   output wire writes_gpr, writes_fpr,
   output wire issue_legal
@@ -114,6 +115,8 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire is_ebreak=inst==64'h0000_0000_0010_0073;
   wire is_edge_break=(opc==7'h73)&&(f3==3'b001)&&(rd==5'd0)&&
     (inst[31:20]==12'h7e0);
+  // Merge the terminal instruction policy before the ID->EX capture.
+  assign terminal_break=is_ebreak||is_edge_break;
   wire is_edge_cache=(op_class==4'd7)&&(opc==7'h0b);
   wire is_fast_class=(op_class==4'd0)||(op_class==4'd1);
   wire is_int_mem=(op_class==4'd2)||(op_class==4'd3);
@@ -167,7 +170,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   assign jump_imm=imm_j;
   assign control={is_lui,is_auipc,is_jal,is_jalr,is_branch,is_load,
     is_store,is_fp_load,is_fp_store,is_fp_compute,is_muldiv,is_cycle,
-    is_instret,is_hardware_id,is_icache_header_csr,is_dcache_header_csr,is_fp_csr,is_ebreak,
+    is_instret,is_hardware_id,is_icache_header_csr,is_dcache_header_csr,is_fp_csr,
     is_edge_break,is_edge_cache,is_fast_class,is_int_mem,is_fp_mem,is_fence_i,
     is_supported_system,is_accel,csr_fflags,csr_frm,csr_write,cache_is_va,
     cache_kind,f3,funct7_bit5,shamt,csr_uimm,write_rd,
