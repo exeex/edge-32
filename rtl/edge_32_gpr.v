@@ -1,20 +1,22 @@
 `timescale 1ns/1ps
 // ID register read and architectural writeback. FF storage, two operand
 // outputs, one committed write port. ID->EX owns the synchronous read boundary.
-module edge_32_gpr (
+module edge_32_gpr #(parameter PREDECODED_WRITE = 0) (
   input wire clk, input wire reset_n,
   input wire [4:0] read_rs1, input wire [4:0] read_rs2,
   output wire [31:0] read_value1, output wire [31:0] read_value2,
   input wire write_valid, input wire [4:0] write_rd,
+  input wire [31:1] write_select,
   input wire [31:0] write_value,
   output wire [31:0] debug_x31
 );
   // Keep the numerical bank in FFs on FPGA; reset only visibility metadata.
   wire [31:0] regs_q [0:31];
   wire [31:0] initialized_q;
-  wire write_enable = write_valid && (write_rd != 5'd0);
-  wire forward1 = write_enable && (read_rs1 == write_rd);
-  wire forward2 = write_enable && (read_rs2 == write_rd);
+  wire [31:0] selected = {write_select, 1'b0};
+  wire write_enable = write_valid && (PREDECODED_WRITE || (write_rd != 5'd0));
+  wire forward1 = write_enable && (PREDECODED_WRITE ? selected[read_rs1] : (read_rs1 == write_rd));
+  wire forward2 = write_enable && (PREDECODED_WRITE ? selected[read_rs2] : (read_rs2 == write_rd));
   // Read storage in parallel with WB comparison; resolve bypass at the output.
   // Both FF read muxes may select the same entry; no read arbitration is needed.
   wire [4:0] slot1 = read_rs1;
@@ -34,7 +36,8 @@ module edge_32_gpr (
     reg initialized;
     assign regs_q[entry] = data_q;
     assign initialized_q[entry] = initialized;
-    wire write_entry = write_enable && (write_rd == entry);
+    wire write_entry = write_enable &&
+      (PREDECODED_WRITE ? write_select[entry] : (write_rd == entry));
     always @(posedge clk)
       if (write_entry) data_q <= write_value;
     always @(posedge clk or negedge reset_n)
