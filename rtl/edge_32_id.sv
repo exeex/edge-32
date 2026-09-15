@@ -3,11 +3,11 @@ module edge_32_id_stage #(
   parameter PC_WIDTH=32, parameter DMEM_RESP_FORMATTED=0, parameter ENABLE_FPU=0, parameter AUTO_START=1, parameter [46:0] EDGE_ASIC_ID=47'd0
 )(
   input wire clk,
+  input wire gpr_stall,
   input wire csr_write,
   input wire ex_release_ready,
   input wire ex_valid,
   input wire ex_writes_fpr,
-  input wire ex_writes_gpr,
   input wire [31:0] id_fpu_control,
   input wire if_csr_write,
   input wire [3:0] if_decoded_class,
@@ -20,8 +20,6 @@ module edge_32_id_stage #(
   input wire [PC_WIDTH-1:0] if_pc,
   input wire if_rd_fpr,
   input wire if_rd_gpr,
-  input wire [4:0] if_rs1,
-  input wire [4:0] if_rs2,
   input wire [2:0] if_uses_fpr,
   input wire if_valid,
   input wire [4:0] if_write_rd,
@@ -36,10 +34,6 @@ module edge_32_id_stage #(
   input wire wb_fp_csr_q,
   input wire wb_icache_header_q,
   input wire wb_pending_q,
-  input wire [4:0] wb_rd_q,
-  input wire wb_valid,
-  input wire [31:0] wb_value_q,
-  output wire [63:0] debug_x31,
   output wire [31:0] id_alu_imm,
   output wire [31:0] id_branch_imm,
   output wire id_capture_enable,
@@ -53,8 +47,6 @@ module edge_32_id_stage #(
   output wire [31:0] id_jump_imm,
   output wire [31:0] id_mem_imm,
   output reg [PC_WIDTH-1:0] id_pc,
-  output wire [31:0] id_rs1_value,
-  output wire [31:0] id_rs2_value,
   output wire id_terminal_break,
   output wire [1:0] id_uses_gpr,
   output reg id_valid,
@@ -62,19 +54,15 @@ module edge_32_id_stage #(
   output wire if_ready
 );
   wire csr_interlock;
-  wire [31:0] gpr_debug_x31;
   wire id_can_advance;
   wire id_csr_hazard;
   reg id_csr_write;
   reg [3:0] id_decoded_class;
   reg id_decoded_legal;
   wire id_fpr_hazard;
-  wire id_gpr_hazard;
   reg id_rd_fpr;
   reg id_rd_gpr;
   wire id_reads_fp_csr;
-  reg [4:0] id_rs1;
-  reg [4:0] id_rs2;
   wire id_stall;
   reg [2:0] id_uses_fpr;
   reg [4:0] id_write_rd;
@@ -82,10 +70,8 @@ module edge_32_id_stage #(
 
 `include "id/decode.svh"
 `include "id/dependencies.svh"
-`include "id/register_file.svh"
 
 `include "id/admission.svh"
 `include "id/slot.svh"
     assign if_id_fire = if_valid && if_ready;
-  assign debug_x31={32'd0,gpr_debug_x31};
 endmodule

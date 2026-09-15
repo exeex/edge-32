@@ -1,7 +1,5 @@
 // Implementation owned by this stage module.
-  // A result still in EX cannot bypass the new WB register boundary.
-    assign id_gpr_hazard=ex_valid&&ex_writes_gpr&&(rd!=0)&&
-    ((id_uses_gpr[0]&&id_rs1==rd)||(id_uses_gpr[1]&&id_rs2==rd));
+  // GPR dependencies are owned by the local read port.
     assign id_fpr_hazard=ex_valid&&ex_writes_fpr&&
     ((id_uses_fpr[0]&&id_frs0==rd)||(id_uses_fpr[1]&&id_frs1==rd)||
      (id_uses_fpr[2]&&id_frs2==rd));
@@ -13,4 +11,4 @@
     (ex_valid&&csr_write&&
     (is_fp_csr||is_icache_header_csr||is_dcache_header_csr)) ||
     (wb_pending_q&&(wb_fp_csr_q||wb_icache_header_q||wb_dcache_header_q));
-  assign id_stall=id_gpr_hazard||id_fpr_hazard||id_csr_hazard;
+  assign id_stall=gpr_stall||id_fpr_hazard||id_csr_hazard;

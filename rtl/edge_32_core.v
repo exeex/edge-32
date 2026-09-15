@@ -39,7 +39,7 @@ module edge_32_core #(
   output wire [63:0] instret_count
 );
   // IF -> ID -> EX -> WB
-  // ^     ^          |     WB writes the ID register-file read owner.
+  // ^     ^          |     WB writes the GPR local read owner.
   // |     +----------+
   // +---- EX redirect      Resolution cancels younger IF/ID work.
   wire core_start_i = AUTO_START ? 1'b0 : core_start;
@@ -160,14 +160,27 @@ module edge_32_core #(
     .imem_req_valid(imem_req_valid)
   );
 
+  // IF -> GPR local indices; ID -> source use; EX -> RAW; WB -> writeback.
+
+  wire gpr_stall;
+  wire [31:0] gpr_debug_x31;
+  assign debug_x31 = {32'd0, gpr_debug_x31};
+  edge_32_gpr_read_port gpr_read_port (
+    .clk(clk), .reset_n(reset_n), .if_accept(if_valid && if_ready),
+    .if_rs1(if_rs1), .if_rs2(if_rs2), .uses_gpr(id_uses_gpr),
+    .ex_valid(ex_valid), .ex_writes_gpr(ex_writes_gpr), .ex_rd(rd),
+    .gpr_stall(gpr_stall), .read_value1(id_rs1_value), .read_value2(id_rs2_value),
+    .write_valid(wb_valid), .write_rd(wb_rd_q), .write_value(wb_value_q),
+    .debug_x31(gpr_debug_x31));
+
   edge_32_id_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED),
     .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START), .EDGE_ASIC_ID(EDGE_ASIC_ID)) id_stage (
     .clk(clk),
+    .gpr_stall(gpr_stall),
     .csr_write(csr_write),
     .ex_release_ready(ex_release_ready),
     .ex_valid(ex_valid),
     .ex_writes_fpr(ex_writes_fpr),
-    .ex_writes_gpr(ex_writes_gpr),
     .id_fpu_control(id_fpu_control),
     .if_csr_write(if_csr_write),
     .if_decoded_class(if_decoded_class),
@@ -180,8 +193,6 @@ module edge_32_core #(
     .if_pc(if_pc),
     .if_rd_fpr(if_rd_fpr),
     .if_rd_gpr(if_rd_gpr),
-    .if_rs1(if_rs1),
-    .if_rs2(if_rs2),
     .if_uses_fpr(if_uses_fpr),
     .if_valid(if_valid),
     .if_write_rd(if_write_rd),
@@ -196,10 +207,6 @@ module edge_32_core #(
     .wb_fp_csr_q(wb_fp_csr_q),
     .wb_icache_header_q(wb_icache_header_q),
     .wb_pending_q(wb_pending_q),
-    .wb_rd_q(wb_rd_q),
-    .wb_valid(wb_valid),
-    .wb_value_q(wb_value_q),
-    .debug_x31(debug_x31),
     .id_alu_imm(id_alu_imm),
     .id_branch_imm(id_branch_imm),
     .id_capture_enable(id_capture_enable),
@@ -213,8 +220,6 @@ module edge_32_core #(
     .id_jump_imm(id_jump_imm),
     .id_mem_imm(id_mem_imm),
     .id_pc(id_pc),
-    .id_rs1_value(id_rs1_value),
-    .id_rs2_value(id_rs2_value),
     .id_terminal_break(id_terminal_break),
     .id_uses_gpr(id_uses_gpr),
     .id_valid(id_valid),
@@ -338,5 +343,6 @@ endmodule
 // Stage module definitions compile with this core; includes do not share scope.
 `include "edge_32_if.sv"
 `include "edge_32_id.sv"
+`include "edge_32_gpr_read_port.sv"
 `include "edge_32_ex.sv"
 `include "edge_32_wb.sv"
