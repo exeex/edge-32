@@ -162,14 +162,12 @@ module edge_32_core #(
 
   wire [31:0] id_rs1_value, id_rs2_value;
   wire gpr_stall;
-  wire ex_forward_valid;
   wire [31:0] gpr_debug_x31;
   assign debug_x31 = {32'd0, gpr_debug_x31};
   edge_32_gpr_read_port gpr_read_port (
     .clk(clk), .reset_n(reset_n), .if_accept(if_valid && if_ready),
     .if_rs1(if_rs1), .if_rs2(if_rs2), .uses_gpr(id_uses_gpr),
     .ex_valid(ex_valid), .ex_writes_gpr(ex_writes_gpr), .ex_rd(ex_rd),
-    .ex_forward_valid(ex_forward_valid), .ex_forward_value(ex_wb.fast_value),
     .gpr_stall(gpr_stall), .read_value1(id_rs1_value), .read_value2(id_rs2_value),
     .write_valid(wb_valid), .write_rd(wb_rd_q), .write_value(wb_value_q),
     .debug_x31(gpr_debug_x31));
@@ -284,7 +282,6 @@ module edge_32_core #(
     .dmem_req_write(dmem_req_write),
     .dmem_req_wstrb(dmem_req_wstrb),
     .ex_done(ex_done),
-    .ex_forward_valid(ex_forward_valid),
     .ex_release_ready(ex_release_ready),
     .ex_valid(ex_valid),
     .ex_wb(ex_wb),

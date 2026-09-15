@@ -61,7 +61,6 @@ module edge_32_ex_stage #(
   output wire dmem_req_write,
   output wire [7:0] dmem_req_wstrb,
   output wire ex_done,
-  output wire ex_forward_valid,
   output wire ex_release_ready,
   output reg ex_valid,
   output wire edge32_stage::completion_payload_t ex_wb,
@@ -165,9 +164,6 @@ module edge_32_ex_stage #(
 `include "ex/result.svh"
 `include "ex/transaction_state.svh"
 `include "ex/slot.svh"
-  // Fast completion already excludes invalid/decode-fault/terminal/stop state.
-  // Keep slow completion feedback out of the operand forwarding qualification.
-  assign ex_forward_valid = fast_done;
   assign ex_wb.fast_value = fast_result;
   assign ex_wb.other_value = ex_result;
   assign ex_wb.fast = is_fast_class;
