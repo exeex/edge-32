@@ -41,6 +41,9 @@
   always @(posedge clk) begin
     if(id_capture_enable) begin
       ex_issue_control_q<=id_issue_control;
+      ex_immediate_complete_q<=id_issue_control.is_fast_class ||
+        (id_issue_control.is_supported_system && !id_issue_control.is_fence_i &&
+         !id_issue_control.is_instret);
       ex_imm_q<=id_imm;
     end
   end

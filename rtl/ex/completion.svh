@@ -18,15 +18,15 @@
     assign fence_i_done=is_fence_i&&icache_invalidate_started_q&&
     icache_invalidate_complete;
     assign fast_done=ex_issue_ok&&is_fast_class;
-    assign sys_done=ex_issue_ok&&is_supported_system&&!is_fence_i&&
-                    (!is_instret||instret_read_ready_q);
-  // Pipeline already owns EX valid and cancels capture on stop/redirect.
-  // Export execution readiness before WB's live-owner/commit qualification.
-  assign ex_release_ready=(fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||
+  // Capacity is independent of validity, launch permission and cancellation.
+  // Static one-cycle classes were decoded at ID capture; slow units expose
+  // completion of their owned transaction. Actual transfers are qualified below.
+  assign ex_release_ready=(ex_immediate_complete_q||
+     (is_instret&&instret_read_ready_q)||
+     (is_muldiv&&mul_started_q&&mul_result_valid)||
      ((is_int_mem||is_fp_mem)&&mem_started_q&&lsu_done)||
-     fp_compute_complete||
-     accel_done||cache_done||fence_i_done||ex_decode_fault_q);
-  assign ex_done=ex_valid&&!halted&&!core_start_i&&!core_force_stop_i&&
+     fp_compute_complete||accel_done||cache_done||fence_i_done||ex_decode_fault_q);
+  assign ex_done=ex_valid&&!halted&&!wb_terminal&&!core_start_i&&!core_force_stop_i&&
                ex_release_ready;
   assign ex_faulting=ex_decode_fault_q||
     ((is_int_mem||is_fp_mem)&&lsu_done&&lsu_error)||
@@ -46,6 +46,6 @@
   assign frontend_stop=halted||terminal_complete||wb_terminal;
     assign ex_control=is_jal||is_jalr||is_branch;
     assign branch_redirect=fast_done&&ex_control&&branch_taken;
-  assign redirect=branch_redirect||fence_i_done;
+  assign redirect=branch_redirect||(ex_done&&fence_i_done);
   assign redirect_pc=fence_i_done ?
     ex_pc+{{(PC_WIDTH-3){1'b0}},3'd4}:branch_target;

@@ -164,7 +164,7 @@ module edge_32_frontend_control (
   end
   // Runs in parallel with normal ex_done. Producer-owned fault completions
   // retain their original qualifications; a break also waits for WB to clear.
-  assign terminal_complete=ex_valid&&!halted&&!core_start&&!core_force_stop&&
+  assign terminal_complete=ex_valid&&!halted&&!wb_terminal&&!core_start&&!core_force_stop&&
     (ex_decode_fault || (!wb_terminal&&ex_terminal_break) ||
      memory_fault_complete || accel_fault_complete);
 endmodule

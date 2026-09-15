@@ -156,7 +156,7 @@ module edge_32_ex_stage #(
   wire mul_start;
   reg mul_started_q;
   wire [4:0] shamt;
-  wire sys_done;
+  reg ex_immediate_complete_q;
 
 `include "ex/issue_registers.svh"
 `include "ex/units.svh"
