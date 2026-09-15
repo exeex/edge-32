@@ -1,3 +1,8 @@
+// Restore XLEN at the consumer; no second immediate register or format tag.
+  wire [31:0] ex_imm = (is_lui || is_auipc) ? {ex_imm_q, 12'b0} :
+    is_jal ? {{11{ex_imm_q[19]}}, ex_imm_q, 1'b0} :
+    is_branch ? {{19{ex_imm_q[11]}}, ex_imm_q[11:0], 1'b0} :
+                {{20{ex_imm_q[11]}}, ex_imm_q[11:0]};
 // Implementation owned by this stage module.
     assign is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
     assign ex_legal=decoded_legal;
@@ -8,7 +13,7 @@
     .fast_issue_op(alu_op),.fast_issue_pc(ex_pc),
     .fast_issue_src0_value(ex_rs1_value),
     .fast_issue_src1_value(ex_rs2_value),
-    .fast_issue_imm(ex_alu_imm_q),
+    .fast_issue_imm(ex_imm),
     .fast_issue_funct3(f3),
     .fast_issue_funct7_bit5(funct7_bit5),.fast_issue_funct7_is_m(1'b0),
     .fast_issue_shamt(shamt),
@@ -18,8 +23,7 @@
     .branch_issue_op(alu_op),.branch_issue_pc(ex_pc),
     .branch_issue_src0_value(ex_rs1_value),
     .branch_issue_src1_value(ex_rs2_value),
-    .branch_issue_imm(ex_mem_imm_q),.branch_issue_branch_imm(ex_branch_imm_q),
-    .branch_issue_jal_imm(ex_jump_imm_q),.branch_issue_funct3(f3),
+    .branch_issue_imm(ex_imm),.branch_issue_funct3(f3),
     .branch_taken(branch_taken),.branch_target(branch_target));
 
     assign mul_start=ex_issue_ok&&is_muldiv&&!mul_started_q;
@@ -35,7 +39,7 @@
     .op_ready(lsu_ready),.op_store(is_store||is_fp_store),
     .op_fp(is_fp_load||is_fp_store),.op_funct3(f3),
     .op_base(ex_rs1_value),
-    .op_offset(ex_mem_imm_q),
+    .op_offset(ex_imm),
     .op_store_data(is_fp_store?fp_store_value[31:0]:ex_rs2_value),
     .mem_req_valid(dmem_req_valid),
     .mem_req_ready(dmem_req_ready),.mem_req_write(dmem_req_write),

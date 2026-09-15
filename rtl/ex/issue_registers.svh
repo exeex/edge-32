@@ -41,7 +41,6 @@
   always @(posedge clk) begin
     if(id_capture_enable) begin
       ex_issue_control_q<=id_issue_control;
-      ex_alu_imm_q<=id_alu_imm; ex_mem_imm_q<=id_mem_imm;
-      ex_branch_imm_q<=id_branch_imm; ex_jump_imm_q<=id_jump_imm;
+      ex_imm_q<=id_imm;
     end
   end

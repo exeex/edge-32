@@ -11,8 +11,6 @@ module edge_32_branch #(
   input  wire [31:0]         branch_issue_src0_value,
   input  wire [31:0]         branch_issue_src1_value,
   input  wire [31:0]         branch_issue_imm,
-  input  wire [31:0]         branch_issue_branch_imm,
-  input  wire [31:0]         branch_issue_jal_imm,
   input  wire [2:0]          branch_issue_funct3,
 
   output reg                 branch_taken,
@@ -42,14 +40,14 @@ module edge_32_branch #(
     endcase
 
     if (branch_issue_op == ALU_OP_JAL) begin
-      control_target = branch_issue_pc[31:0] + branch_issue_jal_imm;
+      control_target = branch_issue_pc[31:0] + branch_issue_imm;
       branch_taken = 1'b1;
     end else if (branch_issue_op == ALU_OP_JALR) begin
       control_target = (branch_issue_src0_value + branch_issue_imm) &
                        32'hffff_fffe;
       branch_taken = 1'b1;
     end else begin
-      control_target = branch_issue_pc[31:0] + branch_issue_branch_imm;
+      control_target = branch_issue_pc[31:0] + branch_issue_imm;
     end
   end
 

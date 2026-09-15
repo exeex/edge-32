@@ -64,8 +64,7 @@ module edge_32_core #(
   wire [4:0] if_write_rd;
 
   // ID outputs: data, lifetime and feedback.
-  wire [31:0] id_alu_imm;
-  wire [31:0] id_branch_imm;
+  wire [19:0] id_imm;
   wire id_capture_enable;
   wire id_error;
   wire [4:0] id_frs0;
@@ -74,8 +73,6 @@ module edge_32_core #(
   wire [31:0] id_inst;
   wire rv32::issue_control_t id_issue_control;
   wire id_issue_legal;
-  wire [31:0] id_jump_imm;
-  wire [31:0] id_mem_imm;
   wire [PC_WIDTH-1:0] id_pc;
   wire [31:0] id_rs1_value;
   wire [31:0] id_rs2_value;
@@ -207,8 +204,7 @@ module edge_32_core #(
     .wb_fp_csr_q(wb_fp_csr_q),
     .wb_icache_header_q(wb_icache_header_q),
     .wb_pending_q(wb_pending_q),
-    .id_alu_imm(id_alu_imm),
-    .id_branch_imm(id_branch_imm),
+    .id_imm(id_imm),
     .id_capture_enable(id_capture_enable),
     .id_error(id_error),
     .id_frs0(id_frs0),
@@ -217,8 +213,6 @@ module edge_32_core #(
     .id_inst(id_inst),
     .id_issue_control(id_issue_control),
     .id_issue_legal(id_issue_legal),
-    .id_jump_imm(id_jump_imm),
-    .id_mem_imm(id_mem_imm),
     .id_pc(id_pc),
     .id_terminal_break(id_terminal_break),
     .id_uses_gpr(id_uses_gpr),
@@ -248,8 +242,7 @@ module edge_32_core #(
     .icache_address_header_q(icache_address_header_q),
     .icache_invalidate_complete(icache_invalidate_complete),
     .icache_invalidate_ready(icache_invalidate_ready),
-    .id_alu_imm(id_alu_imm),
-    .id_branch_imm(id_branch_imm),
+    .id_imm(id_imm),
     .id_capture_enable(id_capture_enable),
     .id_error(id_error),
     .id_frs0(id_frs0),
@@ -258,8 +251,6 @@ module edge_32_core #(
     .id_inst(id_inst),
     .id_issue_control(id_issue_control),
     .id_issue_legal(id_issue_legal),
-    .id_jump_imm(id_jump_imm),
-    .id_mem_imm(id_mem_imm),
     .id_pc(id_pc),
     .id_rs1_value(id_rs1_value),
     .id_rs2_value(id_rs2_value),

@@ -21,8 +21,7 @@ module edge_32_ex_stage #(
   input wire [31:0] icache_address_header_q,
   input wire icache_invalidate_complete,
   input wire icache_invalidate_ready,
-  input wire [31:0] id_alu_imm,
-  input wire [31:0] id_branch_imm,
+  input wire [19:0] id_imm,
   input wire id_capture_enable,
   input wire id_error,
   input wire [4:0] id_frs0,
@@ -31,8 +30,6 @@ module edge_32_ex_stage #(
   input wire [31:0] id_inst,
   input wire rv32::issue_control_t id_issue_control,
   input wire id_issue_legal,
-  input wire [31:0] id_jump_imm,
-  input wire [31:0] id_mem_imm,
   input wire [PC_WIDTH-1:0] id_pc,
   input wire [31:0] id_rs1_value,
   input wire [31:0] id_rs2_value,
@@ -102,8 +99,7 @@ module edge_32_ex_stage #(
   wire csr_frm;
   wire [4:0] csr_uimm;
   reg decoded_legal;
-  reg [31:0] ex_alu_imm_q;
-  reg [31:0] ex_branch_imm_q;
+  reg [19:0] ex_imm_q;
   wire ex_control;
   wire ex_decode_fault_q;
   reg ex_error;
@@ -111,9 +107,7 @@ module edge_32_ex_stage #(
   reg [31:0] ex_inst;
   rv32::issue_control_t ex_issue_control_q;
   wire ex_issue_ok;
-  reg [31:0] ex_jump_imm_q;
   wire ex_legal;
-  reg [31:0] ex_mem_imm_q;
   reg [PC_WIDTH-1:0] ex_pc;
   wire [31:0] ex_result;
   reg [31:0] ex_rs1_value;

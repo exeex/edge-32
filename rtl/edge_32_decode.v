@@ -71,7 +71,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   input wire [31:0] fpu_control,
   output wire [55:0] control,
   output wire terminal_break,
-  output wire [31:0] alu_imm, mem_imm, branch_imm, jump_imm,
+  output wire [19:0] imm,
   output wire writes_gpr, writes_fpr,
   output wire issue_legal
 );
@@ -136,16 +136,13 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire decoded_issue_legal=decoded_legal&&ex_supported;
 
 
-  // I/S/U/B/J immediate layouts, computed concurrently.
-  wire [11:0] i12=inst[31:20];
-  wire [11:0] s12={inst[31:25],inst[11:7]};
-  wire [31:0] imm_i={{20{i12[11]}},i12};
-  wire [31:0] imm_s={{20{s12[11]}},s12};
-  wire [31:0] imm_u={inst[31:12],12'b0};
-  wire [31:0] imm_b={{19{inst[31]}},inst[31],inst[7],
-    inst[30:25],inst[11:8],1'b0};
-  wire [31:0] imm_j={{11{inst[31]}},inst[31],inst[19:12],
-    inst[20],inst[30:21],1'b0};
+  // Raw I/S/B/U/J payloads: omitted low zeros are restored only in EX.
+  // Short formats are zero-padded; bit 11 retains their two's-complement sign.
+  wire [19:0] imm_i={8'b0,inst[31:20]};
+  wire [19:0] imm_s={8'b0,inst[31:25],inst[11:7]};
+  wire [19:0] imm_u=inst[31:12];
+  wire [19:0] imm_b={8'b0,inst[31],inst[7],inst[30:25],inst[11:8]};
+  wire [19:0] imm_j={inst[31],inst[19:12],inst[20],inst[30:21]};
   // Existing ALU selector priority only; independent predicates stay parallel.
   rv32::alu_op_t alu_op;
   always_comb begin
@@ -169,10 +166,19 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire [1:0] cache_kind=inst[21:20];
   wire funct7_bit5=inst[30];
   wire [4:0] shamt=rs2, csr_uimm=rs1;
-  assign alu_imm=(is_lui||is_auipc) ? imm_u:imm_i;
-  assign mem_imm=(is_store||is_fp_store) ? imm_s:imm_i;
-  assign branch_imm=imm_b;
-  assign jump_imm=imm_j;
+  // One 20-bit raw payload; ID performs no sign extension.
+  // Mutually exclusive format predicates keep immediate selection parallel.
+  // I is also the deterministic default for instructions that do not use imm.
+  wire imm_is_u = is_lui || is_auipc;
+  wire imm_is_s = is_store || is_fp_store;
+  wire imm_is_b = is_branch;
+  wire imm_is_j = is_jal;
+  wire imm_is_i = !(imm_is_u || imm_is_s || imm_is_b || imm_is_j);
+  assign imm = ({20{imm_is_i}} & imm_i) |
+               ({20{imm_is_s}} & imm_s) |
+               ({20{imm_is_b}} & imm_b) |
+               ({20{imm_is_u}} & imm_u) |
+               ({20{imm_is_j}} & imm_j);
   rv32::issue_control_t issue_packet;
   assign issue_packet.is_lui = is_lui;
   assign issue_packet.is_auipc = is_auipc;

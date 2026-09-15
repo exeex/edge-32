@@ -9,7 +9,6 @@
     .inst(id_inst),.op_class(id_decoded_class),.decoded_legal(id_decoded_legal),
     .register_rd(id_write_rd),.rd_gpr(id_rd_gpr),.rd_fpr(id_rd_fpr),
     .fpu_control(id_fpu_control),
-    .control(id_issue_control),.terminal_break(id_terminal_break),.alu_imm(id_alu_imm),.mem_imm(id_mem_imm),
-    .branch_imm(id_branch_imm),.jump_imm(id_jump_imm),
+    .control(id_issue_control),.terminal_break(id_terminal_break),.imm(id_imm),
     .writes_gpr(),.writes_fpr(),
     .issue_legal(id_issue_legal));
