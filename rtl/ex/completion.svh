@@ -18,7 +18,8 @@
     assign fence_i_done=is_fence_i&&icache_invalidate_started_q&&
     icache_invalidate_complete;
     assign fast_done=ex_issue_ok&&is_fast_class;
-    assign sys_done=ex_issue_ok&&is_supported_system&&!is_fence_i;
+    assign sys_done=ex_issue_ok&&is_supported_system&&!is_fence_i&&
+                    (!is_instret||instret_read_ready_q);
   // Pipeline already owns EX valid and cancels capture on stop/redirect.
   // Export execution readiness before WB's live-owner/commit qualification.
   assign ex_release_ready=(fast_done||sys_done||(is_muldiv&&mul_started_q&&mul_result_valid)||

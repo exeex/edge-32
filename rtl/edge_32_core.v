@@ -301,6 +301,12 @@ module edge_32_core #(
     .wb_fp_csr_q(wb_fp_csr_q)
   );
 
+  // Counters own arithmetic outside the completion/writeback stage.
+  edge_32_counter64 cycle_counter(.clk(clk),.reset_n(reset_n),
+    .enable(1'b1),.value(cycle_q));
+  edge_32_counter64 retire_counter(.clk(clk),.reset_n(reset_n),
+    .enable(wb_commit&&!wb_fault_q),.value(instret_q));
+
   edge_32_wb_stage wb_stage (
     .clk(clk),
     .core_force_stop_i(core_force_stop_i),
@@ -308,12 +314,10 @@ module edge_32_core #(
     .ex_wb(ex_wb),
     .ex_wb_fire(ex_wb_fire),
     .reset_n(reset_n),
-    .cycle_q(cycle_q),
     .dcache_address_header_q(dcache_address_header_q),
     .halted(halted),
     .icache_address_header_q(icache_address_header_q),
     .illegal(illegal),
-    .instret_q(instret_q),
     .wb_commit(wb_commit),
     .wb_dcache_header_q(wb_dcache_header_q),
     .wb_fault_q(wb_fault_q),
