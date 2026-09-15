@@ -64,9 +64,7 @@ module edge_32_mul_asap7 (
   end
 endmodule
 
-// Native RV32 radix-4 SRT wrapper.  The iterative datapath is 35 bits wide,
-// uses two registered ring slices, seven high bits for quotient-digit
-// selection, and carry-save partial-remainder feedback.
+// Native RV32 radix-4 nonnegative divider wrapper.
 (* keep_hierarchy = "yes" *)
 module edge_32_div_asap7 (
   input wire clk, input wire reset_n,
@@ -76,7 +74,7 @@ module edge_32_div_asap7 (
   output wire result_valid, output wire [31:0] result_value,
   output wire busy
 );
-  edge_32_div_srt4_native srt4 (
+  edge32_div_nonnegative radix4 (
     .clk(clk), .reset_n(reset_n), .op_valid(op_valid), .op_ready(op_ready),
     .src0(src0), .src1(src1), .funct3(funct3),
     .result_valid(result_valid), .result_value(result_value),

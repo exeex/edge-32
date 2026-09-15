@@ -3,5 +3,5 @@ ${ROOT_DIR}/src/edge-32/rtl/muldiv/edge_mul32_booth_compressor.v
 ${ROOT_DIR}/src/edge-32/rtl/muldiv/edge_add16_carry_select8.v
 ${ROOT_DIR}/src/edge-32/rtl/muldiv/edge_add64_carry_select16.v
 ${ROOT_DIR}/src/edge-32/rtl/muldiv/edge_mul32_booth_lane.v
-${ROOT_DIR}/src/edge-32/rtl/edge_32_div_srt4_native.v
+${ROOT_DIR}/src/edge-32/rtl/edge_32_div_nonnegative.v
 ${ROOT_DIR}/src/edge-32/rtl/edge_32_muldiv_asap7.v
