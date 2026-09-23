@@ -40,6 +40,7 @@ package rv32;
   localparam logic [11:0] CSR_EDGE_ICACHE_HEADER = 12'h7db;
   localparam logic [11:0] CSR_EDGE_DCACHE_HEADER = 12'h7dc;
   localparam logic [11:0] CSR_EDGE_BREAK = 12'h7e0;
+  localparam logic [11:0] CSR_EDGE_PUTCHAR = 12'h7e1;
 
   // Edge ASIC sub-operations (not standard RISC-V encodings).
   localparam logic [6:0] ASIC_DMA_START = 7'h01;
@@ -132,6 +133,7 @@ package rv32;
     logic is_dcache_header_csr;
     logic is_fp_csr;
     logic is_edge_break;
+    logic is_edge_putchar;
     logic is_edge_cache;
     logic is_fast_class;
     logic is_int_mem;

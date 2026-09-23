@@ -6,6 +6,8 @@ package edge32_stage;
     logic fast, alu;
     logic [4:0] rd;
     logic writes_gpr, fault, halt;
+    logic putchar;
+    logic [7:0] putchar_value;
     logic writes_icache_header, writes_dcache_header;
     logic [31:0] header_value;
   } completion_payload_t;

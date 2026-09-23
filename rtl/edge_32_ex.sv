@@ -127,6 +127,7 @@ module edge_32_ex_stage #(
   wire is_branch;
   wire is_cycle;
   wire is_edge_break;
+  wire is_edge_putchar;
   wire is_edge_cache;
   wire is_fast_class;
   wire is_fence_i;
@@ -174,6 +175,8 @@ module edge_32_ex_stage #(
   assign ex_wb.writes_gpr = ex_writes_gpr;
   assign ex_wb.fault = ex_faulting;
   assign ex_wb.halt = is_terminal_break;
+  assign ex_wb.putchar = is_edge_putchar && csr_write;
+  assign ex_wb.putchar_value = ex_rs1_value[7:0];
   assign ex_wb.writes_icache_header = is_icache_header_csr && csr_write;
   assign ex_wb.writes_dcache_header = is_dcache_header_csr && csr_write;
   assign ex_wb.header_value = address_header_new;

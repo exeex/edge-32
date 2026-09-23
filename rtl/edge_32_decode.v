@@ -117,6 +117,8 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire is_ebreak=inst==32'h0010_0073;
   wire is_edge_break=(opcode==rv32::OPCODE_SYSTEM)&&(funct3==3'b001)&&(rd==5'd0)&&
     (csr_addr==rv32::CSR_EDGE_BREAK);
+  wire is_edge_putchar=(opcode==rv32::OPCODE_SYSTEM)&&(funct3[1:0]!=2'b00)&&
+    (csr_addr==rv32::CSR_EDGE_PUTCHAR);
   // Merge the terminal instruction policy before the ID->EX capture.
   assign terminal_break=is_ebreak||is_edge_break;
   // Parallel class/legality qualification; no serial opcode dispatch.
@@ -127,7 +129,8 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   wire is_fence=(op_class==rv32::CLASS_SYSTEM)&&(opcode==rv32::OPCODE_MISC_MEM);
   wire is_fence_i=is_fence&&(funct3==3'b001);
   wire is_supported_system=is_cycle||is_instret||is_hardware_id||
-    is_address_header_csr||is_ebreak||is_edge_break||is_fp_csr||is_fence;
+    is_address_header_csr||is_ebreak||is_edge_break||is_edge_putchar||
+    is_fp_csr||is_fence;
   wire is_accel=(inst[6:0]==rv32::OPCODE_EDGE_ASIC)&&(op_class==rv32::CLASS_ACCEL);
   wire fpu_legal=|fpu_control[28:25];
   wire ex_supported=is_accel||is_fast_class||is_muldiv||is_int_mem||is_fp_mem||
@@ -198,6 +201,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   assign issue_packet.is_dcache_header_csr = is_dcache_header_csr;
   assign issue_packet.is_fp_csr = is_fp_csr;
   assign issue_packet.is_edge_break = is_edge_break;
+  assign issue_packet.is_edge_putchar = is_edge_putchar;
   assign issue_packet.is_edge_cache = is_edge_cache;
   assign issue_packet.is_fast_class = is_fast_class;
   assign issue_packet.is_int_mem = is_int_mem;

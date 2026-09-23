@@ -18,6 +18,7 @@
   assign is_dcache_header_csr = ex_issue_control_q.is_dcache_header_csr;
   assign is_fp_csr = ex_issue_control_q.is_fp_csr;
   assign is_edge_break = ex_issue_control_q.is_edge_break;
+  assign is_edge_putchar = ex_issue_control_q.is_edge_putchar;
   assign is_edge_cache = ex_issue_control_q.is_edge_cache;
   assign is_fast_class = ex_issue_control_q.is_fast_class;
   assign is_int_mem = ex_issue_control_q.is_int_mem;

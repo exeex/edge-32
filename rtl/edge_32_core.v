@@ -36,7 +36,8 @@ module edge_32_core #(
   input wire [63:0] accel_resp_value,
   output wire halted, output wire illegal,
   output wire [63:0] debug_x31, output wire [63:0] cycle_count,
-  output wire [63:0] instret_count
+  output wire [63:0] instret_count,
+  output wire putchar_valid, output wire [7:0] putchar_char
 );
   // IF -> ID -> EX -> WB
   // ^     ^          |     WB writes the GPR local read owner.
@@ -120,6 +121,8 @@ module edge_32_core #(
   wire [31:0] wb_value_q;
 
   wire ex_wb_fire = ex_done;
+  assign putchar_valid = ex_wb_fire && ex_wb.putchar && !ex_wb.fault;
+  assign putchar_char = ex_wb.putchar_value;
   wire pipeline_kill = redirect || terminal_complete || wb_terminal || halted ||
                        core_start_i || core_force_stop_i;
 
