@@ -8,6 +8,13 @@ typedef uint64_t addr_t;
 #define EDGE_ADDR_T_DEFINED 1
 #endif
 
+#ifdef __cplusplus
+static inline addr_t edge_addr_from_ptr(const void *ptr)
+{
+  return static_cast<addr_t>(reinterpret_cast<uintptr_t>(ptr));
+}
+#endif
+
 #define EDGE_DCACHE_LINE_SIZE 64u
 #define EDGE_CSR_BREAK_ID 0x7e0u
 #define EDGE_CSR_SIM_PUTCHAR_ID 0x7e1u
@@ -354,6 +361,16 @@ static inline void edge_dcache_clean_invalidate_range(addr_t addr, uintptr_t len
     }
 }
 
+#ifdef __cplusplus
+static inline void edge_dcache_clean_range(const void *addr, uintptr_t len)
+{ edge_dcache_clean_range(edge_addr_from_ptr(addr), len); }
+static inline void edge_dcache_invalidate_range(const void *addr, uintptr_t len)
+{ edge_dcache_invalidate_range(edge_addr_from_ptr(addr), len); }
+static inline void edge_dcache_clean_invalidate_range(const void *addr,
+                                                     uintptr_t len)
+{ edge_dcache_clean_invalidate_range(edge_addr_from_ptr(addr), len); }
+#endif
+
 static inline void edge_asic_power(unsigned enable)
 {
     if (enable) edge32::emit<edge32::command::asic_power, 1>();
@@ -370,6 +387,10 @@ static inline void edge_dma_start(addr_t src, addr_t dst, uintptr_t len)
     edge_dma_settar(dst);
     edge32::dma_start(static_cast<uint32_t>(len));
 }
+#ifdef __cplusplus
+static inline void edge_dma_start(const void *src, void *dst, uintptr_t len)
+{ edge_dma_start(edge_addr_from_ptr(src), edge_addr_from_ptr(dst), len); }
+#endif
 static inline void edge_dma_sync(void) { edge32::dma_sync(); }
 static inline void edge_dma_setn(uintptr_t bytes)
 { edge32::dma_setn(static_cast<uint32_t>(bytes)); }
@@ -381,9 +402,260 @@ static inline void edge_dma_setx(uintptr_t stride, uintptr_t count)
     // Current public Tensor shapes are bounded to 255 entries per axis.
     switch (count) {
     case 1: edge32::emit<edge32::command::dma_setx, 1>(stride); break;
+    case 2: edge32::emit<edge32::command::dma_setx, 2>(stride); break;
+    case 3: edge32::emit<edge32::command::dma_setx, 3>(stride); break;
+    case 4: edge32::emit<edge32::command::dma_setx, 4>(stride); break;
+    case 5: edge32::emit<edge32::command::dma_setx, 5>(stride); break;
+    case 6: edge32::emit<edge32::command::dma_setx, 6>(stride); break;
+    case 7: edge32::emit<edge32::command::dma_setx, 7>(stride); break;
     case 8: edge32::emit<edge32::command::dma_setx, 8>(stride); break;
+    case 9: edge32::emit<edge32::command::dma_setx, 9>(stride); break;
+    case 10: edge32::emit<edge32::command::dma_setx, 10>(stride); break;
+    case 11: edge32::emit<edge32::command::dma_setx, 11>(stride); break;
+    case 12: edge32::emit<edge32::command::dma_setx, 12>(stride); break;
+    case 13: edge32::emit<edge32::command::dma_setx, 13>(stride); break;
+    case 14: edge32::emit<edge32::command::dma_setx, 14>(stride); break;
+    case 15: edge32::emit<edge32::command::dma_setx, 15>(stride); break;
+    case 16: edge32::emit<edge32::command::dma_setx, 16>(stride); break;
+    case 17: edge32::emit<edge32::command::dma_setx, 17>(stride); break;
+    case 18: edge32::emit<edge32::command::dma_setx, 18>(stride); break;
+    case 19: edge32::emit<edge32::command::dma_setx, 19>(stride); break;
+    case 20: edge32::emit<edge32::command::dma_setx, 20>(stride); break;
+    case 21: edge32::emit<edge32::command::dma_setx, 21>(stride); break;
+    case 22: edge32::emit<edge32::command::dma_setx, 22>(stride); break;
+    case 23: edge32::emit<edge32::command::dma_setx, 23>(stride); break;
+    case 24: edge32::emit<edge32::command::dma_setx, 24>(stride); break;
+    case 25: edge32::emit<edge32::command::dma_setx, 25>(stride); break;
+    case 26: edge32::emit<edge32::command::dma_setx, 26>(stride); break;
+    case 27: edge32::emit<edge32::command::dma_setx, 27>(stride); break;
+    case 28: edge32::emit<edge32::command::dma_setx, 28>(stride); break;
+    case 29: edge32::emit<edge32::command::dma_setx, 29>(stride); break;
+    case 30: edge32::emit<edge32::command::dma_setx, 30>(stride); break;
+    case 31: edge32::emit<edge32::command::dma_setx, 31>(stride); break;
+    case 32: edge32::emit<edge32::command::dma_setx, 32>(stride); break;
+    case 33: edge32::emit<edge32::command::dma_setx, 33>(stride); break;
+    case 34: edge32::emit<edge32::command::dma_setx, 34>(stride); break;
+    case 35: edge32::emit<edge32::command::dma_setx, 35>(stride); break;
+    case 36: edge32::emit<edge32::command::dma_setx, 36>(stride); break;
+    case 37: edge32::emit<edge32::command::dma_setx, 37>(stride); break;
+    case 38: edge32::emit<edge32::command::dma_setx, 38>(stride); break;
+    case 39: edge32::emit<edge32::command::dma_setx, 39>(stride); break;
+    case 40: edge32::emit<edge32::command::dma_setx, 40>(stride); break;
+    case 41: edge32::emit<edge32::command::dma_setx, 41>(stride); break;
+    case 42: edge32::emit<edge32::command::dma_setx, 42>(stride); break;
+    case 43: edge32::emit<edge32::command::dma_setx, 43>(stride); break;
+    case 44: edge32::emit<edge32::command::dma_setx, 44>(stride); break;
+    case 45: edge32::emit<edge32::command::dma_setx, 45>(stride); break;
+    case 46: edge32::emit<edge32::command::dma_setx, 46>(stride); break;
+    case 47: edge32::emit<edge32::command::dma_setx, 47>(stride); break;
+    case 48: edge32::emit<edge32::command::dma_setx, 48>(stride); break;
+    case 49: edge32::emit<edge32::command::dma_setx, 49>(stride); break;
+    case 50: edge32::emit<edge32::command::dma_setx, 50>(stride); break;
+    case 51: edge32::emit<edge32::command::dma_setx, 51>(stride); break;
+    case 52: edge32::emit<edge32::command::dma_setx, 52>(stride); break;
+    case 53: edge32::emit<edge32::command::dma_setx, 53>(stride); break;
+    case 54: edge32::emit<edge32::command::dma_setx, 54>(stride); break;
+    case 55: edge32::emit<edge32::command::dma_setx, 55>(stride); break;
+    case 56: edge32::emit<edge32::command::dma_setx, 56>(stride); break;
+    case 57: edge32::emit<edge32::command::dma_setx, 57>(stride); break;
+    case 58: edge32::emit<edge32::command::dma_setx, 58>(stride); break;
+    case 59: edge32::emit<edge32::command::dma_setx, 59>(stride); break;
+    case 60: edge32::emit<edge32::command::dma_setx, 60>(stride); break;
+    case 61: edge32::emit<edge32::command::dma_setx, 61>(stride); break;
+    case 62: edge32::emit<edge32::command::dma_setx, 62>(stride); break;
+    case 63: edge32::emit<edge32::command::dma_setx, 63>(stride); break;
     case 64: edge32::emit<edge32::command::dma_setx, 64>(stride); break;
+    case 65: edge32::emit<edge32::command::dma_setx, 65>(stride); break;
+    case 66: edge32::emit<edge32::command::dma_setx, 66>(stride); break;
+    case 67: edge32::emit<edge32::command::dma_setx, 67>(stride); break;
+    case 68: edge32::emit<edge32::command::dma_setx, 68>(stride); break;
+    case 69: edge32::emit<edge32::command::dma_setx, 69>(stride); break;
+    case 70: edge32::emit<edge32::command::dma_setx, 70>(stride); break;
+    case 71: edge32::emit<edge32::command::dma_setx, 71>(stride); break;
+    case 72: edge32::emit<edge32::command::dma_setx, 72>(stride); break;
+    case 73: edge32::emit<edge32::command::dma_setx, 73>(stride); break;
+    case 74: edge32::emit<edge32::command::dma_setx, 74>(stride); break;
+    case 75: edge32::emit<edge32::command::dma_setx, 75>(stride); break;
+    case 76: edge32::emit<edge32::command::dma_setx, 76>(stride); break;
+    case 77: edge32::emit<edge32::command::dma_setx, 77>(stride); break;
+    case 78: edge32::emit<edge32::command::dma_setx, 78>(stride); break;
+    case 79: edge32::emit<edge32::command::dma_setx, 79>(stride); break;
+    case 80: edge32::emit<edge32::command::dma_setx, 80>(stride); break;
+    case 81: edge32::emit<edge32::command::dma_setx, 81>(stride); break;
+    case 82: edge32::emit<edge32::command::dma_setx, 82>(stride); break;
+    case 83: edge32::emit<edge32::command::dma_setx, 83>(stride); break;
+    case 84: edge32::emit<edge32::command::dma_setx, 84>(stride); break;
+    case 85: edge32::emit<edge32::command::dma_setx, 85>(stride); break;
+    case 86: edge32::emit<edge32::command::dma_setx, 86>(stride); break;
+    case 87: edge32::emit<edge32::command::dma_setx, 87>(stride); break;
+    case 88: edge32::emit<edge32::command::dma_setx, 88>(stride); break;
+    case 89: edge32::emit<edge32::command::dma_setx, 89>(stride); break;
+    case 90: edge32::emit<edge32::command::dma_setx, 90>(stride); break;
+    case 91: edge32::emit<edge32::command::dma_setx, 91>(stride); break;
+    case 92: edge32::emit<edge32::command::dma_setx, 92>(stride); break;
+    case 93: edge32::emit<edge32::command::dma_setx, 93>(stride); break;
+    case 94: edge32::emit<edge32::command::dma_setx, 94>(stride); break;
+    case 95: edge32::emit<edge32::command::dma_setx, 95>(stride); break;
+    case 96: edge32::emit<edge32::command::dma_setx, 96>(stride); break;
+    case 97: edge32::emit<edge32::command::dma_setx, 97>(stride); break;
+    case 98: edge32::emit<edge32::command::dma_setx, 98>(stride); break;
+    case 99: edge32::emit<edge32::command::dma_setx, 99>(stride); break;
+    case 100: edge32::emit<edge32::command::dma_setx, 100>(stride); break;
+    case 101: edge32::emit<edge32::command::dma_setx, 101>(stride); break;
+    case 102: edge32::emit<edge32::command::dma_setx, 102>(stride); break;
+    case 103: edge32::emit<edge32::command::dma_setx, 103>(stride); break;
+    case 104: edge32::emit<edge32::command::dma_setx, 104>(stride); break;
+    case 105: edge32::emit<edge32::command::dma_setx, 105>(stride); break;
+    case 106: edge32::emit<edge32::command::dma_setx, 106>(stride); break;
+    case 107: edge32::emit<edge32::command::dma_setx, 107>(stride); break;
+    case 108: edge32::emit<edge32::command::dma_setx, 108>(stride); break;
+    case 109: edge32::emit<edge32::command::dma_setx, 109>(stride); break;
+    case 110: edge32::emit<edge32::command::dma_setx, 110>(stride); break;
+    case 111: edge32::emit<edge32::command::dma_setx, 111>(stride); break;
+    case 112: edge32::emit<edge32::command::dma_setx, 112>(stride); break;
+    case 113: edge32::emit<edge32::command::dma_setx, 113>(stride); break;
+    case 114: edge32::emit<edge32::command::dma_setx, 114>(stride); break;
+    case 115: edge32::emit<edge32::command::dma_setx, 115>(stride); break;
+    case 116: edge32::emit<edge32::command::dma_setx, 116>(stride); break;
+    case 117: edge32::emit<edge32::command::dma_setx, 117>(stride); break;
+    case 118: edge32::emit<edge32::command::dma_setx, 118>(stride); break;
+    case 119: edge32::emit<edge32::command::dma_setx, 119>(stride); break;
+    case 120: edge32::emit<edge32::command::dma_setx, 120>(stride); break;
+    case 121: edge32::emit<edge32::command::dma_setx, 121>(stride); break;
+    case 122: edge32::emit<edge32::command::dma_setx, 122>(stride); break;
+    case 123: edge32::emit<edge32::command::dma_setx, 123>(stride); break;
+    case 124: edge32::emit<edge32::command::dma_setx, 124>(stride); break;
+    case 125: edge32::emit<edge32::command::dma_setx, 125>(stride); break;
+    case 126: edge32::emit<edge32::command::dma_setx, 126>(stride); break;
+    case 127: edge32::emit<edge32::command::dma_setx, 127>(stride); break;
     case 128: edge32::emit<edge32::command::dma_setx, 128>(stride); break;
+    case 129: edge32::emit<edge32::command::dma_setx, 129>(stride); break;
+    case 130: edge32::emit<edge32::command::dma_setx, 130>(stride); break;
+    case 131: edge32::emit<edge32::command::dma_setx, 131>(stride); break;
+    case 132: edge32::emit<edge32::command::dma_setx, 132>(stride); break;
+    case 133: edge32::emit<edge32::command::dma_setx, 133>(stride); break;
+    case 134: edge32::emit<edge32::command::dma_setx, 134>(stride); break;
+    case 135: edge32::emit<edge32::command::dma_setx, 135>(stride); break;
+    case 136: edge32::emit<edge32::command::dma_setx, 136>(stride); break;
+    case 137: edge32::emit<edge32::command::dma_setx, 137>(stride); break;
+    case 138: edge32::emit<edge32::command::dma_setx, 138>(stride); break;
+    case 139: edge32::emit<edge32::command::dma_setx, 139>(stride); break;
+    case 140: edge32::emit<edge32::command::dma_setx, 140>(stride); break;
+    case 141: edge32::emit<edge32::command::dma_setx, 141>(stride); break;
+    case 142: edge32::emit<edge32::command::dma_setx, 142>(stride); break;
+    case 143: edge32::emit<edge32::command::dma_setx, 143>(stride); break;
+    case 144: edge32::emit<edge32::command::dma_setx, 144>(stride); break;
+    case 145: edge32::emit<edge32::command::dma_setx, 145>(stride); break;
+    case 146: edge32::emit<edge32::command::dma_setx, 146>(stride); break;
+    case 147: edge32::emit<edge32::command::dma_setx, 147>(stride); break;
+    case 148: edge32::emit<edge32::command::dma_setx, 148>(stride); break;
+    case 149: edge32::emit<edge32::command::dma_setx, 149>(stride); break;
+    case 150: edge32::emit<edge32::command::dma_setx, 150>(stride); break;
+    case 151: edge32::emit<edge32::command::dma_setx, 151>(stride); break;
+    case 152: edge32::emit<edge32::command::dma_setx, 152>(stride); break;
+    case 153: edge32::emit<edge32::command::dma_setx, 153>(stride); break;
+    case 154: edge32::emit<edge32::command::dma_setx, 154>(stride); break;
+    case 155: edge32::emit<edge32::command::dma_setx, 155>(stride); break;
+    case 156: edge32::emit<edge32::command::dma_setx, 156>(stride); break;
+    case 157: edge32::emit<edge32::command::dma_setx, 157>(stride); break;
+    case 158: edge32::emit<edge32::command::dma_setx, 158>(stride); break;
+    case 159: edge32::emit<edge32::command::dma_setx, 159>(stride); break;
+    case 160: edge32::emit<edge32::command::dma_setx, 160>(stride); break;
+    case 161: edge32::emit<edge32::command::dma_setx, 161>(stride); break;
+    case 162: edge32::emit<edge32::command::dma_setx, 162>(stride); break;
+    case 163: edge32::emit<edge32::command::dma_setx, 163>(stride); break;
+    case 164: edge32::emit<edge32::command::dma_setx, 164>(stride); break;
+    case 165: edge32::emit<edge32::command::dma_setx, 165>(stride); break;
+    case 166: edge32::emit<edge32::command::dma_setx, 166>(stride); break;
+    case 167: edge32::emit<edge32::command::dma_setx, 167>(stride); break;
+    case 168: edge32::emit<edge32::command::dma_setx, 168>(stride); break;
+    case 169: edge32::emit<edge32::command::dma_setx, 169>(stride); break;
+    case 170: edge32::emit<edge32::command::dma_setx, 170>(stride); break;
+    case 171: edge32::emit<edge32::command::dma_setx, 171>(stride); break;
+    case 172: edge32::emit<edge32::command::dma_setx, 172>(stride); break;
+    case 173: edge32::emit<edge32::command::dma_setx, 173>(stride); break;
+    case 174: edge32::emit<edge32::command::dma_setx, 174>(stride); break;
+    case 175: edge32::emit<edge32::command::dma_setx, 175>(stride); break;
+    case 176: edge32::emit<edge32::command::dma_setx, 176>(stride); break;
+    case 177: edge32::emit<edge32::command::dma_setx, 177>(stride); break;
+    case 178: edge32::emit<edge32::command::dma_setx, 178>(stride); break;
+    case 179: edge32::emit<edge32::command::dma_setx, 179>(stride); break;
+    case 180: edge32::emit<edge32::command::dma_setx, 180>(stride); break;
+    case 181: edge32::emit<edge32::command::dma_setx, 181>(stride); break;
+    case 182: edge32::emit<edge32::command::dma_setx, 182>(stride); break;
+    case 183: edge32::emit<edge32::command::dma_setx, 183>(stride); break;
+    case 184: edge32::emit<edge32::command::dma_setx, 184>(stride); break;
+    case 185: edge32::emit<edge32::command::dma_setx, 185>(stride); break;
+    case 186: edge32::emit<edge32::command::dma_setx, 186>(stride); break;
+    case 187: edge32::emit<edge32::command::dma_setx, 187>(stride); break;
+    case 188: edge32::emit<edge32::command::dma_setx, 188>(stride); break;
+    case 189: edge32::emit<edge32::command::dma_setx, 189>(stride); break;
+    case 190: edge32::emit<edge32::command::dma_setx, 190>(stride); break;
+    case 191: edge32::emit<edge32::command::dma_setx, 191>(stride); break;
+    case 192: edge32::emit<edge32::command::dma_setx, 192>(stride); break;
+    case 193: edge32::emit<edge32::command::dma_setx, 193>(stride); break;
+    case 194: edge32::emit<edge32::command::dma_setx, 194>(stride); break;
+    case 195: edge32::emit<edge32::command::dma_setx, 195>(stride); break;
+    case 196: edge32::emit<edge32::command::dma_setx, 196>(stride); break;
+    case 197: edge32::emit<edge32::command::dma_setx, 197>(stride); break;
+    case 198: edge32::emit<edge32::command::dma_setx, 198>(stride); break;
+    case 199: edge32::emit<edge32::command::dma_setx, 199>(stride); break;
+    case 200: edge32::emit<edge32::command::dma_setx, 200>(stride); break;
+    case 201: edge32::emit<edge32::command::dma_setx, 201>(stride); break;
+    case 202: edge32::emit<edge32::command::dma_setx, 202>(stride); break;
+    case 203: edge32::emit<edge32::command::dma_setx, 203>(stride); break;
+    case 204: edge32::emit<edge32::command::dma_setx, 204>(stride); break;
+    case 205: edge32::emit<edge32::command::dma_setx, 205>(stride); break;
+    case 206: edge32::emit<edge32::command::dma_setx, 206>(stride); break;
+    case 207: edge32::emit<edge32::command::dma_setx, 207>(stride); break;
+    case 208: edge32::emit<edge32::command::dma_setx, 208>(stride); break;
+    case 209: edge32::emit<edge32::command::dma_setx, 209>(stride); break;
+    case 210: edge32::emit<edge32::command::dma_setx, 210>(stride); break;
+    case 211: edge32::emit<edge32::command::dma_setx, 211>(stride); break;
+    case 212: edge32::emit<edge32::command::dma_setx, 212>(stride); break;
+    case 213: edge32::emit<edge32::command::dma_setx, 213>(stride); break;
+    case 214: edge32::emit<edge32::command::dma_setx, 214>(stride); break;
+    case 215: edge32::emit<edge32::command::dma_setx, 215>(stride); break;
+    case 216: edge32::emit<edge32::command::dma_setx, 216>(stride); break;
+    case 217: edge32::emit<edge32::command::dma_setx, 217>(stride); break;
+    case 218: edge32::emit<edge32::command::dma_setx, 218>(stride); break;
+    case 219: edge32::emit<edge32::command::dma_setx, 219>(stride); break;
+    case 220: edge32::emit<edge32::command::dma_setx, 220>(stride); break;
+    case 221: edge32::emit<edge32::command::dma_setx, 221>(stride); break;
+    case 222: edge32::emit<edge32::command::dma_setx, 222>(stride); break;
+    case 223: edge32::emit<edge32::command::dma_setx, 223>(stride); break;
+    case 224: edge32::emit<edge32::command::dma_setx, 224>(stride); break;
+    case 225: edge32::emit<edge32::command::dma_setx, 225>(stride); break;
+    case 226: edge32::emit<edge32::command::dma_setx, 226>(stride); break;
+    case 227: edge32::emit<edge32::command::dma_setx, 227>(stride); break;
+    case 228: edge32::emit<edge32::command::dma_setx, 228>(stride); break;
+    case 229: edge32::emit<edge32::command::dma_setx, 229>(stride); break;
+    case 230: edge32::emit<edge32::command::dma_setx, 230>(stride); break;
+    case 231: edge32::emit<edge32::command::dma_setx, 231>(stride); break;
+    case 232: edge32::emit<edge32::command::dma_setx, 232>(stride); break;
+    case 233: edge32::emit<edge32::command::dma_setx, 233>(stride); break;
+    case 234: edge32::emit<edge32::command::dma_setx, 234>(stride); break;
+    case 235: edge32::emit<edge32::command::dma_setx, 235>(stride); break;
+    case 236: edge32::emit<edge32::command::dma_setx, 236>(stride); break;
+    case 237: edge32::emit<edge32::command::dma_setx, 237>(stride); break;
+    case 238: edge32::emit<edge32::command::dma_setx, 238>(stride); break;
+    case 239: edge32::emit<edge32::command::dma_setx, 239>(stride); break;
+    case 240: edge32::emit<edge32::command::dma_setx, 240>(stride); break;
+    case 241: edge32::emit<edge32::command::dma_setx, 241>(stride); break;
+    case 242: edge32::emit<edge32::command::dma_setx, 242>(stride); break;
+    case 243: edge32::emit<edge32::command::dma_setx, 243>(stride); break;
+    case 244: edge32::emit<edge32::command::dma_setx, 244>(stride); break;
+    case 245: edge32::emit<edge32::command::dma_setx, 245>(stride); break;
+    case 246: edge32::emit<edge32::command::dma_setx, 246>(stride); break;
+    case 247: edge32::emit<edge32::command::dma_setx, 247>(stride); break;
+    case 248: edge32::emit<edge32::command::dma_setx, 248>(stride); break;
+    case 249: edge32::emit<edge32::command::dma_setx, 249>(stride); break;
+    case 250: edge32::emit<edge32::command::dma_setx, 250>(stride); break;
+    case 251: edge32::emit<edge32::command::dma_setx, 251>(stride); break;
+    case 252: edge32::emit<edge32::command::dma_setx, 252>(stride); break;
+    case 253: edge32::emit<edge32::command::dma_setx, 253>(stride); break;
+    case 254: edge32::emit<edge32::command::dma_setx, 254>(stride); break;
+    case 255: edge32::emit<edge32::command::dma_setx, 255>(stride); break;
     default: edge32::emit<edge32::command::dma_setx>(stride); break;
     }
 }
@@ -391,9 +663,260 @@ static inline void edge_dma_sety(uintptr_t stride, uintptr_t count)
 {
     switch (count) {
     case 1: edge32::emit<edge32::command::dma_sety, 1>(stride); break;
+    case 2: edge32::emit<edge32::command::dma_sety, 2>(stride); break;
+    case 3: edge32::emit<edge32::command::dma_sety, 3>(stride); break;
+    case 4: edge32::emit<edge32::command::dma_sety, 4>(stride); break;
+    case 5: edge32::emit<edge32::command::dma_sety, 5>(stride); break;
+    case 6: edge32::emit<edge32::command::dma_sety, 6>(stride); break;
+    case 7: edge32::emit<edge32::command::dma_sety, 7>(stride); break;
     case 8: edge32::emit<edge32::command::dma_sety, 8>(stride); break;
+    case 9: edge32::emit<edge32::command::dma_sety, 9>(stride); break;
+    case 10: edge32::emit<edge32::command::dma_sety, 10>(stride); break;
+    case 11: edge32::emit<edge32::command::dma_sety, 11>(stride); break;
+    case 12: edge32::emit<edge32::command::dma_sety, 12>(stride); break;
+    case 13: edge32::emit<edge32::command::dma_sety, 13>(stride); break;
+    case 14: edge32::emit<edge32::command::dma_sety, 14>(stride); break;
+    case 15: edge32::emit<edge32::command::dma_sety, 15>(stride); break;
+    case 16: edge32::emit<edge32::command::dma_sety, 16>(stride); break;
+    case 17: edge32::emit<edge32::command::dma_sety, 17>(stride); break;
+    case 18: edge32::emit<edge32::command::dma_sety, 18>(stride); break;
+    case 19: edge32::emit<edge32::command::dma_sety, 19>(stride); break;
+    case 20: edge32::emit<edge32::command::dma_sety, 20>(stride); break;
+    case 21: edge32::emit<edge32::command::dma_sety, 21>(stride); break;
+    case 22: edge32::emit<edge32::command::dma_sety, 22>(stride); break;
+    case 23: edge32::emit<edge32::command::dma_sety, 23>(stride); break;
+    case 24: edge32::emit<edge32::command::dma_sety, 24>(stride); break;
+    case 25: edge32::emit<edge32::command::dma_sety, 25>(stride); break;
+    case 26: edge32::emit<edge32::command::dma_sety, 26>(stride); break;
+    case 27: edge32::emit<edge32::command::dma_sety, 27>(stride); break;
+    case 28: edge32::emit<edge32::command::dma_sety, 28>(stride); break;
+    case 29: edge32::emit<edge32::command::dma_sety, 29>(stride); break;
+    case 30: edge32::emit<edge32::command::dma_sety, 30>(stride); break;
+    case 31: edge32::emit<edge32::command::dma_sety, 31>(stride); break;
+    case 32: edge32::emit<edge32::command::dma_sety, 32>(stride); break;
+    case 33: edge32::emit<edge32::command::dma_sety, 33>(stride); break;
+    case 34: edge32::emit<edge32::command::dma_sety, 34>(stride); break;
+    case 35: edge32::emit<edge32::command::dma_sety, 35>(stride); break;
+    case 36: edge32::emit<edge32::command::dma_sety, 36>(stride); break;
+    case 37: edge32::emit<edge32::command::dma_sety, 37>(stride); break;
+    case 38: edge32::emit<edge32::command::dma_sety, 38>(stride); break;
+    case 39: edge32::emit<edge32::command::dma_sety, 39>(stride); break;
+    case 40: edge32::emit<edge32::command::dma_sety, 40>(stride); break;
+    case 41: edge32::emit<edge32::command::dma_sety, 41>(stride); break;
+    case 42: edge32::emit<edge32::command::dma_sety, 42>(stride); break;
+    case 43: edge32::emit<edge32::command::dma_sety, 43>(stride); break;
+    case 44: edge32::emit<edge32::command::dma_sety, 44>(stride); break;
+    case 45: edge32::emit<edge32::command::dma_sety, 45>(stride); break;
+    case 46: edge32::emit<edge32::command::dma_sety, 46>(stride); break;
+    case 47: edge32::emit<edge32::command::dma_sety, 47>(stride); break;
+    case 48: edge32::emit<edge32::command::dma_sety, 48>(stride); break;
+    case 49: edge32::emit<edge32::command::dma_sety, 49>(stride); break;
+    case 50: edge32::emit<edge32::command::dma_sety, 50>(stride); break;
+    case 51: edge32::emit<edge32::command::dma_sety, 51>(stride); break;
+    case 52: edge32::emit<edge32::command::dma_sety, 52>(stride); break;
+    case 53: edge32::emit<edge32::command::dma_sety, 53>(stride); break;
+    case 54: edge32::emit<edge32::command::dma_sety, 54>(stride); break;
+    case 55: edge32::emit<edge32::command::dma_sety, 55>(stride); break;
+    case 56: edge32::emit<edge32::command::dma_sety, 56>(stride); break;
+    case 57: edge32::emit<edge32::command::dma_sety, 57>(stride); break;
+    case 58: edge32::emit<edge32::command::dma_sety, 58>(stride); break;
+    case 59: edge32::emit<edge32::command::dma_sety, 59>(stride); break;
+    case 60: edge32::emit<edge32::command::dma_sety, 60>(stride); break;
+    case 61: edge32::emit<edge32::command::dma_sety, 61>(stride); break;
+    case 62: edge32::emit<edge32::command::dma_sety, 62>(stride); break;
+    case 63: edge32::emit<edge32::command::dma_sety, 63>(stride); break;
     case 64: edge32::emit<edge32::command::dma_sety, 64>(stride); break;
+    case 65: edge32::emit<edge32::command::dma_sety, 65>(stride); break;
+    case 66: edge32::emit<edge32::command::dma_sety, 66>(stride); break;
+    case 67: edge32::emit<edge32::command::dma_sety, 67>(stride); break;
+    case 68: edge32::emit<edge32::command::dma_sety, 68>(stride); break;
+    case 69: edge32::emit<edge32::command::dma_sety, 69>(stride); break;
+    case 70: edge32::emit<edge32::command::dma_sety, 70>(stride); break;
+    case 71: edge32::emit<edge32::command::dma_sety, 71>(stride); break;
+    case 72: edge32::emit<edge32::command::dma_sety, 72>(stride); break;
+    case 73: edge32::emit<edge32::command::dma_sety, 73>(stride); break;
+    case 74: edge32::emit<edge32::command::dma_sety, 74>(stride); break;
+    case 75: edge32::emit<edge32::command::dma_sety, 75>(stride); break;
+    case 76: edge32::emit<edge32::command::dma_sety, 76>(stride); break;
+    case 77: edge32::emit<edge32::command::dma_sety, 77>(stride); break;
+    case 78: edge32::emit<edge32::command::dma_sety, 78>(stride); break;
+    case 79: edge32::emit<edge32::command::dma_sety, 79>(stride); break;
+    case 80: edge32::emit<edge32::command::dma_sety, 80>(stride); break;
+    case 81: edge32::emit<edge32::command::dma_sety, 81>(stride); break;
+    case 82: edge32::emit<edge32::command::dma_sety, 82>(stride); break;
+    case 83: edge32::emit<edge32::command::dma_sety, 83>(stride); break;
+    case 84: edge32::emit<edge32::command::dma_sety, 84>(stride); break;
+    case 85: edge32::emit<edge32::command::dma_sety, 85>(stride); break;
+    case 86: edge32::emit<edge32::command::dma_sety, 86>(stride); break;
+    case 87: edge32::emit<edge32::command::dma_sety, 87>(stride); break;
+    case 88: edge32::emit<edge32::command::dma_sety, 88>(stride); break;
+    case 89: edge32::emit<edge32::command::dma_sety, 89>(stride); break;
+    case 90: edge32::emit<edge32::command::dma_sety, 90>(stride); break;
+    case 91: edge32::emit<edge32::command::dma_sety, 91>(stride); break;
+    case 92: edge32::emit<edge32::command::dma_sety, 92>(stride); break;
+    case 93: edge32::emit<edge32::command::dma_sety, 93>(stride); break;
+    case 94: edge32::emit<edge32::command::dma_sety, 94>(stride); break;
+    case 95: edge32::emit<edge32::command::dma_sety, 95>(stride); break;
+    case 96: edge32::emit<edge32::command::dma_sety, 96>(stride); break;
+    case 97: edge32::emit<edge32::command::dma_sety, 97>(stride); break;
+    case 98: edge32::emit<edge32::command::dma_sety, 98>(stride); break;
+    case 99: edge32::emit<edge32::command::dma_sety, 99>(stride); break;
+    case 100: edge32::emit<edge32::command::dma_sety, 100>(stride); break;
+    case 101: edge32::emit<edge32::command::dma_sety, 101>(stride); break;
+    case 102: edge32::emit<edge32::command::dma_sety, 102>(stride); break;
+    case 103: edge32::emit<edge32::command::dma_sety, 103>(stride); break;
+    case 104: edge32::emit<edge32::command::dma_sety, 104>(stride); break;
+    case 105: edge32::emit<edge32::command::dma_sety, 105>(stride); break;
+    case 106: edge32::emit<edge32::command::dma_sety, 106>(stride); break;
+    case 107: edge32::emit<edge32::command::dma_sety, 107>(stride); break;
+    case 108: edge32::emit<edge32::command::dma_sety, 108>(stride); break;
+    case 109: edge32::emit<edge32::command::dma_sety, 109>(stride); break;
+    case 110: edge32::emit<edge32::command::dma_sety, 110>(stride); break;
+    case 111: edge32::emit<edge32::command::dma_sety, 111>(stride); break;
+    case 112: edge32::emit<edge32::command::dma_sety, 112>(stride); break;
+    case 113: edge32::emit<edge32::command::dma_sety, 113>(stride); break;
+    case 114: edge32::emit<edge32::command::dma_sety, 114>(stride); break;
+    case 115: edge32::emit<edge32::command::dma_sety, 115>(stride); break;
+    case 116: edge32::emit<edge32::command::dma_sety, 116>(stride); break;
+    case 117: edge32::emit<edge32::command::dma_sety, 117>(stride); break;
+    case 118: edge32::emit<edge32::command::dma_sety, 118>(stride); break;
+    case 119: edge32::emit<edge32::command::dma_sety, 119>(stride); break;
+    case 120: edge32::emit<edge32::command::dma_sety, 120>(stride); break;
+    case 121: edge32::emit<edge32::command::dma_sety, 121>(stride); break;
+    case 122: edge32::emit<edge32::command::dma_sety, 122>(stride); break;
+    case 123: edge32::emit<edge32::command::dma_sety, 123>(stride); break;
+    case 124: edge32::emit<edge32::command::dma_sety, 124>(stride); break;
+    case 125: edge32::emit<edge32::command::dma_sety, 125>(stride); break;
+    case 126: edge32::emit<edge32::command::dma_sety, 126>(stride); break;
+    case 127: edge32::emit<edge32::command::dma_sety, 127>(stride); break;
     case 128: edge32::emit<edge32::command::dma_sety, 128>(stride); break;
+    case 129: edge32::emit<edge32::command::dma_sety, 129>(stride); break;
+    case 130: edge32::emit<edge32::command::dma_sety, 130>(stride); break;
+    case 131: edge32::emit<edge32::command::dma_sety, 131>(stride); break;
+    case 132: edge32::emit<edge32::command::dma_sety, 132>(stride); break;
+    case 133: edge32::emit<edge32::command::dma_sety, 133>(stride); break;
+    case 134: edge32::emit<edge32::command::dma_sety, 134>(stride); break;
+    case 135: edge32::emit<edge32::command::dma_sety, 135>(stride); break;
+    case 136: edge32::emit<edge32::command::dma_sety, 136>(stride); break;
+    case 137: edge32::emit<edge32::command::dma_sety, 137>(stride); break;
+    case 138: edge32::emit<edge32::command::dma_sety, 138>(stride); break;
+    case 139: edge32::emit<edge32::command::dma_sety, 139>(stride); break;
+    case 140: edge32::emit<edge32::command::dma_sety, 140>(stride); break;
+    case 141: edge32::emit<edge32::command::dma_sety, 141>(stride); break;
+    case 142: edge32::emit<edge32::command::dma_sety, 142>(stride); break;
+    case 143: edge32::emit<edge32::command::dma_sety, 143>(stride); break;
+    case 144: edge32::emit<edge32::command::dma_sety, 144>(stride); break;
+    case 145: edge32::emit<edge32::command::dma_sety, 145>(stride); break;
+    case 146: edge32::emit<edge32::command::dma_sety, 146>(stride); break;
+    case 147: edge32::emit<edge32::command::dma_sety, 147>(stride); break;
+    case 148: edge32::emit<edge32::command::dma_sety, 148>(stride); break;
+    case 149: edge32::emit<edge32::command::dma_sety, 149>(stride); break;
+    case 150: edge32::emit<edge32::command::dma_sety, 150>(stride); break;
+    case 151: edge32::emit<edge32::command::dma_sety, 151>(stride); break;
+    case 152: edge32::emit<edge32::command::dma_sety, 152>(stride); break;
+    case 153: edge32::emit<edge32::command::dma_sety, 153>(stride); break;
+    case 154: edge32::emit<edge32::command::dma_sety, 154>(stride); break;
+    case 155: edge32::emit<edge32::command::dma_sety, 155>(stride); break;
+    case 156: edge32::emit<edge32::command::dma_sety, 156>(stride); break;
+    case 157: edge32::emit<edge32::command::dma_sety, 157>(stride); break;
+    case 158: edge32::emit<edge32::command::dma_sety, 158>(stride); break;
+    case 159: edge32::emit<edge32::command::dma_sety, 159>(stride); break;
+    case 160: edge32::emit<edge32::command::dma_sety, 160>(stride); break;
+    case 161: edge32::emit<edge32::command::dma_sety, 161>(stride); break;
+    case 162: edge32::emit<edge32::command::dma_sety, 162>(stride); break;
+    case 163: edge32::emit<edge32::command::dma_sety, 163>(stride); break;
+    case 164: edge32::emit<edge32::command::dma_sety, 164>(stride); break;
+    case 165: edge32::emit<edge32::command::dma_sety, 165>(stride); break;
+    case 166: edge32::emit<edge32::command::dma_sety, 166>(stride); break;
+    case 167: edge32::emit<edge32::command::dma_sety, 167>(stride); break;
+    case 168: edge32::emit<edge32::command::dma_sety, 168>(stride); break;
+    case 169: edge32::emit<edge32::command::dma_sety, 169>(stride); break;
+    case 170: edge32::emit<edge32::command::dma_sety, 170>(stride); break;
+    case 171: edge32::emit<edge32::command::dma_sety, 171>(stride); break;
+    case 172: edge32::emit<edge32::command::dma_sety, 172>(stride); break;
+    case 173: edge32::emit<edge32::command::dma_sety, 173>(stride); break;
+    case 174: edge32::emit<edge32::command::dma_sety, 174>(stride); break;
+    case 175: edge32::emit<edge32::command::dma_sety, 175>(stride); break;
+    case 176: edge32::emit<edge32::command::dma_sety, 176>(stride); break;
+    case 177: edge32::emit<edge32::command::dma_sety, 177>(stride); break;
+    case 178: edge32::emit<edge32::command::dma_sety, 178>(stride); break;
+    case 179: edge32::emit<edge32::command::dma_sety, 179>(stride); break;
+    case 180: edge32::emit<edge32::command::dma_sety, 180>(stride); break;
+    case 181: edge32::emit<edge32::command::dma_sety, 181>(stride); break;
+    case 182: edge32::emit<edge32::command::dma_sety, 182>(stride); break;
+    case 183: edge32::emit<edge32::command::dma_sety, 183>(stride); break;
+    case 184: edge32::emit<edge32::command::dma_sety, 184>(stride); break;
+    case 185: edge32::emit<edge32::command::dma_sety, 185>(stride); break;
+    case 186: edge32::emit<edge32::command::dma_sety, 186>(stride); break;
+    case 187: edge32::emit<edge32::command::dma_sety, 187>(stride); break;
+    case 188: edge32::emit<edge32::command::dma_sety, 188>(stride); break;
+    case 189: edge32::emit<edge32::command::dma_sety, 189>(stride); break;
+    case 190: edge32::emit<edge32::command::dma_sety, 190>(stride); break;
+    case 191: edge32::emit<edge32::command::dma_sety, 191>(stride); break;
+    case 192: edge32::emit<edge32::command::dma_sety, 192>(stride); break;
+    case 193: edge32::emit<edge32::command::dma_sety, 193>(stride); break;
+    case 194: edge32::emit<edge32::command::dma_sety, 194>(stride); break;
+    case 195: edge32::emit<edge32::command::dma_sety, 195>(stride); break;
+    case 196: edge32::emit<edge32::command::dma_sety, 196>(stride); break;
+    case 197: edge32::emit<edge32::command::dma_sety, 197>(stride); break;
+    case 198: edge32::emit<edge32::command::dma_sety, 198>(stride); break;
+    case 199: edge32::emit<edge32::command::dma_sety, 199>(stride); break;
+    case 200: edge32::emit<edge32::command::dma_sety, 200>(stride); break;
+    case 201: edge32::emit<edge32::command::dma_sety, 201>(stride); break;
+    case 202: edge32::emit<edge32::command::dma_sety, 202>(stride); break;
+    case 203: edge32::emit<edge32::command::dma_sety, 203>(stride); break;
+    case 204: edge32::emit<edge32::command::dma_sety, 204>(stride); break;
+    case 205: edge32::emit<edge32::command::dma_sety, 205>(stride); break;
+    case 206: edge32::emit<edge32::command::dma_sety, 206>(stride); break;
+    case 207: edge32::emit<edge32::command::dma_sety, 207>(stride); break;
+    case 208: edge32::emit<edge32::command::dma_sety, 208>(stride); break;
+    case 209: edge32::emit<edge32::command::dma_sety, 209>(stride); break;
+    case 210: edge32::emit<edge32::command::dma_sety, 210>(stride); break;
+    case 211: edge32::emit<edge32::command::dma_sety, 211>(stride); break;
+    case 212: edge32::emit<edge32::command::dma_sety, 212>(stride); break;
+    case 213: edge32::emit<edge32::command::dma_sety, 213>(stride); break;
+    case 214: edge32::emit<edge32::command::dma_sety, 214>(stride); break;
+    case 215: edge32::emit<edge32::command::dma_sety, 215>(stride); break;
+    case 216: edge32::emit<edge32::command::dma_sety, 216>(stride); break;
+    case 217: edge32::emit<edge32::command::dma_sety, 217>(stride); break;
+    case 218: edge32::emit<edge32::command::dma_sety, 218>(stride); break;
+    case 219: edge32::emit<edge32::command::dma_sety, 219>(stride); break;
+    case 220: edge32::emit<edge32::command::dma_sety, 220>(stride); break;
+    case 221: edge32::emit<edge32::command::dma_sety, 221>(stride); break;
+    case 222: edge32::emit<edge32::command::dma_sety, 222>(stride); break;
+    case 223: edge32::emit<edge32::command::dma_sety, 223>(stride); break;
+    case 224: edge32::emit<edge32::command::dma_sety, 224>(stride); break;
+    case 225: edge32::emit<edge32::command::dma_sety, 225>(stride); break;
+    case 226: edge32::emit<edge32::command::dma_sety, 226>(stride); break;
+    case 227: edge32::emit<edge32::command::dma_sety, 227>(stride); break;
+    case 228: edge32::emit<edge32::command::dma_sety, 228>(stride); break;
+    case 229: edge32::emit<edge32::command::dma_sety, 229>(stride); break;
+    case 230: edge32::emit<edge32::command::dma_sety, 230>(stride); break;
+    case 231: edge32::emit<edge32::command::dma_sety, 231>(stride); break;
+    case 232: edge32::emit<edge32::command::dma_sety, 232>(stride); break;
+    case 233: edge32::emit<edge32::command::dma_sety, 233>(stride); break;
+    case 234: edge32::emit<edge32::command::dma_sety, 234>(stride); break;
+    case 235: edge32::emit<edge32::command::dma_sety, 235>(stride); break;
+    case 236: edge32::emit<edge32::command::dma_sety, 236>(stride); break;
+    case 237: edge32::emit<edge32::command::dma_sety, 237>(stride); break;
+    case 238: edge32::emit<edge32::command::dma_sety, 238>(stride); break;
+    case 239: edge32::emit<edge32::command::dma_sety, 239>(stride); break;
+    case 240: edge32::emit<edge32::command::dma_sety, 240>(stride); break;
+    case 241: edge32::emit<edge32::command::dma_sety, 241>(stride); break;
+    case 242: edge32::emit<edge32::command::dma_sety, 242>(stride); break;
+    case 243: edge32::emit<edge32::command::dma_sety, 243>(stride); break;
+    case 244: edge32::emit<edge32::command::dma_sety, 244>(stride); break;
+    case 245: edge32::emit<edge32::command::dma_sety, 245>(stride); break;
+    case 246: edge32::emit<edge32::command::dma_sety, 246>(stride); break;
+    case 247: edge32::emit<edge32::command::dma_sety, 247>(stride); break;
+    case 248: edge32::emit<edge32::command::dma_sety, 248>(stride); break;
+    case 249: edge32::emit<edge32::command::dma_sety, 249>(stride); break;
+    case 250: edge32::emit<edge32::command::dma_sety, 250>(stride); break;
+    case 251: edge32::emit<edge32::command::dma_sety, 251>(stride); break;
+    case 252: edge32::emit<edge32::command::dma_sety, 252>(stride); break;
+    case 253: edge32::emit<edge32::command::dma_sety, 253>(stride); break;
+    case 254: edge32::emit<edge32::command::dma_sety, 254>(stride); break;
+    case 255: edge32::emit<edge32::command::dma_sety, 255>(stride); break;
     default: edge32::emit<edge32::command::dma_sety>(stride); break;
     }
 }
@@ -408,6 +931,15 @@ static inline void edge_dma_start_strided(
     edge_dma_settar(dst);
     edge32::dma_start(static_cast<uint32_t>(bytes), 1);
 }
+#ifdef __cplusplus
+static inline void edge_dma_start_strided(
+    const void *src, void *dst, uintptr_t bytes, uintptr_t stride,
+    uintptr_t count)
+{
+    edge_dma_start_strided(edge_addr_from_ptr(src), edge_addr_from_ptr(dst),
+                           bytes, stride, count);
+}
+#endif
 static inline void edge_dma_start_strided_circular(
     addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
     uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
@@ -422,6 +954,18 @@ static inline void edge_dma_start_strided_circular(
     edge32::dma_start(static_cast<uint32_t>(ring_entries), 3);
 }
 
+#ifdef __cplusplus
+static inline void edge_dma_start_strided_circular(
+    const void *src, void *ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
+    uintptr_t entry_bytes, uintptr_t ring_entries)
+{
+    edge_dma_start_strided_circular(
+        edge_addr_from_ptr(src), edge_addr_from_ptr(ring), bytes, x_stride,
+        x_max, y_stride, y_max, entry_bytes, ring_entries);
+}
+#endif
+
 static inline void edge_dma_start_strided_circular(
     addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
     uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
@@ -431,6 +975,18 @@ static inline void edge_dma_start_strided_circular(
                                     y_stride, y_max, bytes, ring_entries);
 }
 
+#ifdef __cplusplus
+static inline void edge_dma_start_strided_circular(
+    const void *src, void *ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
+    uintptr_t ring_entries)
+{
+    edge_dma_start_strided_circular(
+        edge_addr_from_ptr(src), edge_addr_from_ptr(ring), bytes, x_stride,
+        x_max, y_stride, y_max, ring_entries);
+}
+#endif
+
 static inline void edge_dma_start_strided_circular(
     addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
     uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max)
@@ -439,6 +995,17 @@ static inline void edge_dma_start_strided_circular(
                                     y_stride, y_max, x_max);
 }
 
+#ifdef __cplusplus
+static inline void edge_dma_start_strided_circular(
+    const void *src, void *ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max)
+{
+    edge_dma_start_strided_circular(
+        edge_addr_from_ptr(src), edge_addr_from_ptr(ring), bytes, x_stride,
+        x_max, y_stride, y_max);
+}
+#endif
+
 static inline void edge_dma_start_strided_circular(
     addr_t src, addr_t ring, uintptr_t bytes, uintptr_t source_stride,
     uintptr_t repeat_count)
@@ -446,6 +1013,17 @@ static inline void edge_dma_start_strided_circular(
     edge_dma_start_strided_circular(src, ring, bytes, source_stride,
                                     repeat_count, 0u, 1u, repeat_count);
 }
+
+#ifdef __cplusplus
+static inline void edge_dma_start_strided_circular(
+    const void *src, void *ring, uintptr_t bytes, uintptr_t source_stride,
+    uintptr_t repeat_count)
+{
+    edge_dma_start_strided_circular(
+        edge_addr_from_ptr(src), edge_addr_from_ptr(ring), bytes,
+        source_stride, repeat_count);
+}
+#endif
 
 #ifdef __cplusplus
 struct bfloat16_t {
@@ -545,6 +1123,12 @@ static inline void edge_tensor_wld(addr_t weight_addr = 0)
         edge32::tensor_wld(weight_addr);
 }
 
+#ifdef __cplusplus
+template <unsigned Options = 0>
+static inline void edge_tensor_wld(const void *weight_ptr)
+{ edge_tensor_wld<Options>(edge_addr_from_ptr(weight_ptr)); }
+#endif
+
 template <unsigned Options = 0>
 static inline void edge_tensor_wld_t(addr_t weight_addr = 0)
 {
@@ -557,14 +1141,47 @@ static inline void edge_tensor_wld_t(addr_t weight_addr = 0)
         edge32::tensor_wld_t(weight_addr);
 }
 
+#ifdef __cplusplus
+template <unsigned Options = 0>
+static inline void edge_tensor_wld_t(const void *weight_ptr)
+{ edge_tensor_wld_t<Options>(edge_addr_from_ptr(weight_ptr)); }
+#endif
+
 static inline void edge_tensor_setin(addr_t addr)
 { edge32::tensor_setin(addr); }
 static inline void edge_tensor_setout(addr_t addr)
 { edge32::tensor_setout(addr); }
 static inline void edge_tensor_setpsum(addr_t addr)
 { edge32::tensor_setpsum(addr); }
+template <unsigned Options = 0>
+static inline void edge_tensor_sld(addr_t addr = 0)
+{
+    static_assert((Options & ~EDGE_TENSOR_LOAD_OPT_KNOWN_MASK) == 0,
+                  "unknown tensor.sld option");
+    if constexpr (Options & EDGE_TENSOR_LOAD_OPT_REUSE)
+        edge32::emit<edge32::command::tensor_sld,
+                     static_cast<uint8_t>(Options)>();
+    else
+        edge32::tensor_sld(addr);
+}
+static inline void edge_tensor_sld_stream(addr_t addr)
+{ edge32::tensor_sld_stream(addr); }
 static inline void edge_tensor_setn(uintptr_t n)
 { edge32::tensor_setn(static_cast<uint32_t>(n)); }
+
+#ifdef __cplusplus
+static inline void edge_tensor_setin(const void *ptr)
+{ edge_tensor_setin(edge_addr_from_ptr(ptr)); }
+static inline void edge_tensor_setout(void *ptr)
+{ edge_tensor_setout(edge_addr_from_ptr(ptr)); }
+static inline void edge_tensor_setpsum(const void *ptr)
+{ edge_tensor_setpsum(edge_addr_from_ptr(ptr)); }
+template <unsigned Options = 0>
+static inline void edge_tensor_sld(const void *ptr)
+{ edge_tensor_sld<Options>(edge_addr_from_ptr(ptr)); }
+static inline void edge_tensor_sld_stream(const void *ptr)
+{ edge_tensor_sld_stream(edge_addr_from_ptr(ptr)); }
+#endif
 
 template <unsigned Options = 0>
 static inline void edge_tensor_start()
@@ -582,6 +1199,10 @@ static inline void edge_tensor_sync(void) { edge32::tensor_sync(); }
 
 static inline void edge_tensor_wld_t_circular(void)
 { edge32::emit<edge32::command::tensor_wld_t_circular>(); }
+static inline void edge_tensor_wld_circular(void)
+{ edge32::emit<edge32::command::tensor_wld_circular>(); }
+static inline void edge_tensor_sld_circular(void)
+{ edge32::emit<edge32::command::tensor_sld_circular>(); }
 
 #define EDGE_ACCEL_CSR_CMPU_MAX_VALUE  0
 #define EDGE_ACCEL_CSR_CMPU_ARGMAX_IDX 1
