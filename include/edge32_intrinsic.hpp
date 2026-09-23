@@ -49,6 +49,7 @@ static inline void edge_dcache_header_write(uint32_t value) {
   (void)value;
 #endif
 }
+#define EDGE_TENSOR_DTYPE_BF16 1
 #define EDGE_TENSOR_WTYPE_BF16 1
 #define EDGE_TENSOR_WTYPE_INT8 2
 #define EDGE_TENSOR_LOAD_OPT_REUSE (1u << 1)
@@ -421,14 +422,116 @@ static inline void edge_dma_start_strided_circular(
     edge32::dma_start(static_cast<uint32_t>(ring_entries), 3);
 }
 
+static inline void edge_dma_start_strided_circular(
+    addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
+    uintptr_t ring_entries)
+{
+    edge_dma_start_strided_circular(src, ring, bytes, x_stride, x_max,
+                                    y_stride, y_max, bytes, ring_entries);
+}
+
+static inline void edge_dma_start_strided_circular(
+    addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
+    uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max)
+{
+    edge_dma_start_strided_circular(src, ring, bytes, x_stride, x_max,
+                                    y_stride, y_max, x_max);
+}
+
+static inline void edge_dma_start_strided_circular(
+    addr_t src, addr_t ring, uintptr_t bytes, uintptr_t source_stride,
+    uintptr_t repeat_count)
+{
+    edge_dma_start_strided_circular(src, ring, bytes, source_stride,
+                                    repeat_count, 0u, 1u, repeat_count);
+}
+
+#ifdef __cplusplus
+struct bfloat16_t {
+    uint16_t bits;
+
+    constexpr bfloat16_t() : bits(0) {}
+    explicit constexpr bfloat16_t(uint16_t raw_bits) : bits(raw_bits) {}
+
+    static constexpr bfloat16_t from_bits(uint16_t raw_bits)
+    {
+        return bfloat16_t(raw_bits);
+    }
+
+    static bfloat16_t from_float(float value)
+    {
+        union {
+            float f32;
+            uint32_t u32;
+        } bits = { value };
+        bits.u32 += 0x7fffu + ((bits.u32 >> 16) & 1u);
+        return bfloat16_t(static_cast<uint16_t>(bits.u32 >> 16));
+    }
+
+    constexpr bfloat16_t(float value) : bits(from_float(value).bits) {}
+
+    float to_float() const
+    {
+        union {
+            uint32_t u32;
+            float f32;
+        } bits = { static_cast<uint32_t>(this->bits) << 16 };
+        return bits.f32;
+    }
+
+    operator float() const { return to_float(); }
+};
+
+template <typename T>
+struct edge_tensor_dtype_encoding {
+    static constexpr int value = -1;
+};
+
+template <>
+struct edge_tensor_dtype_encoding<bfloat16_t> {
+    static constexpr int value = EDGE_TENSOR_DTYPE_BF16;
+};
+
+template <typename T>
+struct edge_tensor_wtype_encoding {
+    static constexpr int value = -1;
+};
+
+template <>
+struct edge_tensor_wtype_encoding<bfloat16_t> {
+    static constexpr int value = EDGE_TENSOR_WTYPE_BF16;
+};
+
+template <>
+struct edge_tensor_wtype_encoding<int8_t> {
+    static constexpr int value = EDGE_TENSOR_WTYPE_INT8;
+};
+#endif
+
 template <int dtype, int wtype>
 static inline void edge_tensor_setcsr()
 {
     static_assert(dtype >= 0 && dtype < 16, "tensor dtype must fit imm4");
     static_assert(wtype >= 0 && wtype < 16, "tensor wtype must fit imm4");
+    // RTL decodes imm8[3:0] as dtype and imm8[7:4] as wtype.
     edge32::emit<edge32::command::tensor_setcsr,
-                 static_cast<uint8_t>((dtype << 4) | wtype)>();
+                 static_cast<uint8_t>((wtype << 4) | dtype)>();
 }
+
+#ifdef __cplusplus
+template <typename DType, typename WType>
+static inline void edge_tensor_setcsr()
+{
+    constexpr int dtype = edge_tensor_dtype_encoding<DType>::value;
+    constexpr int wtype = edge_tensor_wtype_encoding<WType>::value;
+    static_assert(dtype >= 0 && dtype < 16,
+                  "unsupported tensor data type");
+    static_assert(wtype >= 0 && wtype < 16,
+                  "unsupported tensor weight type");
+    edge_tensor_setcsr<dtype, wtype>();
+}
+#endif
 
 template <unsigned Options = 0>
 static inline void edge_tensor_wld(addr_t weight_addr = 0)
