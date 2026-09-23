@@ -112,8 +112,9 @@ package rv32;
     A_ZBA_UW = 4'd10
   } alu_op_t;
 
-  // Bit order is the existing 56-bit ABI: names replace positional packing.
-  // EX valid owns observability; this packet has no reset or validity field.
+  // Keep the packet typed end-to-end so adding a control bit cannot silently
+  // truncate a fixed-width decode port. EX valid owns observability; this
+  // packet has no reset or validity field.
   typedef struct packed {
     logic is_lui;
     logic is_auipc;
@@ -293,8 +294,8 @@ module edge_instruction_classifier (
         ((accel_subop==rv32::ASIC_DMA_SYNC)||(accel_subop==rv32::ASIC_TENSOR_SYNC)||
          (accel_subop==rv32::ASIC_ACTU_SYNC)||(accel_subop==rv32::ASIC_CMPU_SYNC));
       accel_is_getcsr=(accel_subop==rv32::ASIC_GETCSR);
-      // ASIC getcsr reports through the accelerator CSR result path.
-      writes_gpr=1'b0;
+      // GETCSR returns through the accelerator response path and writes rd.
+      writes_gpr=accel_is_getcsr && (rd!=0);
     end else if(legal_op||legal_op_imm||legal_op32||legal_op_imm32||
             (opcode==rv32::OPCODE_LUI)||(opcode==rv32::OPCODE_AUIPC)) begin
       instruction_class=scalar_m?rv32::CLASS_MULDIV:rv32::CLASS_ALU;

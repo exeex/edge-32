@@ -69,7 +69,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   input wire decoded_legal,
   input wire [4:0] register_rd, input wire rd_gpr, rd_fpr,
   input wire [31:0] fpu_control,
-  output wire [55:0] control,
+  output wire rv32::issue_control_t control,
   output wire terminal_break,
   output wire [19:0] imm,
   output wire writes_gpr, writes_fpr,
@@ -240,6 +240,7 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   wire [11:0] csr_addr = inst[31:20];
   wire [6:0] opcode=inst[6:0];
   wire [2:0] funct3=inst[14:12];
+  wire [6:0] funct7=inst[31:25];
   wire [4:0] fp_family=inst[31:27];
   // Integer register use follows opcode, independently of issue legality.
   wire op_imm=(opcode==rv32::OPCODE_OP_IMM)||(opcode==rv32::OPCODE_OP_IMM_32);
@@ -301,7 +302,8 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   assign write_rd=edge_break ? 5'd31:inst[11:7];
   assign rd_gpr=(write_rd!=0)&&(op_imm||op_reg||(opcode==rv32::OPCODE_LUI)||
     (opcode==rv32::OPCODE_AUIPC)||(opcode==rv32::OPCODE_JAL)||(opcode==rv32::OPCODE_JALR)||
-    (opcode==rv32::OPCODE_LOAD)||csr_op||fp_to_gpr);
+    (opcode==rv32::OPCODE_LOAD)||csr_op||fp_to_gpr||
+    ((opcode==rv32::OPCODE_EDGE_ASIC)&&(funct7==rv32::ASIC_GETCSR)));
   assign rd_fpr=fp_load||fp_fma||(fp_op&&!fp_to_gpr);
   // Conservatively interlock a CSR writer without waiting for legality.
   assign csr_write=csr_op&&

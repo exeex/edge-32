@@ -78,7 +78,7 @@ static inline void edge_dcache_header_write(uint32_t value) {
 //   [24:20] imm8[7:3]
 //   [19:15] rs1
 //   [14:12] imm8[2:0]
-//   [11:7]  reserved rd=0
+//   [11:7]  rd=0 for commands; GETCSR names its result GPR
 //   [6:0]   ASIC opcode 0x3f
 namespace edge32 {
 
@@ -91,6 +91,17 @@ constexpr uint32_t asic_word(unsigned funct7, unsigned rs1, unsigned imm8)
            (((imm8 >> 3) & 0x1fu) << 20) |
            ((rs1 & 0x1fu) << 15) |
            ((imm8 & 0x7u) << 12) |
+           kAsicOpcode;
+}
+
+constexpr uint32_t asic_result_word(unsigned funct7, unsigned rd,
+                                     unsigned rs1, unsigned imm8)
+{
+    return ((funct7 & 0x7fu) << 25) |
+           (((imm8 >> 3) & 0x1fu) << 20) |
+           ((rs1 & 0x1fu) << 15) |
+           ((imm8 & 0x7u) << 12) |
+           ((rd & 0x1fu) << 7) |
            kAsicOpcode;
 }
 
@@ -136,6 +147,22 @@ inline void emit(uint32_t value)
                      : "+r"(operand) : "i"(word) : "memory");
 #else
     (void)value;
+#endif
+}
+
+template<command Command, uint8_t Imm8 = 0>
+inline uintptr_t emit_result()
+{
+#if defined(__riscv)
+    // GETCSR returns through the normal accelerator response path.  Keep the
+    // ABI fixed on a0 so the C/C++ wrapper can consume the RV32 result.
+    register uintptr_t result __asm__("a0");
+    constexpr uint32_t word = asic_result_word(
+        static_cast<unsigned>(Command), kIntrinsicRs1, 0, Imm8);
+    __asm__ volatile(".word %c1" : "=r"(result) : "i"(word) : "memory");
+    return result;
+#else
+    return 0;
 #endif
 }
 
@@ -211,6 +238,8 @@ static_assert(asic_word(0x24, 5, 0x30) == 0x4862803fu,
               "ASIC32 encoding must match RTL");
 static_assert((asic_word(0x7f, 31, 0xff) & 0x00000f80u) == 0,
               "ASIC32 rd field must remain zero");
+static_assert(asic_result_word(0x2f, 10, 0, 4) == 0x5e00453fu,
+              "ASIC32 GETCSR encoding must match RTL");
 
 }  // namespace edge32
 
@@ -437,6 +466,95 @@ static inline void edge_tensor_sync(void) { edge32::tensor_sync(); }
 
 static inline void edge_tensor_wld_t_circular(void)
 { edge32::emit<edge32::command::tensor_wld_t_circular>(); }
+
+#define EDGE_ACCEL_CSR_CMPU_MAX_VALUE  0
+#define EDGE_ACCEL_CSR_CMPU_ARGMAX_IDX 1
+#define EDGE_ACCEL_CSR_CMPU_MIN_VALUE  2
+#define EDGE_ACCEL_CSR_CMPU_ARGMIN_IDX 3
+#define EDGE_ACCEL_CSR_ACTU_EXP_SUM    4
+
+template <int dtype, int mode>
+static inline void edge_actu_setcsr()
+{
+    static_assert(dtype >= 0 && dtype < 16, "actu dtype must fit imm4");
+    static_assert(mode >= 0 && mode < 16, "actu mode must fit imm4");
+    edge32::emit<edge32::command::actu_setcsr,
+                 static_cast<uint8_t>((mode << 4) | dtype)>();
+}
+
+static inline void edge_actu_setin(const void *ptr)
+{ edge32::actu_setin(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_actu_setout(void *ptr)
+{ edge32::actu_setout(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_actu_setn(uintptr_t n)
+{ edge32::actu_setn(static_cast<uint32_t>(n)); }
+static inline void edge_actu_setscalar(uintptr_t value)
+{ edge32::actu_setscalar(static_cast<uint32_t>(value)); }
+
+template <uintptr_t value>
+static inline void edge_actu_setscalar_imm()
+{
+    static_assert(value <= 0xffffffffu,
+                  "actu scalar immediate must fit RV32");
+    edge32::actu_setscalar(static_cast<uint32_t>(value));
+}
+
+static inline void edge_actu_start(void) { edge32::actu_start(); }
+static inline void edge_actu_sync(void)
+{
+    edge32::actu_sync();
+#if defined(__riscv)
+    __asm__ volatile("fence rw, rw" ::: "memory");
+#endif
+}
+
+template <int mode>
+static inline void edge_cmpu_setcsr()
+{
+    static_assert(mode >= 0 && mode < 16, "cmpu mode must fit imm4");
+    edge32::emit<edge32::command::cmpu_setcsr,
+                 static_cast<uint8_t>(mode)>();
+}
+
+static inline void edge_cmpu_setlhs(const void *ptr)
+{ edge32::cmpu_setlhs(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_cmpu_setrhs(const void *ptr)
+{ edge32::cmpu_setrhs(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_cmpu_setmask(const uint8_t *ptr)
+{ edge32::cmpu_setmask(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_cmpu_setout(void *ptr)
+{ edge32::cmpu_setout(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr))); }
+static inline void edge_cmpu_setn(uintptr_t n)
+{ edge32::cmpu_setn(static_cast<uint32_t>(n)); }
+static inline void edge_cmpu_start(void) { edge32::cmpu_start(); }
+static inline void edge_cmpu_sync(void)
+{
+    edge32::cmpu_sync();
+#if defined(__riscv)
+    __asm__ volatile("fence rw, rw" ::: "memory");
+#endif
+}
+
+template <int csr_id>
+static inline uintptr_t edge_accel_getcsr()
+{
+    static_assert(csr_id >= EDGE_ACCEL_CSR_CMPU_MAX_VALUE &&
+                  csr_id <= EDGE_ACCEL_CSR_ACTU_EXP_SUM,
+                  "accelerator CSR ID is out of range");
+    return edge32::emit_result<edge32::command::accel_getcsr,
+                               static_cast<uint8_t>(csr_id)>();
+}
+
+static inline uintptr_t edge_cmpu_get_max_value()
+{ return edge_accel_getcsr<EDGE_ACCEL_CSR_CMPU_MAX_VALUE>(); }
+static inline uintptr_t edge_cmpu_get_argmax_idx()
+{ return edge_accel_getcsr<EDGE_ACCEL_CSR_CMPU_ARGMAX_IDX>(); }
+static inline uintptr_t edge_cmpu_get_min_value()
+{ return edge_accel_getcsr<EDGE_ACCEL_CSR_CMPU_MIN_VALUE>(); }
+static inline uintptr_t edge_cmpu_get_argmin_idx()
+{ return edge_accel_getcsr<EDGE_ACCEL_CSR_CMPU_ARGMIN_IDX>(); }
+static inline uintptr_t edge_actu_get_exp_sum()
+{ return edge_accel_getcsr<EDGE_ACCEL_CSR_ACTU_EXP_SUM>(); }
 
 struct edge_hardware_info {
     uint16_t rv_core_id;
