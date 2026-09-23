@@ -9,7 +9,7 @@ edge-rv-lite integrations may temporarily consume that leaf for compatibility,
 but Edge32 production targets must not source the old classifier path.
 
 Edge32 uses one RV32M implementation: `edge_32_muldiv_asap7`, with its
-radix-4 Booth multiplier, carry-select leaves and native SRT4 divider.
+six-product 3x2 multiplier tree and native SRT4 divider.
 The core, product filelists, Verilator, synthesis and APR all use that path.
 There is no portable mul/div fallback or experimental divider selector.
 
