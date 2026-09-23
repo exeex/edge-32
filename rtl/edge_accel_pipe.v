@@ -307,6 +307,9 @@ wire       is_sld_reuse;
 wire       is_sld_stream;
 wire       is_wsld_circular;
 wire       is_sld_circular;
+wire       is_tensor_address_cmd;
+wire       is_compact_address_low;
+wire       is_compact_address_high;
 wire       is_actu_setup;
 wire       is_actu_start;
 wire       is_actu_sync;
@@ -324,6 +327,7 @@ wire       getcsr_ready_for_target;
 wire       ready_for_target;
 wire       cmd_fire;
 wire [ADDR_WIDTH-1:0] capture_addr;
+wire [63:0] capture_address_value;
 wire [PA_WIDTH-1:0] capture_dtcm_byte_offset;
 wire       capture_is_dtcm_ptr;
 wire [ADDR_WIDTH-1:0] capture_dtcm_word_addr;
@@ -333,6 +337,7 @@ reg  [63:0] dma_x_q;
 reg  [63:0] dma_y_q;
 reg  [63:0] dma_src_q;
 reg  [63:0] dma_tar_q;
+reg  [63:0] tensor_address_q;
 reg         asic_ready_q;
 
 function [7:0] compact_legacy_imm8;
@@ -444,6 +449,20 @@ assign is_sld_reuse     = is_sld && control_imm8[1];
 assign is_sld_stream    = (subop == TENSOR_SLD_STREAM);
 assign is_wsld_circular = (subop == TENSOR_WSLD_CIRCULAR);
 assign is_sld_circular = (subop == TENSOR_SLD_CIRCULAR);
+assign is_tensor_address_cmd =
+    (((subop == TENSOR_WLD) || (subop == TENSOR_WLD_T)) &&
+     !control_imm8[1]) ||
+    ((subop == TENSOR_SLD) && !control_imm8[1]) ||
+    (subop == TENSOR_SLD_STREAM) ||
+    (subop == TENSOR_SETIN) ||
+    (subop == TENSOR_SETOUT) ||
+    (subop == TENSOR_SETPSUM);
+assign is_compact_address_low = COMPACT_CMD_INPUT &&
+                                is_tensor_address_cmd &&
+                                !control_imm8[0];
+assign is_compact_address_high = COMPACT_CMD_INPUT &&
+                                 is_tensor_address_cmd &&
+                                 control_imm8[0];
 assign is_actu_setup    = (subop == ACTU_SETCSR) ||
                           (subop == ACTU_SETIN) ||
                           (subop == ACTU_SETOUT) ||
@@ -488,20 +507,21 @@ assign getcsr_owner_idle = (control_imm8[3:0] <= CSR_CMPU_ARGMIN_IDX) ?
                             !actu_sync_stall : 1'b1);
 assign getcsr_ready_for_target = reverse_snapshot_write_ready &&
                                  getcsr_owner_idle;
-assign ready_for_target = is_dma_start ?
-                          (is_dma_start_circular ? dma_start_circular_ready
-                                                 : dma_start_ready) :
-                          (is_dma_sync ? dma_sync_done :
-                           (is_asic_power ?
-                            (control_imm8[0]||
-                             (!tensor_sync_stall&&!actu_sync_stall&&
-                              !cmpu_sync_stall&&dma_sync_done)) :
-                           (is_accel_getcsr ? getcsr_ready_for_target :
-                           ((is_cmpu_setup || is_cmpu_start || is_cmpu_sync)
-                            ? cmpu_ready_for_target :
-                           ((is_actu_setup || is_actu_start || is_actu_sync)
-                            ? actu_ready_for_target
-                            : tensor_ready_for_target)))));
+assign ready_for_target = is_compact_address_low ? 1'b1 :
+                          is_dma_start ?
+                            (is_dma_start_circular ? dma_start_circular_ready
+                                                   : dma_start_ready) :
+                          is_dma_sync ? dma_sync_done :
+                          is_asic_power ?
+                            (control_imm8[0] ||
+                             (!tensor_sync_stall && !actu_sync_stall &&
+                              !cmpu_sync_stall && dma_sync_done)) :
+                          is_accel_getcsr ? getcsr_ready_for_target :
+                          (is_cmpu_setup || is_cmpu_start || is_cmpu_sync) ?
+                            cmpu_ready_for_target :
+                          (is_actu_setup || is_actu_start || is_actu_sync) ?
+                            actu_ready_for_target :
+                          tensor_ready_for_target;
 assign cmd_ready        = decode_illegal ||
                           (subop_is_stream &&
                            (!needs_capture || cmd_capture_valid) &&
@@ -509,16 +529,21 @@ assign cmd_ready        = decode_illegal ||
                            (!ASIC_POWER_CONTROL||is_asic_power||asic_ready_q));
 assign cmd_fire         = cmd_valid && cmd_ready && !decode_illegal &&
                           subop_is_stream && opcode_is_edge64;
+assign capture_address_value = is_compact_address_high ?
+                               {cmd_capture_value[31:0],
+                                tensor_address_q[31:0]} :
+                               cmd_capture_value[63:0];
 assign capture_is_dtcm_ptr = mem_region_enable &&
-       ((cmd_capture_value[PA_WIDTH-1:0] & mem_region_mask[PA_WIDTH-1:0]) ==
+       ((capture_address_value[PA_WIDTH-1:0] &
+         mem_region_mask[PA_WIDTH-1:0]) ==
         mem_region_base[PA_WIDTH-1:0]);
 assign capture_dtcm_byte_offset[PA_WIDTH-1:0] =
-       cmd_capture_value[PA_WIDTH-1:0] - mem_region_base[PA_WIDTH-1:0];
+       capture_address_value[PA_WIDTH-1:0] - mem_region_base[PA_WIDTH-1:0];
 assign capture_dtcm_word_addr[ADDR_WIDTH-1:0] =
        capture_dtcm_byte_offset[ADDR_WIDTH+2:3];
 assign capture_addr[ADDR_WIDTH-1:0] =
        capture_is_dtcm_ptr ? capture_dtcm_word_addr[ADDR_WIDTH-1:0]
-                           : cmd_capture_value[ADDR_WIDTH-1:0];
+                           : capture_address_value[ADDR_WIDTH-1:0];
 
 assign capture_consume_valid = cmd_fire && needs_capture;
 // A start may be accepted into the tensor unit's pending state before an
@@ -559,6 +584,7 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
     dma_y_q[63:0] <= 64'b0;
     dma_src_q[63:0] <= 64'b0;
     dma_tar_q[63:0] <= 64'b0;
+    tensor_address_q[63:0] <= 64'b0;
   end else if (cmd_fire && is_dma_set) begin
     if (subop == DMA_SETN)
       dma_n_q[31:0] <= cmd_capture_value[31:0];
@@ -593,6 +619,10 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
         dma_tar_q[63:0] <= cmd_capture_value[63:0];
       end
     end
+  end else if (cmd_fire && is_compact_address_low) begin
+    tensor_address_q[31:0] <= cmd_capture_value[31:0];
+  end else if (cmd_fire && is_compact_address_high) begin
+    tensor_address_q[63:32] <= cmd_capture_value[31:0];
   end
 end
 
@@ -600,20 +630,31 @@ assign cmd_setcsr_req   = cmd_fire && (subop == TENSOR_SETCSR);
 assign cmd_setcsr_dtype = control_imm8[3:0];
 assign cmd_setcsr_wtype = control_imm8[7:4];
 
-assign cmd_wld_req      = cmd_fire && (subop == TENSOR_WLD);
+assign cmd_wld_req      = cmd_fire && (subop == TENSOR_WLD) &&
+                          (!COMPACT_CMD_INPUT || !is_tensor_address_cmd ||
+                           is_compact_address_high);
 assign cmd_wld_circular_req = cmd_fire && is_wld_circular;
-assign cmd_wld_trans_req= cmd_fire && ((subop == TENSOR_WLD_T) ||
-                                       (subop == TENSOR_WLD_T_CIRCULAR));
+assign cmd_wld_trans_req= cmd_fire &&
+                          (((subop == TENSOR_WLD_T) &&
+                            (!COMPACT_CMD_INPUT || !is_tensor_address_cmd ||
+                             is_compact_address_high)) ||
+                           (subop == TENSOR_WLD_T_CIRCULAR));
 assign cmd_wld_reuse    = control_imm8[1] && is_wld;
 assign cmd_wld_ptr      = capture_addr;
 
-assign cmd_setin_req    = cmd_fire && (subop == TENSOR_SETIN);
+assign cmd_setin_req    = cmd_fire && (subop == TENSOR_SETIN) &&
+                           (!COMPACT_CMD_INPUT ||
+                            is_compact_address_high);
 assign cmd_setin_ptr    = capture_addr;
 
-assign cmd_setout_req   = cmd_fire && (subop == TENSOR_SETOUT);
+assign cmd_setout_req   = cmd_fire && (subop == TENSOR_SETOUT) &&
+                           (!COMPACT_CMD_INPUT ||
+                            is_compact_address_high);
 assign cmd_setout_ptr   = capture_addr;
 
-assign cmd_setpsum_req  = cmd_fire && (subop == TENSOR_SETPSUM);
+assign cmd_setpsum_req  = cmd_fire && (subop == TENSOR_SETPSUM) &&
+                           (!COMPACT_CMD_INPUT ||
+                            is_compact_address_high);
 assign cmd_setpsum_ptr  = capture_addr;
 
 assign cmd_setn_req     = cmd_fire && (subop == TENSOR_SETN);
@@ -624,11 +665,15 @@ assign cmd_start_tile_req = cmd_fire && (subop == TENSOR_START_TILE);
 assign cmd_start_mode[7:0] = control_imm8;
 assign cmd_sync_req     = cmd_fire && (subop == TENSOR_SYNC);
 
-assign cmd_sld_req      = cmd_fire && is_sld;
+assign cmd_sld_req      = cmd_fire && is_sld &&
+                          (!COMPACT_CMD_INPUT || !is_tensor_address_cmd ||
+                           is_compact_address_high);
 assign cmd_sld_reuse    = control_imm8[1] && is_sld;
 assign cmd_sld_ptr      = capture_addr;
 assign cmd_sld_stream_ptr = capture_addr;
-assign cmd_sld_stream_req = cmd_fire && is_sld_stream;
+assign cmd_sld_stream_req = cmd_fire && is_sld_stream &&
+                            (!COMPACT_CMD_INPUT ||
+                             is_compact_address_high);
 assign cmd_wsld_circular_req = cmd_fire && is_wsld_circular;
 assign cmd_wsld_circular_transpose = control_imm8[0];
 assign cmd_sld_circular_req = cmd_fire && is_sld_circular;

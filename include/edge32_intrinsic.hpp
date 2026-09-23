@@ -150,6 +150,15 @@ inline void emit(uint32_t value)
 #endif
 }
 
+template<command Command>
+inline void emit_address(uint64_t address)
+{
+    // RV32 carries one address half per command.  Always send both halves;
+    // sending a zero high half is required to clear a previous >4GB address.
+    emit<Command, 0>(static_cast<uint32_t>(address));
+    emit<Command, 1>(static_cast<uint32_t>(address >> 32));
+}
+
 template<command Command, uint8_t Imm8 = 0>
 inline uintptr_t emit_result()
 {
@@ -178,15 +187,11 @@ inline void dma_setn(uint32_t bytes) { emit<command::dma_setn>(bytes); }
 inline void dma_setentry(uint32_t bytes) { emit<command::dma_setentry>(bytes); }
 inline void dma_setsrc(uint64_t address)
 {
-    emit<command::dma_setsrc, 0>(static_cast<uint32_t>(address));
-    const uint32_t high = static_cast<uint32_t>(address >> 32);
-    if (high != 0) emit<command::dma_setsrc, 1>(high);
+    emit_address<command::dma_setsrc>(address);
 }
 inline void dma_settar(uint64_t address)
 {
-    emit<command::dma_settar, 0>(static_cast<uint32_t>(address));
-    const uint32_t high = static_cast<uint32_t>(address >> 32);
-    if (high != 0) emit<command::dma_settar, 1>(high);
+    emit_address<command::dma_settar>(address);
 }
 inline void dma_start(uint32_t bytes, uint8_t mode = 0)
 {
@@ -202,11 +207,21 @@ inline void dma_start(uint32_t bytes, uint8_t mode = 0)
 inline void dma_sync() { emit<command::dma_sync>(); }
 
 inline void tensor_setcsr(uint32_t value) { emit<command::tensor_setcsr>(value); }
-inline void tensor_wld(uint32_t ptr) { emit<command::tensor_wld>(ptr); }
-inline void tensor_setin(uint32_t ptr) { emit<command::tensor_setin>(ptr); }
-inline void tensor_setout(uint32_t ptr) { emit<command::tensor_setout>(ptr); }
-inline void tensor_setpsum(uint32_t ptr) { emit<command::tensor_setpsum>(ptr); }
+inline void tensor_wld(uint64_t address)
+{ emit_address<command::tensor_wld>(address); }
+inline void tensor_setin(uint64_t address)
+{ emit_address<command::tensor_setin>(address); }
+inline void tensor_setout(uint64_t address)
+{ emit_address<command::tensor_setout>(address); }
+inline void tensor_setpsum(uint64_t address)
+{ emit_address<command::tensor_setpsum>(address); }
 inline void tensor_setn(uint32_t value) { emit<command::tensor_setn>(value); }
+inline void tensor_wld_t(uint64_t address)
+{ emit_address<command::tensor_wld_t>(address); }
+inline void tensor_sld(uint64_t address)
+{ emit_address<command::tensor_sld>(address); }
+inline void tensor_sld_stream(uint64_t address)
+{ emit_address<command::tensor_sld_stream>(address); }
 inline void tensor_start(uint8_t mode = 0)
 {
     switch (mode) {
@@ -243,8 +258,8 @@ static_assert(asic_result_word(0x2f, 10, 0, 4) == 0x5e00453fu,
 
 }  // namespace edge32
 
-// Drop-in Edge API names for edge-32. Addresses are integer values rather
-// than pointers because the scalar ABI is RV32 while DMA addresses are 64-bit.
+// Drop-in Edge API names for edge-32. DMA and tensor addresses are integer
+// values rather than C++ pointers; RV32 transports each as low/high words.
 static inline uintptr_t edge_get_cycle(void)
 {
     uintptr_t cycle;
@@ -424,8 +439,7 @@ static inline void edge_tensor_wld(addr_t weight_addr = 0)
         edge32::emit<edge32::command::tensor_wld,
                      static_cast<uint8_t>(Options)>();
     else
-        edge32::emit<edge32::command::tensor_wld>(
-            static_cast<uint32_t>(weight_addr));
+        edge32::tensor_wld(weight_addr);
 }
 
 template <unsigned Options = 0>
@@ -437,16 +451,15 @@ static inline void edge_tensor_wld_t(addr_t weight_addr = 0)
         edge32::emit<edge32::command::tensor_wld_t,
                      static_cast<uint8_t>(Options)>();
     else
-        edge32::emit<edge32::command::tensor_wld_t>(
-            static_cast<uint32_t>(weight_addr));
+        edge32::tensor_wld_t(weight_addr);
 }
 
 static inline void edge_tensor_setin(addr_t addr)
-{ edge32::tensor_setin(static_cast<uint32_t>(addr)); }
+{ edge32::tensor_setin(addr); }
 static inline void edge_tensor_setout(addr_t addr)
-{ edge32::tensor_setout(static_cast<uint32_t>(addr)); }
+{ edge32::tensor_setout(addr); }
 static inline void edge_tensor_setpsum(addr_t addr)
-{ edge32::tensor_setpsum(static_cast<uint32_t>(addr)); }
+{ edge32::tensor_setpsum(addr); }
 static inline void edge_tensor_setn(uintptr_t n)
 { edge32::tensor_setn(static_cast<uint32_t>(n)); }
 
