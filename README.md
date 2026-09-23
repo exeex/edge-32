@@ -1,40 +1,86 @@
-# edge-32: RV32 Control Core
+# Edge32: an RV32 control core built for physical timing
 
-`edge-32` is the RV32 derivative of `edge-rv-lite`. The repository preserves
-the lite core history so the width and ISA migration can proceed in reviewable,
-bit-true steps instead of starting from an unrelated implementation.
+Edge32 is the public RV32 successor to `edge-rv-lite` for NPU control. It is a
+single-issue, four-stage, in-order core implementing RV32IMF with Zba. The
+redesign prioritizes ASAP7 physical timing and routability: register
+reads, frontend control, multiplication, division, and the boundaries between
+pipeline stages. The NPU performs bulk computation outside the scalar core.
 
-The maintained instruction classifier is now owned here. Legacy edge-rv and
-edge-rv-lite integrations may temporarily consume that leaf for compatibility,
-but Edge32 production targets must not source the old classifier path.
+The main tradeoff is visible in software. Compared with the former RV64 lite
+core, Edge32 uses substantially fewer FPGA logic resources and has more
+measured pre-CTS timing margin. Its two-iteration CoreMark checkpoint takes
+25.5% more cycles per iteration. A historical product-level Tensor comparison
+is slightly faster on Edge32; the Tensor implementation is outside this public
+repository and is not described here.
 
-Edge32 uses one RV32M implementation: `edge_32_muldiv_asap7`, with its
-six-product 3x2 multiplier tree and native SRT4 divider.
-The core, product filelists, Verilator, synthesis and APR all use that path.
-There is no portable mul/div fallback or experimental divider selector.
+## What changed
 
-The CPU-side accelerator command emitter, `edge_accel_pipe`, is also owned by
-Edge32. It terminates instruction encoding and scalar snapshot semantics;
-`edge-asic` begins at the emitted accelerator command interface.
+| Upgrade | Result |
+| --- | --- |
+| Four-stage scalar pipeline | IF/predecode, ID/read, EX/execute, WB/retire replace the former three-stage RV64 scalar path. |
+| Physically local register reads | IF captures source indices for a new 2-read/1-write GPR; bit-sliced storage and local read muxes shorten the register-read cone. |
+| Smaller RV32M unit | One native RV32 multiplier/divider replaces the former RV64 leaf. The multiplier uses six smaller products; division uses a native radix-4 implementation. |
+| Narrower scalar state | RV32 registers and scalar addresses reduce the cached-core FPGA estimate by 48.5% in total cells and 37.4% in LUTs. |
+| 64-bit product addressing | Cache address headers and split DMA address commands retain access to 64-bit physical addresses. |
+| Product behavior | Recorded 64x64 Tensor windows improve by 0.74% and 0.97% against the matched RV64-lite reference. |
+| Scalar cost | CoreMark grows from 785,777 to 985,783 cycles per iteration at the measured RTL checkpoints. |
 
-The maintained scalar path is RV32IMF with Zba. Registers and effective scalar
-addresses are 32 bits; cache/AXI and accelerator interfaces retain their
-explicit product widths. Historical RV64 migration code is not a selectable
-CPU implementation.
+## Architecture chosen for ASAP7 timing
 
-## FPGA synthesis versus the former edge-rv-lite
+The scalar pipeline has four stages:
 
-The comparable scalar boundary is the cached core, not the complete `edge-e3`
-product. The table below uses Yosys 0.67+post (`b8e7da6f`),
-`synth_xilinx -family xc7 -noiopad -noclkbuf`, default DSP mapping and the
-same FPGA RAM model. Both cores use their default 16 KiB I-cache and 16 KiB
-D-cache with FPU disabled. The old baseline is the last `edge-rv-lite` gitlink
-before `edge-cores` switched scalar submodules: `edge-rv-lite` `a25755d` and
-its `edge-rv` dependency `e875ea8`. Edge32 is `e8c13c0`. The old core is
-RV64 with a 40-bit PC; Edge32 is RV32 with a 32-bit PC. These figures compare
-the two implemented cores, not a controlled one-component change.
+| Stage | Work |
+| --- | --- |
+| **IF** | Fetch and predecode GPR/FPR indices and coarse instruction properties. |
+| **ID** | Read operands, check dependencies and legality, and capture the issue controls. |
+| **EX** | Execute one scalar instruction or issue an accelerator command. A variable-latency operation retains EX ownership until it completes. |
+| **WB** | Commit register/CSR state and retirement in program order. |
 
-| Cached-core resource | edge-rv-lite | edge-32 | Edge32 change |
+Predecoding indices in IF removes instruction-field decode from the ID register
+read path. The `edge_32_gpr` register file has two read ports and one write
+port. Its 31 writable 32-bit words are organized as 32 physical bit slices,
+with local storage and two local read muxes per slice. WB-to-ID forwarding
+preserves architectural same-cycle reads. The FPR file keeps a separate write
+path through registered WB. Frontend stop and request-capacity logic are kept
+near the frontend rather than joined to a wide EX completion path.
+
+The RV32M owner is `edge_32_muldiv_asap7`. Its six-product 3x2 multiplier tree
+reduces wide multiplier wiring; the native radix-4 divider avoids carrying the
+old RV64 arithmetic datapath into Edge32. These structures were selected for
+physical timing and routing pressure. A multiply occupies a six-stage product
+pipeline, which increases scalar latency relative to the former lite leaf.
+
+### Physical evidence and limit
+
+The design was iterated against a 1 GHz ASAP7 TT physical flow with actual
+placement coordinates and estimated wire RC, rather than judging timing from
+RTL depth alone. The comparable integration checkpoints are:
+
+| ASAP7 checkpoint | Setup slack | Repaired core area |
+| --- | ---: | ---: |
+| Preceding three-stage GPR design | +4.82 ps | 3,702 µm² |
+| Four-stage GPR design | +158.12 ps | 3,735 µm² |
+| Later frontend-local control checkpoint | +158.69 ps | 3,588.50 µm² |
+
+The four-stage change added timing margin on the measured placement path. The
+later control checkpoint passed 320/320 functional tests. Its worst path was in
+the divider; the separate +200 ps setup-reserve target was still 41.31 ps
+short. These figures are **pre-CTS placement-RC checkpoints**, not extracted
+post-route timing or foundry signoff for the current RTL. They show the
+physical constraints that guided the redesign; they do not establish a final
+routed clock frequency.
+
+## Resource comparison with edge-rv-lite
+
+Yosys 0.67+post (`b8e7da6f`) ran `synth_xilinx -family xc7 -noiopad
+-noclkbuf` with default DSP mapping and the same FPGA RAM model. The
+comparison covers cached scalar cores with FPU disabled and default 16 KiB
+I-cache and D-cache. The old baseline is `edge-rv-lite` `a25755d` with its
+`edge-rv` dependency `e875ea8`; Edge32 RTL is `e8c13c0` (unchanged in the
+subsequent documentation revision). The cores differ in ISA width, pipeline,
+and arithmetic architecture, so this measures the full upgrade.
+
+| Cached-core resource | RV64 lite | Edge32 | Change |
 | --- | ---: | ---: | ---: |
 | Total Yosys cells | 32,709 | 16,860 | -48.5% |
 | LUT1–LUT6 | 15,447 | 9,669 | -37.4% |
@@ -44,11 +90,9 @@ the two implemented cores, not a controlled one-component change.
 | DSP48E1 | 4 | 6 | +2 |
 | RAMB18E1 / RAMB36E1 | 32 / 6 | 32 / 5 | 0 / -1 |
 
-Separately synthesizing the actual RV32M owner and the former RV64M leaf gives
-the following narrower comparison. The old leaf supports 64-bit operations;
-the new owner implements 32-bit operations.
+The separate mul/div synthesis makes the arithmetic tradeoff clearer:
 
-| Mul/div resource | edge-rv-lite | edge-32 | Edge32 change |
+| Mul/div resource | RV64 lite leaf | Edge32 RV32M | Change |
 | --- | ---: | ---: | ---: |
 | Total Yosys cells | 4,318 | 1,636 | -62.1% |
 | LUT1–LUT6 | 1,973 | 852 | -56.8% |
@@ -57,970 +101,95 @@ the new owner implements 32-bit operations.
 | MUXF7 + MUXF8 | 130 | 1 | -99.2% |
 | DSP48E1 | 4 | 6 | +2 |
 
-`edge_32_muldiv_asap7` combines six smaller multiplier products with a native
-32-bit radix-4 divider. The much lower LUT, carry and wide-mux counts should
-reduce routing pressure around the scalar mul/div unit; the six parallel
-products use two more DSP blocks. Yosys resource counts do not measure placed
-routing, timing closure or ASIC area. Those claims require place-and-route.
+The two additional DSP blocks buy a much smaller LUT/carry/mux network.
+These are FPGA synthesis estimates, not ASIC area, routed wire length, or Fmax.
+The [parent synthesis guide](../../synth/README.md) describes the runnable
+profiles; the historical lite source revisions are pinned above.
 
-Run these profiles from the `edge-cores` root to reproduce the reports. The
-cached-core reports are written to `synth/build/edge_32_cached_core/edge-32/`
-and `synth/build/edge_rv_lite_cached_core/edge-rv-lite/`; the standalone
-mul/div reports use `synth/build/<top>/xilinx/`.
+## Performance: the scalar tradeoff and the Tensor result
+
+### CoreMark
+
+The current Edge32 RTL (`abe4ae0`) ran the two-iteration bare-metal CoreMark
+image on its cached AXI core in Verilator 5.050. LLVM 22.1.8 compiled
+RV32IMF_Zba / ILP32F at `-O2`; the FPU and default 16 KiB caches were enabled.
+The historical testbench came from `edge-cores` `c257689b` and used its pinned
+CoreMark source `4bda0ead`. CRC validation, retired-count checking, and I/D
+cache traffic checks passed. The RV64-lite number is taken from the
+[old lite README](https://github.com/exeex/edge-rv-lite/blob/a25755dc4e8904b13af1f68152a3f165764fa55b/README.md#coremark-and-tensor-benchmark-report);
+that core was not rerun.
+
+| Metric | RV64 lite | Edge32 | Edge32 change |
+| --- | ---: | ---: | ---: |
+| Internal `rdcycle` cycles per iteration | 785,777 | 985,783 | +200,006 (+25.5%) |
+| Iterations per MHz, derived from cycles | 1.273 | 1.014 | -20.3% |
+| Retired instructions, complete image | 616,228 | 587,409 | Different RV64/RV32 images |
+
+The two-iteration run is a development checkpoint, not an official CoreMark
+submission. Both cycle figures use the timed `rdcycle` interval rather than
+whole-testbench runtime. The six-stage multiplier contributes to scalar cost,
+but the measured gap cannot be assigned to it alone: the binaries, pipeline,
+and memory behavior differ. The Edge32 run counted 19,032 integer multiplies
+and two divides across the complete two-iteration image. Verilator does not
+include physical wire delay; elapsed time also depends on post-route clock
+frequency.
+
+### Tensor product checkpoint
+
+The following **historical** 2026-08-21 measurement uses the same 64x64
+software workload and the same `X30` timing boundary on the three products.
+It includes weight production and Tensor execution, while excluding boot,
+input packing, and output scatter. The Edge32 product ran at checkpoint
+`654ddab`; it was not rerun after the later four-stage and RV32M changes.
+
+| 64x64 case | `edge-rv@e3` | `edge-rv-lite@e3` | `edge32@e3` | Edge32 vs lite |
+| --- | ---: | ---: | ---: | ---: |
+| 64 tokens, X30 cycles | 4,660 | 4,699 | **4,664** | **-35 (-0.74%)** |
+| 128 tokens, X30 cycles | 8,772 | 8,785 | **8,700** | **-85 (-0.97%)** |
+
+Edge32 was slightly faster in these matched Tensor windows despite the scalar
+CoreMark tradeoff. This is the measured product-level result of the optimized
+integration; it does not isolate individual cycle savings. The Tensor RTL is
+outside this public repository, so this README reports the result without
+implementation details. The lite README also contains a different
+`tiled_circular` case; its figures are not mixed with this `runtime_shape`
+comparison.
+
+## RV32 with 64-bit physical addresses
+
+The PC, GPRs, and scalar effective addresses are 32 bits. Each I-cache and
+D-cache operates within a selected 4 GiB address window; a separate 32-bit
+header CSR supplies the upper physical-address bits at the AXI boundary.
+Software must maintain cache state when changing headers because low addresses
+can alias across windows. The default cache capacities are 16 KiB each and do
+not determine the window size.
+
+DMA has a separate 64-bit address path. `edge_dma_setsrc` and
+`edge_dma_settar` emit low-32 and high-32 commands, and `edge_accel_pipe`
+combines them into 64-bit source and target addresses. RV32 scalar addressing
+therefore does not truncate DMA physical addresses.
+
+## Using the public RTL
+
+The canonical source lists are [`filelists/edge_32.fl`](filelists/edge_32.fl)
+for the cached core and
+[`filelists/edge_32_muldiv.fl`](filelists/edge_32_muldiv.fl) for the standalone
+RV32M owner. Public software uses
+[`include/intrinsic.hpp`](include/intrinsic.hpp) or the explicit
+[`edge32_intrinsic.hpp`](include/edge32_intrinsic.hpp). Build for
+`riscv32-unknown-elf` with `-march=rv32imf_zba -mabi=ilp32f`.
+
+The local CMake project exposes RTL sources. Software-image construction,
+Verilator tests, and ASAP7 physical experiments belong to the composed
+`edge-cores` test harness; the current `src/edge-32/CMakeLists.txt` does not
+provide standalone CoreMark or Tensor test targets. To run the maintained
+public FPGA resource profile from the parent checkout:
 
 ```sh
-OLD_RV=/tmp/edge-rv-e875ea8
-OLD_LITE=/tmp/edge-rv-lite-a25755d
-git clone https://github.com/exeex/edge-rv.git "$OLD_RV"
-git -C "$OLD_RV" checkout e875ea8681a2f1de6fcd2dd666737c320f3ec953
-git clone https://github.com/exeex/edge-rv-lite.git "$OLD_LITE"
-git -C "$OLD_LITE" checkout a25755dc4e8904b13af1f68152a3f165764fa55b
 ./synth/run_profile.sh --check edge-32 xilinx
-EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
-  ./synth/run_profile.sh --check edge-rv-lite xilinx
 ./synth/run_profile.sh edge-32 xilinx
-EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
-  ./synth/run_profile.sh edge-rv-lite xilinx
-./synth/run_yosys.sh edge_32_muldiv_asap7 xilinx \
-  src/edge-32/filelists/edge_32_muldiv.fl
-EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
-  ./synth/run_yosys.sh edge_scalar_muldiv_leaf xilinx \
-  "$OLD_LITE/filelists/edge_rv_lite.fl"
 ```
 
-## Why RV32 still reaches 64-bit physical addresses
-
-RV32 keeps the PC, GPRs and scalar load/store effective addresses at 32 bits.
-The I-cache and D-cache each operate within one 4 GiB address window at a time;
-their default 16 KiB capacities are unrelated to that address limit. Separate
-32-bit I-cache and D-cache header CSRs select the upper address bits. At the
-AXI boundary, `edge_32_axi_core` concatenates the appropriate header with the
-32-bit refill or writeback address. Software must handle cache maintenance
-when changing a header because cached low addresses can alias across windows.
-
-DMA does not use the scalar pointer width as its physical-address width.
-`edge_dma_setsrc` and `edge_dma_settar` take 64-bit addresses and emit low-32
-(`imm8=0`) and high-32 (`imm8=1`) commands. `edge_accel_pipe` combines those
-halves into 64-bit source and target registers. The header mechanism gives the
-scalar caches a selected 4 GiB window; DMA can address the 64-bit physical
-space directly.
-
-## Four-stage in-order NPU control core
-
-Edge32 is the NPU's single-issue scalar control core. It fetches software,
-prepares operands, executes scalar instructions or issues accelerator commands,
-and commits results in program order. The four stages are **IF/predecode →
-ID/read → EX/execute → WB/retire**. Different instructions can occupy different
-stages at once, but a variable-latency operation keeps one EX owner until it
-completes. The Tensor/DMA engines execute behind the accelerator command
-interface; they are not extra scalar issue lanes. The imported three-stage RV64
-rationale later in this document is historical, not the current pipeline.
-
-| Stage | Responsibility |
-| --- | --- |
-| IF | Predecode GPR/FPR indices, destination bank, FPR source use and coarse instruction class; capture them with the admitted instruction. |
-| ID | Resolve GPR source use, legality, destination write authorization, result-source controls and dynamic rounding mode; select GPR/FPR operands and interlock on unavailable EX results or pending CSR state. |
-| EX | Issue captured operands to the selected unit and retain ownership until completion; frontend-local control consumes aligned ID sideband in parallel. |
-| WB | Accept aligned result, rd, bank and valid; commit register/CSR state and retirement, and forward registered results to ID. |
-
-### IF predecode and the 2R1W GPR
-
-IF runs `edge_32_register_decode` on the fetched instruction before the IF-to-ID
-edge. It extracts both GPR source indices, up to three FPR source indices,
-destination index, register-bank choice and FPR source-use information. On an
-accepted instruction, `edge_32_gpr_read_port` registers the two GPR indices;
-the FPR indices travel with the ID slot. ID therefore starts with stable read
-addresses rather than placing index decode and the register-file read mux in
-one serial path. The GPR/FPR read values and dependency checks settle during
-ID, and the ID-to-EX edge captures the operands without an added stage.
-
-The new `edge_32_gpr` is a **2-read/1-write (2R1W)** FF register file. Its
-31 writable 32-bit words are arranged as 32 physical bit slices, each with
-local storage and two local read muxes; x0 is hardwired to zero. WB supplies
-one write address and value per cycle. Same-cycle WB-to-ID bypass and
-initialization masks keep the read behavior architectural. Separating IF
-index generation from ID data selection, and keeping the read muxes near their
-storage, is intended to shorten the clock-critical register-read path. The
-placement results below provide timing evidence for specific revisions; Yosys
-cell counts alone do not establish a clock frequency.
-
-The ID issue packet carries the destination and mux controls through EX.
-ID separately merges fault and break policy for `edge_32_frontend_control`.
-Its two resetless bits capture on the same ID-to-EX edge as operands, with the
-same stall/cancel ownership, but belong beside the frontend physically. Only
-narrow producer-owned memory/accelerator fault events join this local stop
-logic; the normal all-unit completion tree is not an input. Frontend lookahead
-computes both pop/no-pop request candidates from local ownership state, so
-late pipeline capacity only selects a prepared candidate. The remaining
-scalar issue packet is 56 bits. No pipeline stage or retirement cycle is added.
-
-Completion supplies readiness and data; it does not re-decode rd. A younger
-instruction's controls cannot overwrite an occupied older WB slot.
-
-The two GPR read muxes return the same word when source indices match. Storage
-selection and WB address comparison run in parallel; the output mux resolves
-bypass priority. The 992 numerical FFs have no reset, while 31 entry
-initialization bits reset to hide stale contents.
-Unwritten entries and x0 read zero; `debug_x31` applies the same initialization
-mask and observes committed storage only.
-
-The 32 × 32-bit FPR file remains inside `edge_fpu_alu`, with three logical
-read ports and one functional write port; f0 is writable. Integrated Edge32
-selects `EXTERNAL_FPR_WRITEBACK=1`: compute and load results both commit through
-registered WB, and direct compute writes are disabled. Standalone FPU mode
-retains its compute/load write arbitration for module testing.
-
-Both files use FF storage. There is one clock domain, with no added
-asynchronous handshake or BRAM read-latency assumption.
-GPR and FPR dependencies are separate. A matching EX destination stalls ID
-until the producer reaches WB; there is no live EX-result-to-ID data bypass.
-An independent instruction can enter EX while an older instruction commits in
-WB. Variable-latency execution still has one EX owner, not an out-of-order
-scoreboard or multiple outstanding completion queue.
-
-Branches flush younger work in EX while retaining their own WB result. Faults,
-register/CSR updates, flags, halt and instret become architectural at WB.
-Start/force-stop cancels pending pipeline/WB ownership while preserving committed
-register state. Pipeline payloads use valid ownership rather than numerical
-reset; architectural register files retain their reset-to-zero behavior.
-The exact 64-bit cycle/instret counters use segmented increments with registered
-carry predicates, without delaying their visible values.
-
-### Physical timing checkpoints
-
-The 2026-09-15 integration checkpoint passes 320 CTests. Against the preceding
-three-stage GPR version, matched 1 GHz ASAP7 pre-CTS placement-RC setup slack
-improves from +4.82 ps to +158.12 ps; repaired area changes from 3702 to 3735 µm².
-The remaining worst path is inside the divider. The +200 ps setup contract is
-still unmet; this is not routed signoff or FPGA Fmax evidence. A dependency
-microtest grows from 12 to 15 cycles, so clock margin alone does not establish
-workload speedup.
-
-A subsequent GPR initialization/broadcast experiment retains the same architecture
-and passes all 320 tests. It reduces full-core area to 3600 µm² (about 3.6%),
-with GPR-attributed area 746 → 602 µm². Setup becomes -20.78 ps, with the worst
-path from EX rs1 through branch logic to `imem_req_valid`; this candidate has
-an area benefit but does not meet the 1 GHz timing contract. Full comparison:
-`src/test-32/physical/openroad/rv32-gpr-valid-broadcast-20260915.md` in the
-composed workspace.
-
-The subsequent branch/IF capacity split keeps that GPR design and separates
-FIFO-space prediction from redirect-qualified admission. All 320 tests pass.
-At the same pre-CTS settings, core setup improves to +123.30 ps and area is
-3598 µm²; branch-to-request and branch-to-register margins are +305.69 and
-+228.33 ps. The remaining +200 ps contract misses are reset distribution and
-the divider. Details: `src/test-32/physical/openroad/rv32-branch-capacity-20260915.md`.
-
-The frontend-local terminal sideband and pop/no-pop capacity lookahead retain
-320/320 passing tests. Matched pre-CTS core area is 3588.50 µm² and worst setup
-is +158.69 ps, versus 3598.40 µm² / +123.30 ps before this change. The two
-control FFs are physically at the frontend/pipeline edge, outside the ALU
-cluster, on the existing ID-to-EX clock edge. The remaining +200 ps misses are
-divider (+158.69 ps), reset-to-frontend (+162.73 ps), and the independent ID
-measurement target (+198.78 ps). This is placement-RC evidence, not routed
-signoff. Details: `src/test-32/physical/openroad/rv32-frontend-terminal-20260915.md`.
-
-The composed workspace owns detailed contracts, tests and APR evidence in
-`src/test-32/edge_core/rtl/` and
-`src/test-32/physical/openroad/rv32-four-stage-20260915.md`. Public RTL and
-integration filelists live in this repository.
-
-## Migration acceptance criteria
-
-- RV32I integer and control-flow directed tests pass.
-- RV32M multiply/divide semantics pass, including high-half operations.
-- RV64-only integer encodings are illegal.
-- Register and architectural address results are 32-bit.
-- Load/store widths and sign extension match RV32.
-- A bare-metal RV32 smoke image boots through the maintained top-level wrapper.
-- Documentation, filelists, CMake targets, and synthesis tops use `edge-32`
-  names once their corresponding RTL boundary has migrated.
-
-## Historical Edge32 Tensor checkpoint (2026-08-21)
-
-The following checkpoint records the first same-source 64x64 Tensor runs on
-Edge32. Both Edge32 images use `rv32imf_zba` with the `ilp32f` ABI and include
-the target-neutral `edge_intrinsic.hpp`; that header selects the Edge32
-intrinsic implementation from `__riscv_xlen`. The edge-rv and edge-rv-lite
-columns are the previously recorded LLVM 22.1.8 reference values from the
-edge-rv-lite experiment and were not rerun for this checkpoint.
-
-The primary metric is the software-published `X30` Tensor window. It excludes
-boot, input packing, and output scatter, and includes weight production plus
-Tensor execution. Every BF16 output was checked after DTCM-to-AXI DMA.
-
-| 64x64 case | `edge-rv@e3` X30 | `edge-rv-lite@e3` X30 | `edge32@e3` X30 | Edge32 vs RV | Edge32 vs RV64-lite |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 64 tokens | 4,660 | 4,699 | **4,664** | +4 (+0.09%) | -35 (-0.74%) |
-| 128 tokens | 8,772 | 8,785 | **8,700** | -72 (-0.82%) | -85 (-0.97%) |
-
-| 64x64 case | Ideal Tensor cycles | `edge32@e3` X30 | Edge32 MAC utilization | Whole-harness cycles | Retired instructions |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 64 tokens | 4,096 | 4,664 | 87.82% | 326,853 | 110,169 |
-| 128 tokens | 8,192 | 8,700 | 94.16% | 526,492 | 173,288 |
-
-This is a native-configuration product comparison rather than a strict
-common-ISA compiler comparison: Edge32 uses RV32/ILP32F and fixed 32-bit ASIC
-commands, while the two recorded baselines use RV64 and Edge64 commands. The
-Tensor engine, DTCM, DMA, AXI memory model, benchmark source, expected output,
-and X30 timing boundary are shared. The results show no throughput regression
-for these coarse-grained Tensor windows; the small differences are scalar
-command-generation and cache/DMA setup effects around the shared ASIC work.
-
-The Edge32 runs were measured on 2026-08-21 with LLVM 22.1.8 and Verilator
-5.050. The implementation checkpoint was based on parent commit `75aa901f`
-and edge-32 commit `654ddab`, with the Edge32 Tensor/DMA changes committed in
-the following revision. Reproduce the checked cases from the parent build:
-
-```sh
-cmake --build build/cmake-harness --target \
-  edge32_matmul64x64_64tokens_circular_verilator \
-  edge32_matmul64x64_128tokens_circular_verilator -j4
-
-ctest --test-dir build/cmake-harness \
-  -R '^edge32_matmul64x64_(64|128)tokens_circular$' \
-  --output-on-failure -V
-```
-
-## Imported design rationale (historical RV64 three-stage experiment)
-
-The remainder preserves the earlier edge-rv-lite experiment, including its
-architecture and benchmark values. Use the current pipeline section above for
-maintained Edge32 behavior; the historical performance figures were not rerun
-as part of the four-stage change.
-
-## Abstract
-
-`edge-rv-lite` is a single-issue, three-stage RV64 control core built to test a
-specific product question: **when most computation runs in dedicated ASIC
-units, does the scalar control plane still need a dual-issue processor?**
-
-The normal `edge-rv` core uses dual issue, scalar snapshots, command queues,
-scoreboards, an RTU, and completion machinery to prepare accelerator commands
-while older work remains in flight. `edge-rv-lite` removes that scalar-side
-machinery, but it does **not** wait for an ASIC operation to finish. RV64 and
-Edge64 instructions are separated before execution. Edge64 commands enter the
-dedicated `edge_accel_pipe`; once the selected ASIC accepts a command, the
-three-stage scalar pipeline continues. The resulting core has no RTU, sequence
-IDs, epochs, snapshot RAM, replay queue, or multi-port scalar writeback.
-
-This is not a proposal to reduce the ASIC subsystem. The experiment keeps the
-same edge-e3 Tensor, DTCM, DMA, ACTU/CMPU, cache, AXI, instruction classifier,
-and shared scalar execution RTL. Only the scalar scheduling owner changes.
-That controlled substitution makes it possible to measure where dual issue
-matters and where a single-issue scalar control plane is sufficient.
-
-The current results expose the trade directly:
-
-- the reusable RV layer uses 75.4% fewer Yosys cells than `edge-rv`;
-- the complete edge-e3 product uses 34.7% fewer Yosys cells;
-- CoreMark takes 1.919x as many cycles per iteration;
-- long-running Tensor windows change by only 0.1% to 0.9%.
-
-The conclusion is workload-dependent. Dual issue remains valuable when the
-RISC-V core dynamically constructs a fine-grained accelerator schedule. Single
-issue is enough when software mainly configures and launches coarse-grained
-ASIC operations whose execution time dominates scalar command preparation.
-
-## 1. Research question
-
-An accelerator product can spend substantial control logic on a scalar core
-even when nearly all arithmetic happens elsewhere. In edge-e3, `edge-rv`
-provides a capable dual-issue control plane. It can compute operands, snapshot
-them, queue ASIC commands, and continue preparing younger work while an older
-command executes.
-
-That machinery is useful, but it is not free. It consumes area in the scalar
-pipeline and in the structures needed to identify, order, complete, cancel,
-and retire concurrent work. Whether the cost is justified depends on the
-granularity of the attached ASIC instructions.
-
-This work asks three related questions:
-
-1. Can a single-issue three-stage core retain the Edge software and product
-   boundary without implementing a second ISA or a reduced ASIC subsystem?
-2. How much scalar and product-level logic is removed when dual-issue command
-   preparation is replaced by single-issue, direct accelerator dispatch?
-3. Does reduced scalar issue bandwidth materially reduce the throughput of
-   realistic Tensor operations when accepted ASIC work runs independently?
-
-The experiment is intentionally asymmetric. CoreMark represents scalar-heavy
-work and should expose the performance cost of single issue. Long Tensor runs
-represent coarse-grained acceleration and test whether that cost remains
-visible after the ASIC has been launched.
-
-## 2. Hypothesis
-
-The hypothesis is not that single issue is universally better. It is that
-**single issue is sufficient for an ASIC control plane when accelerator
-commands are coarse-grained and the schedule is mostly static**.
-
-The expected outcomes are:
-
-- scalar workloads become slower because the RV64 pipeline is single issue and
-  serializes its own variable-latency operations;
-- ASIC behavior remains unchanged because Tensor, DMA, DTCM, ACTU, and CMPU
-  are shared rather than reimplemented;
-- accepted ASIC commands execute in their own pipes while RV64 continues;
-- Tensor descriptor and weight double buffering allow software to prepare the
-  next launch without corrupting the active one;
-- product area falls because both the dual-issue pipe and its concurrency
-  bookkeeping disappear.
-
-Conversely, `edge-rv-lite` is the wrong choice when RISC-V acts as a dynamic
-command generator. Sparse addresses, changing shapes, fine-grained
-dependencies, and a stream of short ASIC commands can all make scalar
-preparation part of the critical path.
-
-## 3. Evaluation scope
-
-`edge-rv-lite` lives in this directory, but the complete experiment does not.
-The work uses three verification and evaluation boundaries.
-
-| Level | Boundary | What it proves | Required source |
-| --- | --- | --- | --- |
-| Module | Lite pipeline and local wrappers | Decode, issue/completion, faults, FPU, LSU, cache and DTCM contracts | `edge-rv-lite` plus shared `edge-rv` RTL |
-| Scalar integration | Bootable RV subsystem | Same-source CoreMark, cache/AXI integration, RV-layer synthesis | complete `edge-cores` parent project |
-| Product integration | Complete edge-e3 composition | Tensor/DMA/DTCM execution and full-product area | `edge-cores` plus the edge-e3 ASIC RTL |
-
-CoreMark depends on the parent project's toolchain, generated memory image,
-CMake/CTest harness, and normal `edge-rv` baseline. The Tensor experiments
-additionally depend on the complete edge-e3 ASIC subsystem, including Tensor
-execution, DTCM, DMA, cache-coherence paths, and the composed product tops.
-
-The Tensor result is therefore a controlled system substitution:
-
-```text
-same software                  same software
-same edge-e3 ASICs             same edge-e3 ASICs
-same Tensor/DMA/DTCM           same Tensor/DMA/DTCM
-same cache and AXI hierarchy   same cache and AXI hierarchy
-          |                              |
-   dual-issue edge-rv       single-issue edge-rv-lite
-```
-
-The claim is not that `edge-rv-lite` contains its own Tensor engine. The claim
-is that replacing only the scalar scheduling owner in an otherwise unchanged
-edge-e3 product has little effect on coarse-grained Tensor execution.
-
-## 4. Baseline: dual-issue edge-rv
-
-`edge-rv` is the baseline scalar owner. Its reusable layer includes the scalar
-and optional FPU pipeline, frontend, snapshot and dispatch machinery, RTU, and
-I/D caches. It is designed to preserve overlap between scalar preparation and
-accelerator execution.
-
-The important capability is dynamic command generation. A compact RISC-V loop
-can calculate the next command's addresses, shapes, and operands, snapshot
-those values, and place the ASIC instruction into a queue while earlier work
-is still executing. In this role, the scalar pipeline acts like a small JIT
-compiler for the accelerator schedule.
-
-This avoids statically expanding a dynamic loop into thousands of ASIC
-instructions. Static expansion would consume I-cache capacity and cause
-instruction fetch to compete with data traffic. A well-written attention
-kernel can keep an approximately 8 KiB hot path in I-cache; the relevant
-question is not code size alone, but whether that compact loop must continually
-construct new commands.
-
-The baseline pays for mechanisms that `edge-rv-lite` intentionally omits:
-
-- dual scalar issue;
-- architectural dependency scoreboards;
-- RTU ownership and retirement records;
-- snapshot capture of accelerator operands;
-- accelerator command queueing;
-- sequence and epoch identity;
-- completion arbitration and multi-source writeback;
-- multiple queued command preparation independent of downstream readiness.
-
-## 5. The edge-rv-lite design
-
-### 5.1 Single-issue three-stage pipeline
-
-`edge-rv-lite` has three architectural stages:
-
-1. **F** accepts one 32-bit scalar parcel or the parcels of one 64-bit Edge
-   instruction.
-2. **D** classifies the complete instruction and reads its operands.
-3. **X/W** starts the selected operation, owns it until completion, and writes
-   architectural state.
-
-Independent fast instructions may occupy all three stages. Only X/W may start
-an operation, however, and an unfinished scalar X/W operation freezes F and D.
-Loads, stores, MUL/DIV, and FPU operations therefore remain the single scalar
-execution owner until completion. An ASIC command is different: X/W holds it
-only until `edge_accel_pipe` and the selected unit accept it. The ASIC then
-continues independently and the RV64 pipeline advances.
-
-Branches, JAL, and JALR resolve in X/W. A taken control transfer clears F and D
-and restarts fetch at the target. There is no predictor or epoch machinery;
-the fixed taken penalty is part of the intended area tradeoff.
-
-The only GPR bypass forwards a completing X/W result to operands advancing
-from D on the same edge. There is no need to reserve destinations in a
-scoreboard because a younger instruction cannot pass an unfinished producer.
-
-### 5.2 RV64 and ASIC instruction separation
-
-The instruction stream contains ordinary 32-bit RV64 instructions and 64-bit
-Edge ASIC instructions. In the dual-issue core, the maintained module is still
-named `edge_predecoder`. It tokenizes and classifies the mixed stream, sends
-scalar work toward `edge_scalar_pipe`, and sends accelerator work through the
-snapshot/command-queue path to `edge_accel_pipe`.
-
-Lite implements the same architectural split with less policy. Ordered 32-bit
-fetch parcels first pass through `edge_32_instruction_assembler`; the
-shared `edge_instruction_classifier` then identifies scalar versus ASIC
-operation classes. Scalar instructions enter the three-stage RV64 pipe. Edge64
-instructions use the lite accelerator owner and the same maintained
-`edge_accel_pipe` used by the full product.
-
-This separation is why a running ASIC does not block the three-stage scalar
-pipeline. The lite owner holds an Edge64 instruction and its capture operand
-stable only while the destination applies backpressure. When the destination
-accepts the command, the owner returns one registered scalar response on the
-following cycle. Setup and start commands return zero; get-CSR returns the
-selected ASIC result; illegal decode returns an error.
-
-For a start instruction, this response means **the ASIC has accepted and owns
-the command**, not that computation has finished. Software uses the matching
-`sync` instruction when it requires execution completion. Thus lite removes
-the scalar accelerator queue without making RV64 wait for the entire ASIC
-latency.
-
-Only one Edge64 command handshakes through the lite dispatch boundary at a
-time, but multiple previously accepted ASIC operations may coexist in
-unit-owned pipelines and buffers. Tensor compute, WLD/SLD, DMA, ACTU, and CMPU
-each retain their own readiness and lifetime. The scalar core stalls only when
-the destination cannot accept the next command, not merely because an earlier
-ASIC operation is still running.
-
-The LSU remains serialized inside the scalar pipeline: its request register
-and controller move through `IDLE -> REQUEST -> RESPONSE` while F and D wait.
-
-| Mechanism | `edge-rv` | `edge-rv-lite` |
-| --- | --- | --- |
-| Issue policy | Dual issue | Single issue |
-| Pipeline role | Prepare and queue work | Single-issue RV64 plus direct ASIC dispatch |
-| Accelerator operands | Snapshot and queue | Read on accepted request |
-| Scalar-side ASIC queue | Sequence/epoch-identified commands | None |
-| ASIC execution | Dedicated `edge_accel_pipe` and units | Same dedicated pipe and units |
-| RV64 after accepted ASIC start | Continues | Continues |
-| Dependencies | Scoreboards and scheduling policy | In-order pipeline blocking |
-| Scalar dispatch identity | RTU, sequence, and epoch | Current request until acceptance |
-| Redirect recovery | Concurrent-state cleanup | Flush F and D |
-| Writeback | Multi-source arbitration | One completing owner |
-| Scalar/ASIC execution overlap | Supported | Supported after command acceptance |
-
-### 5.3 Instruction assembly and decode
-
-The frontend supplies fixed 32-bit instructions. Opcode `7'h3f` identifies a
-complete ASIC32 command; it no longer marks a two-parcel Edge64 instruction.
-The fields are `funct7[31:25]`, `rs1[19:15]`, reserved `rd[11:7]`, and
-`imm8={inst[24:20],inst[14:12]}`. There is no partial-instruction redirect
-state.
-
-Edge-32 software should include `include/intrinsic.hpp` (or the explicit
-`edge32_intrinsic.hpp`). It provides a constexpr bit encoder, generic command
-templates, and named DMA/Tensor/ACTU/CMPU wrappers which emit exactly one
-32-bit instruction. The legacy RV64 `edge_intrinsic.hpp` remains unchanged.
-
-The native Edge-32 software profile is `riscv32-unknown-elf` with
-`-march=rv32imf_zba -mabi=ilp32f`. Atomic instructions are intentionally not
-part of this profile. The `edge32_software_rv32imf_zba_smoke_verilator` target builds
-and runs a bare-metal image covering integer, M, Zba, and single-precision F
-instructions on the core RTL.
-
-The `edge32_software_coremark_verilator` target builds the checked-in two-iteration
-CoreMark workload with the same RV32 profile and runs it on the direct-memory
-core testbench. The RV32 startup and linker files initialize `gp`, `sp`, and
-`.bss`, then return the validated average cycle count through `x31` before
-halting with `ebreak`; no machine-mode setup or interrupt support is required.
-
-The Edge-32 DMA API retains the `edge_dma_setsrc`, `edge_dma_settar`, and
-`edge_dma_start` names but takes `uint64_t` addresses. Each address is emitted
-as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`),
-including when the high half is zero. Accepting a low command clears the
-retained high half, so a caller that emits only a low command still addresses
-the low 4 GiB window.
-
-`edge_rv_lite_decode.v` wraps the shared `edge_instruction_classifier`; it
-does not maintain a second legality table. D classifies once and carries the
-class, legality, and GPR-write metadata into X/W.
-
-The classifier covers RV64I, RV64M, Zba, Edge FP32 and low-precision
-load/store, CSR/system/fence operations, Edge cache/DMA control, and the
-64-bit vector/Tensor/DMA/ACTU/CMPU/get-CSR envelope. Lite adds only product
-capability checks for units present in its configuration.
-
-The ALU, branch, MUL/DIV, and FPU RTL is also not forked. The lite filelist
-references the maintained implementations under `../edge-rv`. Lite owns the
-predecode/control path, one-owner LSU/BIU path, and backpressured direct ASIC
-dispatch.
-
-### 5.4 Fault, halt, and hardware ID
-
-A single X/W commit gate prevents a faulting instruction from issuing ALU
-redirects, MUL/DIV, LSU, FPU, cache, or accelerator side effects. LSU or
-accelerator response errors suppress GPR writeback. Faulting instructions halt
-as illegal without incrementing `instret`.
-
-A terminal instruction becomes visible on its completion edge. That edge
-flushes younger F/D state and partial Edge64 assembly. Sticky `halted` then
-gates fetch, issue, writeback, and retirement until reset.
-
-Software-test termination is a harness contract, not a memory-map feature.
-Bare-metal `crt0` writes report symbols as normal RAM and executes
-`csrw 0x7e0, a0`; the harness observes `halted` and reads `debug_x31`. Stores
-to the former `0x2ee8` test-image location remain ordinary memory transactions.
-
-The read-only custom CSR `0xfc0` reports RV core ID 2, VPU version 0, and FPU
-version 0 or 1 according to `ENABLE_FPU`. The selected product supplies the
-remaining 47 bits through the `EDGE_ASIC_ID` elaboration parameter. Shared
-intrinsics decode the complete product, Tensor-dimension, and format identity,
-so software does not need a lite-specific ABI.
-
-## 6. Preserving the ASIC product
-
-The central implementation rule is that lite changes **scalar scheduling
-policy, not accelerator behavior**.
-
-Below the scalar issue boundary, both products instantiate `edge_accel_pipe`
-as the common command decoder and dispatch boundary. Both products then use
-`edge_accel_data_ctrl`, which owns direct DMA, XY-strided DMA, circular DMA,
-Tensor circular WLD/SLD/WSLD scheduling, and the Tensor/DTCM command mux. The
-normal core adds a dual-issue queue and snapshot policy before the accelerator
-pipe; lite drives it from a backpressured single command owner. Once accepted,
-commands live in ASIC-owned state rather than in the three-stage scalar
-pipeline. There is no rewritten lite DMA engine or reduced Tensor
-implementation.
-
-### 6.1 Tensor descriptor and execution double buffering
-
-Tensor commands are designed so that accepted ASIC work and younger RV64 setup
-can overlap safely. `tensor.setcsr`, `tensor.setin`, `tensor.setout`,
-`tensor.setpsum`, `tensor.setn`, and WLD-related setup build a pending
-descriptor for the next start.
-
-When `tensor.start` is accepted, the complete descriptor used by that job is
-snapshotted into ASIC-owned active state. In software terms, the CSR set for
-the launched instruction is frozen: later set commands cannot modify the
-running job's datatype, pointers, run count, weight selection, or mode.
-Software may immediately program the pending descriptor as a second CSR set
-for the next job while the active job is executing.
-
-The Tensor unit also contains a one-entry queued-start descriptor. If the
-current job is active, a loaded weight tile is available, and the queued slot
-is empty, a second `tensor.start` can be accepted. That start snapshots the
-new pending descriptor and selected weight buffer. It launches immediately
-when the active stream drains.
-
-Weight state follows the same ownership principle. Two physical weight
-buffers provide active/pending ping-pong storage. A queued start owns its
-selected buffer, so a younger WLD cannot overwrite weights already bound to an
-active or queued job. Scale state is independently double buffered as well.
-
-This unit-local buffering is different from the full core's scalar snapshot
-and command queue. The ASIC buffers protect commands that have already been
-accepted; they allow the single-issue RV64 core to keep programming and
-launching work without retaining completed Edge64 instructions in its
-three-stage pipeline. Backpressure occurs only when the target command slot,
-queued start, or required weight/scale buffer is unavailable, or when software
-explicitly executes a synchronization command.
-
-### 6.2 Software-visible pipeline
-
-The open-source C++ kernels show how this contract is used in real software:
-
-- [`cpp/libnn/activation.hpp`](https://github.com/exeex/edge-cores/blob/main/cpp/libnn/activation.hpp)
-  issues ACTU setup and `start`, then uses an explicit `sync` because the chunk
-  result is needed before the following DMA or loop iteration;
-- [`cpp/libnn/matmul.hpp`](https://github.com/exeex/edge-cores/blob/main/cpp/libnn/matmul.hpp)
-  pipelines Tensor tiles. Its inner loops issue `setin`, `setout`, optional
-  `setpsum`, `tensor.start`, and the next circular WLD without placing
-  `tensor.sync` inside the loop. One sync appears only after all tile commands
-  have been issued.
-
-The matmul loop makes the non-blocking behavior concrete. After an accepted
-`tensor.start`, the active Tensor job runs independently. The RV64 pipeline
-continues through the remaining loop body, increments the induction variables,
-executes the loop branch and redirect, and begins programming the next pending
-descriptor. These writes cannot alter the active descriptor frozen by the
-previous start.
-
-```text
-RV64:   set CSR A -- start A -- loop branch/redirect -- set CSR B -- start B
-                           |                              |
-Tensor:                    +-- execute A ----------------+-- queue/launch B
-```
-
-The next `tensor.start`, rather than the for-loop itself, is the natural
-backpressure point. It proceeds immediately when the queued-start descriptor
-and required ping-pong weight buffer are available; otherwise it waits until
-the Tensor unit can take ownership. This lets ordinary single-issue RV64 work
-run ahead during Tensor execution without requiring a scalar-side accelerator
-command queue.
-
-The source-level integration boundary is selected by filelist:
-
-- preserve the Edge SoC-facing IFU, BIU/D-cache/DTCM, and ASIC command signals;
-- preserve the scalar interfaces while owning the FPU implementation under
-  `rtl/fpu`;
-- replace the dual-issue scalar pipe, RTU, snapshots, and command queues with
-  the lite top and its single-owner controller;
-- tie compatibility lane 1 permanently invalid;
-- compose the result with the same edge-e3 ASIC platform.
-
-`filelists/edge_32.fl` is the canonical Edge-32 source selection. The parent
-project supplies `${EDGE32_ROOT}` for the scalar, FPU, and cache
-implementation. A complete Edge-32
-product must instantiate `edge_core_edge32_top`; swapping only leaf RTL beneath
-the normal `edge_core_top` would retain the baseline RTU and queue area.
-
-## 7. Memory and product integration
-
-```text
-edge_32_core
-        |
-        +-- instruction adapter -- I-cache --------+
-        |                                          |
-        +-- LSU -- DTCM router -- D-cache ----------+-- cache BIU -- AXI
-                    |
-                    +-- scalar DTCM port
-
-edge_core_edge32_top
-        +-- hierarchy above
-        +-- shared DTCM and DMA
-        +-- shared Tensor, ACTU, and CMPU units
-        +-- shared accelerator data controller
-```
-
-`edge_32_cached_core` composes the bootable core with the maintained
-I-cache and D-cache. Its adapters convert one-owner fetch and LSU handshakes to
-the existing cache contracts. Lane 1, redirect-kill metadata, and backend
-pause inputs are tied inactive because lite cannot have a younger outstanding
-scalar memory operation.
-
-An optional stateful DTCM router bypasses D-cache for a configured base/mask
-window. It acknowledges accepted stores and retains the chosen cache or DTCM
-read owner until response. Raw DTCM bank data is normalized to the same
-size/sign-formatted response used by D-cache, allowing scalar code to verify
-BF16 and byte results produced by ASIC tests.
-
-`edge_32_cache_biu` and product-facing `edge32_axi_core` connect this hierarchy to
-the existing 128-bit Edge AXI boundary. The BIU checks response IDs, status,
-burst beat counts, and `RLAST`. Failed instruction fills do not populate
-I-cache. Failed dirty writebacks remain buffered for retry, and AW/W may
-handshake independently.
-
-Byte accesses are unrestricted; halfword, word, and doubleword accesses must
-be naturally aligned. Misaligned accesses fault before any cache, uncached, or
-DTCM request. `FENCE.I` drains accepted instruction refills, sweeps I-cache
-valid bits, flushes younger fetch/decode state, and resumes at the following
-instruction. Software must first complete the D-cache clean/writeback or DMA
-operation that makes modified code visible.
-
-## 8. Optional FPU and precision normalization
-
-`ENABLE_FPU` defaults to `0`. Enabling it instantiates `g_fpu.fpu`
-(`edge_32_fpu`), which owns FP ID decode, the three ID-to-EX FPR operands and
-control packet, the shared single-issue `edge_fpu_alu` and FPR file,
-`edge_32_fp_mem_format`, `frm/fflags`, and FP-specific WB metadata.
-CSR `0xfc0` reports FPU version 1 when enabled.
-
-The core retains shared pipeline validity, register dependency checks, LSU
-request ownership, result/destination storage, and retirement authorization.
-The optional owner commits FPR/CSR/flags only with an authorized, nonfaulting
-WB slot. Extraction adds no stage: ID captures operands, EX issues and completes,
-and WB commits with the existing read-through forwarding and cancel behavior.
-
-With `ENABLE_FPU=0`, the owner is absent and FP read/write, memory-format,
-compute, and CSR sideband are constant zero. The scalar core APR source list
-therefore needs no FPU or FP formatter source files. FP formatting belongs to
-the FPU area category whenever enabled; it must not be counted as scalar
-core control or an unclassified “other” leaf.
-
-The FPU is primarily a bring-up, fallback, data-generation, and validation
-facility. FP8, FP16, BF16, and FP32 are memory formats: loads promote them to a
-physical FP32 FPR, arithmetic uses the FP32 ALU, and stores narrow from FP32.
-This lets bare-metal C++ tolerate accidental `double` constants without
-soft-float helpers, but it does not provide FP64 accuracy.
-
-The enabled profile implements `fflags`, `frm`, and `fcsr`. FPU completions
-sticky-OR `NV,DZ,OF,UF,NX`; CSR writes can clear or replace them. RNE, RTZ,
-RDN, RUP, and RMM are supported. Dynamic rounding uses `frm` and traps for a
-reserved value. With the FPU disabled, these CSRs and all FP operations are
-illegal.
-
-| Memory format | Load/store `funct3` | Bytes |
-| --- | --- | ---: |
-| FP16 | `001` | 2 |
-| FP32 | `010` | 4 |
-| BF16 | `101` | 2 |
-| FP8 E5M2 | `110` | 1 |
-| FP8 E4M3FN | `111` | 1 |
-
-Stores use RNE; FP8 overflow saturates to the largest finite value. Arithmetic
-suffixes do not select different datapaths: `.s`, `.h`, and `.d` aliases all
-operate on physical FP32 values.
-
-### 8.1 Scalar FP4 conversion and packed `fp4x16_t`
-
-Edge FP4 uses the NVFP4 finite E2M1 element. One nibble is laid out as
-`S EE M`, with exponent bias 1. Its representable values are signed zero and
-signed magnitudes 0.5, 1, 1.5, 2, 3, 4, and 6. There is no FP4 Inf or NaN
-encoding.
-
-FP4 is not an LSU format and does not occupy an FPR in packed form. A packed
-`fp4x16_t` is exactly one 64-bit GPR payload containing sixteen independent
-nibbles. Two scalar move/convert instructions cross the boundary between one
-packed nibble and the physical FP32 FPR representation:
-
-| Instruction | `funct7` | `rs2` | `funct3` | `opcode` | Data movement |
-| --- | :---: | :---: | :---: | :---: | --- |
-| `fmv.s.xfp4 fd, rs1` | `1111011` | `00000` | `000` | `1010011` | Expand GPR `rs1[3:0]` exactly to FP32 FPR `fd`; ignore `rs1[63:4]` |
-| `fmv.xfp4.s rd, fs1` | `1110011` | `00000` | `000` | `1010011` | Quantize FP32 FPR `fs1` with RNE and return `{60'b0, fp4}` in GPR `rd` |
-
-`fmv.s.xfp4` is an exact decode of all sixteen E2M1 bit patterns. The sign bit
-is preserved, including negative zero. Because every FP4 encoding is finite,
-this direction needs no NaN or infinity policy.
-
-`fmv.xfp4.s` performs the lossy direction. It rounds to nearest with ties to
-even, saturates finite overflow and positive/negative infinity to `+6` or
-`-6`, preserves signed zero, and maps any FP32 NaN to positive zero. The upper
-60 bits of the integer result are always zero. Neither instruction accesses
-memory or applies a block scale; packed Tensor scaling remains WLD/SLD policy.
-
-The public
-[`edge_intrinsic.hpp`](https://github.com/exeex/edge-cores/blob/main/cpp/intrinsic/edge_intrinsic.hpp)
-exposes the instructions as `edge_fp4_to_fp32()` and `edge_fp32_to_fp4()` and
-builds indexed packed-element access on ordinary RV64 shifts and masks:
-
-```cpp
-// idx 0 addresses the least-significant nibble; valid indices are 0..15.
-static inline float get_element_fp4(fp4x16_t x, int idx)
-{
-    return edge_fp4_to_fp32(
-        static_cast<uint8_t>((x.data >> (idx * 4)) & 0x0fu));
-}
-
-static inline void set_element_fp4(fp4x16_t &x, float y, int idx)
-{
-    const unsigned shift = static_cast<unsigned>(idx) * 4u;
-    const uint64_t mask = UINT64_C(0xf) << shift;
-    const uint64_t nibble = static_cast<uint64_t>(edge_fp32_to_fp4(y));
-    x.data = (x.data & ~mask) | ((nibble & UINT64_C(0xf)) << shift);
-}
-```
-
-The packed layout is therefore:
-
-```text
-bits  3:0   = element 0
-bits  7:4   = element 1
-...
-bits 63:60  = element 15
-```
-
-`get_element_fp4()` extracts the selected nibble into the low four GPR bits
-and executes `fmv.s.xfp4`. `set_element_fp4()` executes `fmv.xfp4.s`, clears
-only the selected nibble, and inserts the new four-bit value without modifying
-the other fifteen elements. Callers must provide an index in the documented
-0 through 15 range.
-
-The intrinsic header also provides sequential `pack_next_fp4()` and
-`unpack_next_fp4()` helpers. Calling `pack_next_fp4()` exactly sixteen times
-from a zero-initialized value produces CUDA-linear element order; the indexed
-helpers are preferable when software must update a specific element in place.
-
-Standalone Yosys `synth_xilinx -family xc7` estimate for `edge_fpu_alu`:
-
-| Resource | Additional FPU cost |
-| --- | ---: |
-| Total cells | 15,604 |
-| LUT1-6 | 9,260 |
-| Flip-flops | 2,080 |
-| CARRY4 | 458 |
-| DSP48E1 | 2 |
-| MUXF7 | 1,165 |
-| MUXF8 | 274 |
-
-## 9. Experimental methodology
-
-Performance numbers are LLVM 22.1.8 Verilator checkpoints using identical
-software source on `edge-rv@e3` and `edge-rv-lite@e3`. The naming convention
-is `rv_core@asic_core`: the name before `@` selects the scalar core and the
-name after `@` selects the attached ASIC product. Internal `rdcycle` is
-the primary metric; whole-harness cycles include boot and setup.
-
-Retired counts identify generated images, not toolchain-independent behavior.
-The LLVM 22.1.8 CoreMark image retires 616,228 instructions. A local LLVM
-19.1.1 image retires 743,510 instructions and supplies the cached/AXI
-regression baseline. These counts must not be mixed.
-
-Area uses Yosys `synth_xilinx -family xc7 -noiopad -noclkbuf`. These are
-FPGA-oriented estimates, not placed-and-routed FPGA or ASIC physical area.
-Two boundaries are reported:
-
-1. **RV layer:** `edge_rv_top` versus `edge_32_cached_core`, excluding
-   Tensor, DTCM, DMA, ACTU, and CMPU product logic.
-2. **Complete product:** `edge_core_top` versus `edge_core_edge32_top`, retaining
-   the same ASICs, caches, and SRAM-to-BRAM wrappers.
-
-## 10. Results
-
-### 10.1 Scalar performance
-
-| Case | Metric | `edge-rv@e3` | `edge-rv-lite@e3` | Lite / RV |
-| --- | --- | ---: | ---: | ---: |
-| CoreMark, 2 iterations | cycles/iteration | 409,503 | 785,777 | 1.919x |
-| CoreMark | retired instructions | 616,228 | 616,228 | 1.000x |
-
-The identical retired count proves both products execute the same image. The
-1.919x cycle ratio exposes the intended cost: single issue nearly halves
-effective throughput on a scalar-dominated workload.
-
-An earlier bootable checkpoint reported a 724,712-cycle whole-program interval
-before `crt0` break. It is not used in the table because it is not the same
-cycles-per-iteration metric.
-
-### 10.2 Tensor execution
-
-| Case | `edge-rv@e3` cycles | `edge-rv-lite@e3` cycles | Lite / RV | Dual issue (`edge-rv@e3`) utilization | Single issue (`edge-rv-lite@e3`) utilization | Delta |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `tile8x8_stream64tokens` | 534 | 539 | 1.009x | 95.88% | 94.99% | -0.89 pp |
-| `matmul64x64_runtime_shape`, 64 tokens | 4,660 | 4,699 | 1.008x | 87.90% | 87.17% | -0.73 pp |
-| `matmul64x64_runtime_shape`, 128 tokens | 8,772 | 8,785 | 1.001x | 93.39% | 93.25% | -0.14 pp |
-
-Cycles are measured over the X30 Tensor window. Utilization is ideal/X30 for
-the stream case and MAC utilization for the two runtime-shape matmuls.
-
-The stream case performs 512 consecutive 8x8 vector steps with one WLD and one
-Tensor start. All 4096 BF16 outputs are checked after DTCM-to-AXI DMA. Lite
-adds five cycles because launch overhead is small relative to the Tensor run.
-
-The runtime-shape cases share one C++ implementation and check every element
-of the 4096- or 8192-element output. Software reads hardware ID, packs public
-input with strided DMA, streams BF16 weights through packed-XY DMA and
-transposed circular WLD, and scatters private blocked output back to public
-layout. The X30 window isolates weight production and Tensor execution; input
-packing and output scatter remain outside it.
-
-The measured window uses the same software-pipelined structure visible in the
-open-source matmul kernel: `tensor.start` does not stop the C++ tile loop. RV64
-runs ahead through its branch/redirect and next descriptor writes, and stalls
-only if the following start reaches a full Tensor queue/buffer boundary. This
-is the mechanism that allows a single-issue scalar core to keep the Tensor
-engine fed.
-
-Lite adds 39 cycles at 64 tokens and 13 cycles at 128 tokens. As the ASIC
-window grows, lower scalar issue bandwidth becomes a smaller fraction of
-execution. The unchanged `bf16_wld_direct_circular.cpp` regression additionally
-covers cache clean-by-VA, direct and circular DMA, direct and transposed WLD,
-scalar DTCM checks, DMA sync, and the Edge break CSR.
-
-### 10.3 RV-layer synthesis
-
-| Resource | `edge-rv` | `edge-rv-lite` | Lite delta | Lite / RV |
-| --- | ---: | ---: | ---: | ---: |
-| Total cells | 127,943 | 31,473 | -96,470 | 24.6% |
-| LUT1-6 | 76,602 | 14,877 | -61,725 | 19.4% |
-| Flip-flops | 17,937 | 6,560 | -11,377 | 36.6% |
-| CARRY4 | 1,913 | 653 | -1,260 | 34.1% |
-| DSP48E1 | 6 | 4 | -2 | 66.7% |
-| MUXF7 | 10,110 | 2,158 | -7,952 | 21.3% |
-| MUXF8 | 2,843 | 452 | -2,391 | 15.9% |
-| BRAM36 / BRAM18 | 6 / 32 | 6 / 32 | 0 / 0 | 100% / 100% |
-
-Lite removes 75.4% of total cells, 80.6% of LUTs, and 63.4% of flip-flops from
-the reusable RV layer. Cache BRAM is unchanged.
-
-### 10.4 Complete-product synthesis
-
-| Resource | `edge-rv@e3` | `edge-rv-lite@e3` | Lite delta | Lite / RV |
-| --- | ---: | ---: | ---: | ---: |
-| Total cells | 283,882 | 185,360 | -98,522 | 65.3% |
-| LUT1-6 | 169,752 | 106,185 | -63,567 | 62.6% |
-| Flip-flops | 43,301 | 31,467 | -11,834 | 72.7% |
-| CARRY4 | 8,425 | 7,060 | -1,365 | 83.8% |
-| DSP48E1 | 101 | 99 | -2 | 98.0% |
-| MUXF7 | 16,798 | 9,424 | -7,374 | 56.1% |
-| MUXF8 | 5,113 | 2,847 | -2,266 | 55.7% |
-| BRAM36 / BRAM18 | 38 / 32 | 38 / 32 | 0 / 0 | 100% / 100% |
-
-Replacing only the scalar owner reduces the complete product by 98,522 Yosys
-cells, or 34.7%. LUT usage falls 37.4% and flip-flops 27.3%, while the shared
-ASIC datapaths and BRAM capacity remain unchanged.
-
-## 11. Interpretation: when is single issue enough?
-
-The results support the hypothesis only for the intended workload class.
-
-`edge-rv` is preferable when the scalar core must construct many short ASIC
-commands, calculate sparse addresses, respond to dynamic shapes, or overlap
-bookkeeping with accelerator latency. Its snapshots and queues let a compact
-loop behave as a dynamic schedule generator.
-
-`edge-rv-lite` is preferable when execution is mostly static, circular DMA
-already buffers DRAM traffic, and each ASIC launch performs substantial work.
-A 512x512 matrix multiplication is the clearest example: a few extra scalar
-cycles are negligible once execution begins.
-
-| Workload property | Preferred scalar owner |
-| --- | --- |
-| Dynamic addresses, shapes, or sparse routing | `edge-rv` |
-| Many fine-grained ASIC commands | `edge-rv` |
-| Multiple future commands must be snapshotted and queued | `edge-rv` |
-| RV64 should continue after an accepted coarse-grained start | Either core |
-| Static schedule with circular DMA | `edge-rv-lite` |
-| Few coarse-grained ASIC launches | `edge-rv-lite` |
-| Area-dominated boot/configure/synchronize core | `edge-rv-lite` |
-
-The decision is not simply scalar performance versus area. It is whether the
-scalar core participates in the accelerator's steady-state scheduler. If it
-does, dual issue can be architecturally valuable. If it does not, single issue
-is enough and the extra scheduling machinery becomes product overhead.
-
-## 12. Reproducing the experiments
-
-These commands assume a configured checkout of the complete `edge-cores`
-parent project. This directory explains and tests the Edge-32 RTL, but it is not a
-standalone package for the CoreMark, Tensor, or full-product results.
-
-### 12.1 Edge-32 RTL and scalar integration
-
-```sh
-cmake -S src/edge-32 -B build/edge-32
-cmake --build build/edge-32 --target edge32_software_coremark_verilator
-ctest --test-dir build/edge-32 \
-  -R '^edge32_software_coremark$' --output-on-failure
-```
-
-The local CMake harness also registers focused tests for pipeline, redirects,
-instruction assembly, decode, LSU, DTCM routing, faults, halt, hardware ID,
-FPU/FCSR, cache adapters, cached-core integration, cache BIU, AXI CoreMark, and
-serialized accelerator issue.
-
-### 12.2 edge-e3 Tensor evaluation
-
-These tests require the complete edge-e3 Tensor, DTCM, DMA, cache, AXI, and
-product-top composition supplied by the parent project:
-
-```sh
-cmake --build build/edge-32 --target \
-  edge32_tensor_bf16_matmul8x8_verilator \
-  edge32_matmul64x64_64tokens_circular_verilator \
-  edge32_matmul64x64_128tokens_circular_verilator -j2
-
-ctest --test-dir build/edge-32 \
-  -R '^edge32_(tensor_bf16_matmul8x8|matmul64x64_(64|128)tokens_circular)$' \
-  --output-on-failure
-```
-
-### 12.3 Synthesis comparison
-
-For the current Edge32 versus the former edge-rv-lite cached core, use the
-pinned revisions, commands and resource tables in
-[FPGA synthesis versus the former edge-rv-lite](#fpga-synthesis-versus-the-former-edge-rv-lite).
-The maintained Edge32 profile is `./synth/run_profile.sh edge-32 xilinx`.
+The public Edge32 RTL is licensed under
+[CERN-OHL-P-2.0](LICENSE.md). The parent `edge-cores` repository has its own
+Apache-2.0 license; the license of this submodule applies to the files here.
