@@ -246,6 +246,12 @@ localparam [6:0] DMA_SETSRC   = 7'h06;
 localparam [6:0] DMA_SETTAR   = 7'h07;
 localparam [6:0] DMA_SETENTRY = 7'h08;
 localparam [6:0] ASIC_POWER = 7'h09;
+localparam [6:0] DMA_SETCSR  = 7'h0a;
+
+localparam [1:0] DMA_CSR_X_STRIDE = 2'd0;
+localparam [1:0] DMA_CSR_X_COUNT  = 2'd1;
+localparam [1:0] DMA_CSR_Y_STRIDE = 2'd2;
+localparam [1:0] DMA_CSR_Y_COUNT  = 2'd3;
 
 localparam [6:0] TENSOR_SETCSR = 7'h10;
 localparam [6:0] TENSOR_WLD    = 7'h11;
@@ -374,6 +380,7 @@ assign subop_is_stream  = control_opcode8[7] &&
                            (subop == DMA_SETY)      ||
                            (subop == DMA_SETSRC)    ||
                            (subop == DMA_SETTAR)    ||
+                           (subop == DMA_SETCSR)    ||
                            (subop == ASIC_POWER)    ||
                            (subop == TENSOR_SETCSR) ||
                            (subop == TENSOR_WLD)    ||
@@ -429,6 +436,7 @@ assign needs_capture    = (is_wld && !is_wld_reuse) ||
                           (subop == DMA_SETY)      ||
                           (subop == DMA_SETSRC)    ||
                           (subop == DMA_SETTAR)    ||
+                          (subop == DMA_SETCSR)    ||
                           (subop == DMA_START);
 assign is_dma_start     = (subop == DMA_START);
 assign is_dma_start_circular = is_dma_start && control_imm8[1];
@@ -437,7 +445,8 @@ assign is_dma_set       = (subop == DMA_SETN) ||
                           (subop == DMA_SETX) ||
                           (subop == DMA_SETY) ||
                           (subop == DMA_SETSRC) ||
-                          (subop == DMA_SETTAR);
+                          (subop == DMA_SETTAR) ||
+                          (subop == DMA_SETCSR);
 assign is_dma_sync      = (subop == DMA_SYNC);
 assign is_start         = (subop == TENSOR_START) || (subop == TENSOR_START_TILE);
 assign is_wld           = (subop == TENSOR_WLD) || (subop == TENSOR_WLD_T);
@@ -600,6 +609,14 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
                          {{24{1'b0}}, control_imm8[7:0],
                           cmd_capture_value[31:0]} :
                          cmd_capture_value[63:0];
+    else if (subop == DMA_SETCSR) begin
+      case (control_imm8[1:0])
+        DMA_CSR_X_STRIDE: dma_x_q[31:0]  <= cmd_capture_value[31:0];
+        DMA_CSR_X_COUNT:  dma_x_q[63:32] <= cmd_capture_value[31:0];
+        DMA_CSR_Y_STRIDE: dma_y_q[31:0]  <= cmd_capture_value[31:0];
+        DMA_CSR_Y_COUNT:  dma_y_q[63:32] <= cmd_capture_value[31:0];
+      endcase
+    end
     else if (subop == DMA_SETSRC) begin
       if (COMPACT_CMD_INPUT) begin
         if (control_imm8[0])

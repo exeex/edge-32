@@ -270,6 +270,7 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
     case(subop)
         rv32::ASIC_DMA_START, rv32::ASIC_DMA_SETN,
         rv32::ASIC_DMA_SETX, rv32::ASIC_DMA_SETY,
+        rv32::ASIC_DMA_SETCSR,
         rv32::ASIC_DMA_SETSRC, rv32::ASIC_DMA_SETTAR,
         rv32::ASIC_DMA_SETENTRY, rv32::ASIC_TENSOR_WLD,
         rv32::ASIC_TENSOR_SETIN, rv32::ASIC_TENSOR_SETOUT,

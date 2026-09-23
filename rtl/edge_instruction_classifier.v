@@ -52,6 +52,7 @@ package rv32;
   localparam logic [6:0] ASIC_DMA_SETTAR = 7'h07;
   localparam logic [6:0] ASIC_DMA_SETENTRY = 7'h08;
   localparam logic [6:0] ASIC_POWER = 7'h09;
+  localparam logic [6:0] ASIC_DMA_SETCSR = 7'h0a;
   localparam logic [6:0] ASIC_TENSOR_SETCSR = 7'h10;
   localparam logic [6:0] ASIC_TENSOR_WLD = 7'h11;
   localparam logic [6:0] ASIC_TENSOR_SETIN = 7'h12;
@@ -232,6 +233,7 @@ module edge_instruction_classifier (
         rv32::ASIC_DMA_SETN, rv32::ASIC_DMA_SETX,
         rv32::ASIC_DMA_SETY, rv32::ASIC_DMA_SETSRC,
         rv32::ASIC_DMA_SETTAR, rv32::ASIC_DMA_SETENTRY,
+        rv32::ASIC_DMA_SETCSR,
         rv32::ASIC_POWER, rv32::ASIC_TENSOR_SETCSR,
         rv32::ASIC_TENSOR_WLD, rv32::ASIC_TENSOR_SETIN,
         rv32::ASIC_TENSOR_SETOUT, rv32::ASIC_TENSOR_SETPSUM,
@@ -262,7 +264,8 @@ module edge_instruction_classifier (
         rv32::ASIC_DMA_START, rv32::ASIC_DMA_SETN,
         rv32::ASIC_DMA_SETX, rv32::ASIC_DMA_SETY,
         rv32::ASIC_DMA_SETSRC, rv32::ASIC_DMA_SETTAR,
-        rv32::ASIC_DMA_SETENTRY, rv32::ASIC_TENSOR_WLD,
+        rv32::ASIC_DMA_SETENTRY, rv32::ASIC_DMA_SETCSR,
+        rv32::ASIC_TENSOR_WLD,
         rv32::ASIC_TENSOR_SETIN, rv32::ASIC_TENSOR_SETOUT,
         rv32::ASIC_TENSOR_SETPSUM, rv32::ASIC_TENSOR_SETN,
         rv32::ASIC_TENSOR_WLD_T, rv32::ASIC_TENSOR_SLD_STREAM,
