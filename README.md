@@ -22,18 +22,127 @@ addresses are 32 bits; cache/AXI and accelerator interfaces retain their
 explicit product widths. Historical RV64 migration code is not a selectable
 CPU implementation.
 
-## Current pipeline and register files
+## FPGA synthesis versus the former edge-rv-lite
 
-The maintained core uses four stages: **IF/predecode → ID/read → EX/execute →
-WB/retire**. The imported three-stage RV64 rationale later in this document is
-historical; it does not describe the current Edge32 pipeline.
+The comparable scalar boundary is the cached core, not the complete `edge-e3`
+product. The table below uses Yosys 0.67+post (`b8e7da6f`),
+`synth_xilinx -family xc7 -noiopad -noclkbuf`, default DSP mapping and the
+same FPGA RAM model. Both cores use their default 16 KiB I-cache and 16 KiB
+D-cache with FPU disabled. The old baseline is the last `edge-rv-lite` gitlink
+before `edge-cores` switched scalar submodules: `edge-rv-lite` `a25755d` and
+its `edge-rv` dependency `e875ea8`. Edge32 is `e8c13c0`. The old core is
+RV64 with a 40-bit PC; Edge32 is RV32 with a 32-bit PC. These figures compare
+the two implemented cores, not a controlled one-component change.
+
+| Cached-core resource | edge-rv-lite | edge-32 | Edge32 change |
+| --- | ---: | ---: | ---: |
+| Total Yosys cells | 32,709 | 16,860 | -48.5% |
+| LUT1–LUT6 | 15,447 | 9,669 | -37.4% |
+| Flip-flops | 6,702 | 3,959 | -40.9% |
+| CARRY4 | 653 | 299 | -54.2% |
+| MUXF7 + MUXF8 | 2,991 | 874 | -70.8% |
+| DSP48E1 | 4 | 6 | +2 |
+| RAMB18E1 / RAMB36E1 | 32 / 6 | 32 / 5 | 0 / -1 |
+
+Separately synthesizing the actual RV32M owner and the former RV64M leaf gives
+the following narrower comparison. The old leaf supports 64-bit operations;
+the new owner implements 32-bit operations.
+
+| Mul/div resource | edge-rv-lite | edge-32 | Edge32 change |
+| --- | ---: | ---: | ---: |
+| Total Yosys cells | 4,318 | 1,636 | -62.1% |
+| LUT1–LUT6 | 1,973 | 852 | -56.8% |
+| Flip-flops | 743 | 394 | -47.0% |
+| CARRY4 | 273 | 138 | -49.5% |
+| MUXF7 + MUXF8 | 130 | 1 | -99.2% |
+| DSP48E1 | 4 | 6 | +2 |
+
+`edge_32_muldiv_asap7` combines six smaller multiplier products with a native
+32-bit radix-4 divider. The much lower LUT, carry and wide-mux counts should
+reduce routing pressure around the scalar mul/div unit; the six parallel
+products use two more DSP blocks. Yosys resource counts do not measure placed
+routing, timing closure or ASIC area. Those claims require place-and-route.
+
+Run these profiles from the `edge-cores` root to reproduce the reports. The
+cached-core reports are written to `synth/build/edge_32_cached_core/edge-32/`
+and `synth/build/edge_rv_lite_cached_core/edge-rv-lite/`; the standalone
+mul/div reports use `synth/build/<top>/xilinx/`.
+
+```sh
+OLD_RV=/tmp/edge-rv-e875ea8
+OLD_LITE=/tmp/edge-rv-lite-a25755d
+git clone https://github.com/exeex/edge-rv.git "$OLD_RV"
+git -C "$OLD_RV" checkout e875ea8681a2f1de6fcd2dd666737c320f3ec953
+git clone https://github.com/exeex/edge-rv-lite.git "$OLD_LITE"
+git -C "$OLD_LITE" checkout a25755dc4e8904b13af1f68152a3f165764fa55b
+./synth/run_profile.sh --check edge-32 xilinx
+EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
+  ./synth/run_profile.sh --check edge-rv-lite xilinx
+./synth/run_profile.sh edge-32 xilinx
+EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
+  ./synth/run_profile.sh edge-rv-lite xilinx
+./synth/run_yosys.sh edge_32_muldiv_asap7 xilinx \
+  src/edge-32/filelists/edge_32_muldiv.fl
+EDGE_RV_ROOT="$OLD_RV" EDGE_RV_LITE_ROOT="$OLD_LITE" \
+  ./synth/run_yosys.sh edge_scalar_muldiv_leaf xilinx \
+  "$OLD_LITE/filelists/edge_rv_lite.fl"
+```
+
+## Why RV32 still reaches 64-bit physical addresses
+
+RV32 keeps the PC, GPRs and scalar load/store effective addresses at 32 bits.
+The I-cache and D-cache each operate within one 4 GiB address window at a time;
+their default 16 KiB capacities are unrelated to that address limit. Separate
+32-bit I-cache and D-cache header CSRs select the upper address bits. At the
+AXI boundary, `edge_32_axi_core` concatenates the appropriate header with the
+32-bit refill or writeback address. Software must handle cache maintenance
+when changing a header because cached low addresses can alias across windows.
+
+DMA does not use the scalar pointer width as its physical-address width.
+`edge_dma_setsrc` and `edge_dma_settar` take 64-bit addresses and emit low-32
+(`imm8=0`) and high-32 (`imm8=1`) commands. `edge_accel_pipe` combines those
+halves into 64-bit source and target registers. The header mechanism gives the
+scalar caches a selected 4 GiB window; DMA can address the 64-bit physical
+space directly.
+
+## Four-stage in-order NPU control core
+
+Edge32 is the NPU's single-issue scalar control core. It fetches software,
+prepares operands, executes scalar instructions or issues accelerator commands,
+and commits results in program order. The four stages are **IF/predecode →
+ID/read → EX/execute → WB/retire**. Different instructions can occupy different
+stages at once, but a variable-latency operation keeps one EX owner until it
+completes. The Tensor/DMA engines execute behind the accelerator command
+interface; they are not extra scalar issue lanes. The imported three-stage RV64
+rationale later in this document is historical, not the current pipeline.
 
 | Stage | Responsibility |
 | --- | --- |
-| IF | Predecode source/destination indices, register banks, source-use masks and coarse instruction class; capture them with the admitted instruction. |
-| ID | Resolve legality, destination write authorization, result-source controls and dynamic rounding mode; select GPR/FPR operands and interlock on unavailable EX results or pending CSR state. |
+| IF | Predecode GPR/FPR indices, destination bank, FPR source use and coarse instruction class; capture them with the admitted instruction. |
+| ID | Resolve GPR source use, legality, destination write authorization, result-source controls and dynamic rounding mode; select GPR/FPR operands and interlock on unavailable EX results or pending CSR state. |
 | EX | Issue captured operands to the selected unit and retain ownership until completion; frontend-local control consumes aligned ID sideband in parallel. |
 | WB | Accept aligned result, rd, bank and valid; commit register/CSR state and retirement, and forward registered results to ID. |
+
+### IF predecode and the 2R1W GPR
+
+IF runs `edge_32_register_decode` on the fetched instruction before the IF-to-ID
+edge. It extracts both GPR source indices, up to three FPR source indices,
+destination index, register-bank choice and FPR source-use information. On an
+accepted instruction, `edge_32_gpr_read_port` registers the two GPR indices;
+the FPR indices travel with the ID slot. ID therefore starts with stable read
+addresses rather than placing index decode and the register-file read mux in
+one serial path. The GPR/FPR read values and dependency checks settle during
+ID, and the ID-to-EX edge captures the operands without an added stage.
+
+The new `edge_32_gpr` is a **2-read/1-write (2R1W)** FF register file. Its
+31 writable 32-bit words are arranged as 32 physical bit slices, each with
+local storage and two local read muxes; x0 is hardwired to zero. WB supplies
+one write address and value per cycle. Same-cycle WB-to-ID bypass and
+initialization masks keep the read behavior architectural. Separating IF
+index generation from ID data selection, and keeping the read muxes near their
+storage, is intended to shorten the clock-critical register-read path. The
+placement results below provide timing evidence for specific revisions; Yosys
+cell counts alone do not establish a clock frequency.
 
 The ID issue packet carries the destination and mux controls through EX.
 ID separately merges fault and break policy for `edge_32_frontend_control`.
@@ -48,12 +157,10 @@ scalar issue packet is 56 bits. No pipeline stage or retirement cycle is added.
 Completion supplies readiness and data; it does not re-decode rd. A younger
 instruction's controls cannot overwrite an occupied older WB slot.
 
-`edge_32_gpr` owns the 32-entry integer register file: 31 writable 32-bit FF
-words plus constant x0, with two logical read operands and one write port.
-Two independent read muxes naturally broadcast a word when source indices
-match, and registered WB bypass covers either operand. Storage selection and WB address comparison run in
-parallel; the output mux resolves bypass priority. The 992 numerical FFs have
-no reset, while 31 entry initialization bits reset to hide stale contents.
+The two GPR read muxes return the same word when source indices match. Storage
+selection and WB address comparison run in parallel; the output mux resolves
+bypass priority. The 992 numerical FFs have no reset, while 31 entry
+initialization bits reset to hide stale contents.
 Unwritten entries and x0 read zero; `debug_x31` applies the same initialization
 mask and observes committed storage only.
 
@@ -63,9 +170,8 @@ selects `EXTERNAL_FPR_WRITEBACK=1`: compute and load results both commit through
 registered WB, and direct compute writes are disabled. Standalone FPU mode
 retains its compute/load write arbitration for module testing.
 
-Both files use FF storage. Read muxes settle within the ID cycle; the existing
-ID-to-EX registers capture operands at the clock edge. There is one clock
-domain, with no added asynchronous handshake or BRAM read-latency assumption.
+Both files use FF storage. There is one clock domain, with no added
+asynchronous handshake or BRAM read-latency assumption.
 GPR and FPR dependencies are separate. A matching EX destination stalls ID
 until the producer reaches WB; there is no live EX-result-to-ID data bypass.
 An independent instruction can enter EX while an older instruction commits in
@@ -79,6 +185,8 @@ register state. Pipeline payloads use valid ownership rather than numerical
 reset; architectural register files retain their reset-to-zero behavior.
 The exact 64-bit cycle/instret counters use segmented increments with registered
 carry predicates, without delaying their visible values.
+
+### Physical timing checkpoints
 
 The 2026-09-15 integration checkpoint passes 320 CTests. Against the preceding
 three-stage GPR version, matched 1 GHz ASAP7 pre-CTS placement-RC setup slack
@@ -432,10 +540,10 @@ halting with `ebreak`; no machine-mode setup or interrupt support is required.
 
 The Edge-32 DMA API retains the `edge_dma_setsrc`, `edge_dma_settar`, and
 `edge_dma_start` names but takes `uint64_t` addresses. Each address is emitted
-as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`) when
-the high half is nonzero. Accepting a low command clears the retained high
-half, so software that starts DMA without a high command always addresses the
-low 4 GiB window.
+as a low-32 command (`imm8=0`) followed by a high-32 command (`imm8=1`),
+including when the high half is zero. Accepting a low command clears the
+retained high half, so a caller that emits only a low command still addresses
+the low 4 GiB window.
 
 `edge_rv_lite_decode.v` wraps the shared `edge_instruction_classifier`; it
 does not maintain a second legality table. D classifies once and carries the
@@ -912,15 +1020,7 @@ ctest --test-dir build/edge-32 \
 
 ### 12.3 Synthesis comparison
 
-Maintained Edge-32 core:
-
-```sh
-cmake -S src/edge-e3 -B build/e3-edge32
-cmake --build build/e3-edge32 --target edge_e3_scalar_top_lint
-EDGE_YOSYS_VARIANT=xilinx-lite-cached \
-  ./synth/run_yosys.sh edge_32_cached_core xilinx \
-  src/edge-32/filelists/edge_32.fl
-```
-
-Use the same revision, Yosys version, target family, filelists, and elaboration
-parameters before comparing cell counts.
+For the current Edge32 versus the former edge-rv-lite cached core, use the
+pinned revisions, commands and resource tables in
+[FPGA synthesis versus the former edge-rv-lite](#fpga-synthesis-versus-the-former-edge-rv-lite).
+The maintained Edge32 profile is `./synth/run_profile.sh edge-32 xilinx`.
