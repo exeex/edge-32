@@ -68,12 +68,23 @@ static inline void edge_dcache_header_write(uint32_t value) {
 #define EDGE_TENSOR_START_OPT_SCALE_STREAM (1u << 3)
 #define EDGE_TENSOR_START_OPT_RSUM (1u << 4)
 #define EDGE_TENSOR_START_OPT_COPY (1u << 5)
+#define EDGE_TENSOR_START_OPT_TILE_OUTPUT_FP32 (1u << 6)
+#define EDGE_TENSOR_START_OPT_TILE_MODE (1u << 7)
+#define EDGE_TENSOR_START_FIRST_TILE \
+    (EDGE_TENSOR_START_OPT_TILE_MODE | EDGE_TENSOR_START_OPT_TILE_OUTPUT_FP32 | \
+     EDGE_TENSOR_START_OPT_NO_PSUM)
+#define EDGE_TENSOR_START_PSUM_TILE \
+    (EDGE_TENSOR_START_OPT_TILE_MODE | EDGE_TENSOR_START_OPT_TILE_OUTPUT_FP32)
+#define EDGE_TENSOR_START_LAST_TILE EDGE_TENSOR_START_OPT_TILE_MODE
+#define EDGE_TENSOR_START_SINGLE_TILE \
+    (EDGE_TENSOR_START_OPT_TILE_MODE | EDGE_TENSOR_START_OPT_NO_PSUM)
 #define EDGE_TENSOR_START_OPT_PSUM_MASK \
     (EDGE_TENSOR_START_OPT_PSUM_ONCE | EDGE_TENSOR_START_OPT_NO_PSUM)
 #define EDGE_TENSOR_START_OPT_KNOWN_MASK \
     (EDGE_TENSOR_START_OPT_USE_SCALE | EDGE_TENSOR_START_OPT_PSUM_MASK | \
      EDGE_TENSOR_START_OPT_SCALE_STREAM | EDGE_TENSOR_START_OPT_RSUM | \
-     EDGE_TENSOR_START_OPT_COPY)
+     EDGE_TENSOR_START_OPT_COPY | EDGE_TENSOR_START_OPT_TILE_OUTPUT_FP32 | \
+     EDGE_TENSOR_START_OPT_TILE_MODE)
 
 #define EDGE_RV_CORE_ID_EDGE_RV 1u
 #define EDGE_RV_CORE_ID_EDGE_RV_LITE 2u
@@ -593,6 +604,12 @@ static inline void edge_tensor_setcsr()
     edge32::tensor_setcsr(static_cast<uint32_t>((wtype << 4) | dtype));
 }
 
+template <int wtype>
+static inline void edge_tensor_setwtype()
+{
+    edge_tensor_setcsr<0, wtype>();
+}
+
 #ifdef __cplusplus
 template <typename DType, typename WType>
 static inline void edge_tensor_setcsr()
@@ -687,6 +704,9 @@ static inline void edge_tensor_start()
     static_assert((Options & EDGE_TENSOR_START_OPT_PSUM_MASK) !=
                       EDGE_TENSOR_START_OPT_PSUM_MASK,
                   "tensor.start psum modes are mutually exclusive");
+    static_assert(!(Options & EDGE_TENSOR_START_OPT_TILE_OUTPUT_FP32) ||
+                      (Options & EDGE_TENSOR_START_OPT_TILE_MODE),
+                  "tensor.start tile output format requires tile mode");
     edge32::emit<edge32::command::tensor_start,
                  static_cast<uint8_t>(Options)>();
 }
