@@ -417,6 +417,7 @@ assign subop_is_stream  = control_opcode8[7] &&
 assign needs_capture    = (is_wld && !is_wld_reuse) ||
                           (is_sld && !is_sld_reuse) ||
                           is_sld_stream ||
+                          (subop == TENSOR_SETCSR) ||
                           (subop == TENSOR_SETIN)  ||
                           (subop == TENSOR_SETOUT) ||
                           (subop == TENSOR_SETPSUM)||
@@ -644,8 +645,8 @@ always @(posedge forever_cpuclk or negedge cpurst_b) begin
 end
 
 assign cmd_setcsr_req   = cmd_fire && (subop == TENSOR_SETCSR);
-assign cmd_setcsr_dtype = control_imm8[3:0];
-assign cmd_setcsr_wtype = control_imm8[7:4];
+assign cmd_setcsr_dtype = cmd_capture_value[3:0];
+assign cmd_setcsr_wtype = cmd_capture_value[7:4];
 
 assign cmd_wld_req      = cmd_fire && (subop == TENSOR_WLD) &&
                           (!COMPACT_CMD_INPUT || !is_tensor_address_cmd ||

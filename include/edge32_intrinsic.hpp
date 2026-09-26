@@ -57,6 +57,7 @@ static inline void edge_dcache_header_write(uint32_t value) {
 #endif
 }
 #define EDGE_TENSOR_DTYPE_BF16 1
+#define EDGE_TENSOR_DTYPE_FP32 2
 #define EDGE_TENSOR_WTYPE_BF16 1
 #define EDGE_TENSOR_WTYPE_INT8 2
 #define EDGE_TENSOR_LOAD_OPT_REUSE (1u << 1)
@@ -587,11 +588,9 @@ struct edge_tensor_wtype_encoding<int8_t> {
 template <int dtype, int wtype>
 static inline void edge_tensor_setcsr()
 {
-    static_assert(dtype >= 0 && dtype < 16, "tensor dtype must fit imm4");
-    static_assert(wtype >= 0 && wtype < 16, "tensor wtype must fit imm4");
-    // RTL decodes imm8[3:0] as dtype and imm8[7:4] as wtype.
-    edge32::emit<edge32::command::tensor_setcsr,
-                 static_cast<uint8_t>((wtype << 4) | dtype)>();
+    static_assert(dtype >= 0 && dtype < 16, "tensor dtype must fit CSR bits [3:0]");
+    static_assert(wtype >= 0 && wtype < 16, "tensor wtype must fit CSR bits [7:4]");
+    edge32::tensor_setcsr(static_cast<uint32_t>((wtype << 4) | dtype));
 }
 
 #ifdef __cplusplus
