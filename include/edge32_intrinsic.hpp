@@ -721,6 +721,20 @@ static inline void edge_tensor_wld_t_circular(void)
 { edge32::emit<edge32::command::tensor_wld_t_circular>(); }
 static inline void edge_tensor_wld_circular(void)
 { edge32::emit<edge32::command::tensor_wld_circular>(); }
+// Slot: scales first, then N same-wtype tiles, padding only at the end.
+// stype=0: BF16 (16 bits); stype=1 reserved for future 8-bit scales.
+template <bool transpose = false, unsigned tiles = 4, unsigned wtype = 2,
+          unsigned scales = 8, unsigned stype = 0>
+static inline void edge_tensor_wsld_circular()
+{
+    static_assert(tiles >= 1 && tiles <= 255, "invalid slot tile count");
+    static_assert(scales == 1 || scales == 8, "one broadcast or eight lane scales");
+    static_assert(stype == 0, "8-bit scale conversion is reserved");
+    static_assert(wtype >= 1 && wtype <= 5, "unsupported weight type");
+    edge32::emit<edge32::command::tensor_wsld_circular, transpose ? 1 : 0>(
+        tiles | (scales << 8) | (stype << 12) | (wtype << 16));
+}
+
 static inline void edge_tensor_sld_circular(void)
 { edge32::emit<edge32::command::tensor_sld_circular>(); }
 

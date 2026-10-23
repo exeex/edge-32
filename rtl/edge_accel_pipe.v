@@ -80,6 +80,7 @@ module edge_accel_pipe(
   cmd_sld_stream_req,
   cmd_wsld_circular_req,
   cmd_wsld_circular_transpose,
+  cmd_wsld_circular_config,
   cmd_sld_circular_req,
   actu_cmd_setcsr_dtype,
   actu_cmd_setcsr_mode,
@@ -203,6 +204,7 @@ output [ADDR_WIDTH-1:0]     cmd_sld_stream_ptr;
 output                      cmd_sld_stream_req;
 output                      cmd_wsld_circular_req;
 output                      cmd_wsld_circular_transpose;
+output [31:0]               cmd_wsld_circular_config;
 output                      cmd_sld_circular_req;
 output [3:0]                actu_cmd_setcsr_dtype;
 output [3:0]                actu_cmd_setcsr_mode;
@@ -414,7 +416,8 @@ assign subop_is_stream  = control_opcode8[7] &&
                            (subop == CMPU_START) ||
                            (subop == CMPU_SYNC) ||
                            (subop == ACCEL_GETCSR));
-assign needs_capture    = (is_wld && !is_wld_reuse) ||
+assign needs_capture    = (COMPACT_CMD_INPUT && is_wsld_circular) ||
+                          (is_wld && !is_wld_reuse) ||
                           (is_sld && !is_sld_reuse) ||
                           is_sld_stream ||
                           (subop == TENSOR_SETCSR) ||
@@ -694,6 +697,7 @@ assign cmd_sld_stream_req = cmd_fire && is_sld_stream &&
                              is_compact_address_high);
 assign cmd_wsld_circular_req = cmd_fire && is_wsld_circular;
 assign cmd_wsld_circular_transpose = control_imm8[0];
+assign cmd_wsld_circular_config = COMPACT_CMD_INPUT ? cmd_capture_value[31:0] : 32'd0;
 assign cmd_sld_circular_req = cmd_fire && is_sld_circular;
 
 assign actu_cmd_setcsr_req = cmd_fire && (subop == ACTU_SETCSR);
