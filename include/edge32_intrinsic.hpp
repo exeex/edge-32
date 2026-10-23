@@ -60,8 +60,10 @@ static inline void edge_dcache_header_write(uint32_t value) {
 #define EDGE_TENSOR_DTYPE_FP32 2
 #define EDGE_TENSOR_WTYPE_BF16 1
 #define EDGE_TENSOR_WTYPE_INT8 2
-// E3 packed WLD: E2M1 nibbles, low nibble first. Value 3 remains reserved.
+// E3 packed WLD numeric formats; FP4 packs the earlier element in low bits.
+#define EDGE_TENSOR_WTYPE_FP8_E4M3FN 3
 #define EDGE_TENSOR_WTYPE_FP4 4
+#define EDGE_TENSOR_WTYPE_FP8_E5M2 5
 #define EDGE_TENSOR_LOAD_OPT_REUSE (1u << 1)
 #define EDGE_TENSOR_LOAD_OPT_KNOWN_MASK EDGE_TENSOR_LOAD_OPT_REUSE
 #define EDGE_TENSOR_START_OPT_USE_SCALE (1u << 0)
