@@ -453,6 +453,19 @@ static inline void edge_dma_start_strided(
                            bytes, stride, count);
 }
 #endif
+// Compile-time contract for the 128-bit circular streaming path. Quant groups
+// inside a transport slot may be unaligned; DMA slot bases and ring wrap may not.
+template <uintptr_t SlotBytes, uintptr_t SlotCount>
+struct EdgeCircularDmaLayout {
+    static_assert(SlotBytes != 0 && SlotCount != 0, "circular ring must be nonempty");
+    static_assert(SlotBytes % 16 == 0, "DMA slot must align to 128 bits (16 bytes)");
+    static_assert((SlotBytes * SlotCount) % 16 == 0,
+                  "circular ring wrap must align to 128 bits (16 bytes)");
+    static constexpr uintptr_t slot_bytes = SlotBytes;
+    static constexpr uintptr_t slot_count = SlotCount;
+    static constexpr uintptr_t ring_bytes = SlotBytes * SlotCount;
+};
+
 static inline void edge_dma_start_strided_circular(
     addr_t src, addr_t ring, uintptr_t bytes, uintptr_t x_stride,
     uintptr_t x_max, uintptr_t y_stride, uintptr_t y_max,
@@ -729,15 +742,19 @@ enum EdgeTensorScaleType : unsigned {
     EDGE_TENSOR_STYPE_NVFP4 = 2, // 8-bit E4M3FN block scale; global scale is separate
 };
 template <bool transpose = false, unsigned tiles = 4, unsigned wtype = 2,
-          unsigned scales = 8, unsigned stype = 0>
+          unsigned scales = 8, unsigned stype = 0, unsigned groups = 1>
 static inline void edge_tensor_wsld_circular()
 {
     static_assert(tiles >= 1 && tiles <= 255, "invalid slot tile count");
     static_assert(scales == 1 || scales == 8, "one broadcast or eight lane scales");
     static_assert(stype <= EDGE_TENSOR_STYPE_NVFP4, "unsupported scale encoding");
     static_assert(wtype >= 1 && wtype <= 5, "unsupported weight type");
+    static_assert(groups == 1 || groups == 2, "one or two quant groups per transport slot");
+    static_assert(groups == 1 || (scales == 8 && stype != 0),
+                  "dense pairs require eight byte scales per group");
     edge32::emit<edge32::command::tensor_wsld_circular, transpose ? 1 : 0>(
-        tiles | (scales << 8) | (stype << 12) | (wtype << 16));
+        tiles | (scales << 8) | (stype << 12) | (wtype << 16) |
+        (groups == 2 ? 1u << 20 : 0u));
 }
 
 static inline void edge_tensor_sld_circular(void)
