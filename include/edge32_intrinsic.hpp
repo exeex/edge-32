@@ -740,6 +740,7 @@ enum EdgeTensorScaleType : unsigned {
     EDGE_TENSOR_STYPE_BF16 = 0,
     EDGE_TENSOR_STYPE_MXFP4 = 1, // 8-bit E8M0 block scale
     EDGE_TENSOR_STYPE_NVFP4 = 2, // E4M3FN block scale combined with the WSLD BF16 global operand
+    EDGE_TENSOR_STYPE_FP16 = 3, // IEEE FP16 scale, exactly expanded to BF20
 };
 // Positive BF16-in-FP32 operand; hardware ignores the low16 container bits.
 // Bit31 selects global setup instead of a circular-stream descriptor.
@@ -753,10 +754,10 @@ static inline void edge_tensor_wsld_circular()
 {
     static_assert(tiles >= 1 && tiles <= 255, "invalid slot tile count");
     static_assert(scales == 1 || scales == 8, "one broadcast or eight lane scales");
-    static_assert(stype <= EDGE_TENSOR_STYPE_NVFP4, "unsupported scale encoding");
+    static_assert(stype <= EDGE_TENSOR_STYPE_FP16, "unsupported scale encoding");
     static_assert(wtype >= 1 && wtype <= 5, "unsupported weight type");
     static_assert(groups == 1 || groups == 2, "one or two quant groups per transport slot");
-    static_assert(groups == 1 || (scales == 8 && stype != 0),
+    static_assert(groups == 1 || (scales == 8 && (stype == EDGE_TENSOR_STYPE_MXFP4 || stype == EDGE_TENSOR_STYPE_NVFP4)),
                   "dense pairs require eight byte scales per group");
     edge32::emit<edge32::command::tensor_wsld_circular, transpose ? 1 : 0>(
         tiles | (scales << 8) | (stype << 12) | (wtype << 16) |
