@@ -739,8 +739,14 @@ static inline void edge_tensor_wld_circular(void)
 enum EdgeTensorScaleType : unsigned {
     EDGE_TENSOR_STYPE_BF16 = 0,
     EDGE_TENSOR_STYPE_MXFP4 = 1, // 8-bit E8M0 block scale
-    EDGE_TENSOR_STYPE_NVFP4 = 2, // 8-bit E4M3FN block scale; global scale is separate
+    EDGE_TENSOR_STYPE_NVFP4 = 2, // E4M3FN block scale combined with the WSLD BF16 global operand
 };
+// Positive BF16-in-FP32 operand; hardware ignores the low16 container bits.
+// Bit31 selects global setup instead of a circular-stream descriptor.
+static inline void edge_tensor_wsld_global(uint32_t fp32_container)
+{
+    edge32::emit<edge32::command::tensor_wsld_circular>(0x80000000u | fp32_container);
+}
 template <bool transpose = false, unsigned tiles = 4, unsigned wtype = 2,
           unsigned scales = 8, unsigned stype = 0, unsigned groups = 1>
 static inline void edge_tensor_wsld_circular()
