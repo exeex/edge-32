@@ -36,6 +36,7 @@ ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_lookup_scheduler.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_pair_predictor.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_banked_data_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_tag_array.v
+${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_metadata_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/rtl/edge_dcache_dirty_array.v
 ${EDGE32_ROOT}/rtl/cache/edge_dcache/edge_dcache.v
 ${EDGE32_ROOT}/rtl/edge_32_gpr.v

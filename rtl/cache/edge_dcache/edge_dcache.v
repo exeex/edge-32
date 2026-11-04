@@ -7,6 +7,9 @@ module edge_dcache #(
   parameter DCACHE_BYTES = 16384,
   parameter LINE_BYTES   = 64,
   parameter LOAD_LATENCY = 1,
+  // Physical SRAM metadata has a clocked read and a shared read/write port.
+  // Keep the historical asynchronous model available for baseline comparisons.
+  parameter METADATA_SYNC_READ = 0,
 `ifdef EDGE_DCACHE_REGISTERED_LOOKUP
   parameter LOOKUP_REGISTERED = 1,
 `else
@@ -204,6 +207,24 @@ module edge_dcache #(
   wire metadata_write_valid_bit;
   wire metadata_write_dirty_bit;
   wire [VALUE_WIDTH-1:0] data_read_word;
+  wire metadata_read_ready;
+  wire [TAG_WIDTH-1:0] async_metadata_tag, sync_metadata_tag;
+  wire async_metadata_valid, async_metadata_dirty;
+  wire sync_metadata_valid, sync_metadata_dirty;
+  wire sync_metadata_ready;
+  wire metadata_load_ready = metadata_read_ready &&
+    (!METADATA_SYNC_READ || metadata_read_index == load_line_index);
+  wire metadata_store_read_ready = metadata_read_ready &&
+    (!METADATA_SYNC_READ || metadata_read_index == store_line_index);
+  wire metadata_classify_ready = metadata_read_ready &&
+    (!METADATA_SYNC_READ || metadata_read_index ==
+      registered_classify_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH]);
+  reg store_class_valid_q, store_class_hit_q, store_class_dirty_conflict_q;
+  reg [TAG_WIDTH-1:0] store_class_tag_q;
+  reg cache_op_class_valid_q, cache_op_class_hit_q, cache_op_class_dirty_q;
+  wire metadata_store_ready = !METADATA_SYNC_READ || store_class_valid_q;
+  wire [TAG_WIDTH-1:0] store_victim_tag = METADATA_SYNC_READ ?
+    store_class_tag_q : metadata_read_tag;
   wire [TAG_WIDTH-1:0] metadata_read_tag;
   wire metadata_read_valid;
   wire metadata_read_dirty;
@@ -401,28 +422,30 @@ module edge_dcache #(
      ((load_line_index != mshr_line_index) && !mshr_complete));
   assign load_backend_blocked =
     backend_load_pause || clean_wb_busy ||
+    (!(lookup_buffered && !hybrid_bypass) && !metadata_load_ready) ||
     (load_metadata_hit ? !load_hit_queue_accept :
      !mshr_miss_ready);
   assign lsu_load_req_ready = !metadata_init_active_q && lookup_push_ready;
   assign lsu_load_req1_ready = lsu_load_req_ready && lsu_load_req_valid;
-  assign store_metadata_hit =
-    metadata_read_valid &&
-    (metadata_read_tag[TAG_WIDTH-1:0] == store_tag[TAG_WIDTH-1:0]);
+  assign store_metadata_hit = METADATA_SYNC_READ ? store_class_hit_q :
+    (metadata_read_valid &&
+     metadata_read_tag[TAG_WIDTH-1:0] == store_tag[TAG_WIDTH-1:0]);
   assign store_dirty_conflict =
-    !metadata_init_active_q && lsu_store_req_valid && !lsu_load_req_valid &&
-    metadata_read_valid && metadata_read_dirty && !store_metadata_hit;
+    !metadata_init_active_q && metadata_store_ready && lsu_store_req_valid && !lsu_load_req_valid &&
+    (METADATA_SYNC_READ ? store_class_dirty_conflict_q :
+     (metadata_read_valid && metadata_read_dirty && !store_metadata_hit));
   assign store_dirty_conflict_start =
-    store_dirty_conflict && !clean_wb_busy && !mshr_active &&
+    store_dirty_conflict && metadata_store_ready && !clean_wb_busy && !mshr_active &&
     !backend_store_pause;
   assign store_refill_miss =
     !metadata_init_active_q && lsu_store_req_valid && !lsu_load_req_valid &&
     !store_metadata_hit;
   assign store_miss_refill_fire =
-    store_refill_miss && !store_dirty_conflict &&
+    store_refill_miss && metadata_store_ready && !store_dirty_conflict &&
     !backend_store_pause && !clean_wb_busy && !mshr_active &&
     lookup_empty && !registered_classify_valid && mshr_miss_ready;
   assign store_backend_blocked =
-    backend_store_pause || clean_wb_busy || lsu_load_req_valid ||
+    backend_store_pause || !metadata_store_ready || clean_wb_busy || lsu_load_req_valid ||
     mshr_active || !lookup_empty || registered_classify_valid ||
     store_dirty_conflict || store_refill_miss;
   assign load1_same_line =
@@ -468,7 +491,9 @@ module edge_dcache #(
   assign store1_fire = lsu_store_req1_valid && lsu_store_req1_ready;
   assign cache_op_ready =
     !metadata_init_active_q && !store_fire && !clean_wb_busy && !mshr_active &&
-    (hit_queue_count == 3'd0) && lookup_empty;
+    (hit_queue_count == 3'd0) && lookup_empty &&
+    (!METADATA_SYNC_READ || (!lsu_store_req_valid &&
+      (!cache_op_is_va || cache_op_class_valid_q)));
   assign cache_op_fire = cache_op_valid && cache_op_ready;
   assign cache_op_va_fire = cache_op_fire && cache_op_is_va;
   assign cache_op_clean_va_fire = cache_op_va_fire && cache_op_kind[0];
@@ -476,10 +501,11 @@ module edge_dcache #(
     cache_op_va_fire && cache_op_kind[1];
   assign cache_op_metadata_hit =
     cache_op_va_fire &&
-    metadata_read_valid &&
-    (metadata_read_tag[TAG_WIDTH-1:0] == cache_op_tag[TAG_WIDTH-1:0]);
+    (METADATA_SYNC_READ ? cache_op_class_hit_q :
+     (metadata_read_valid && metadata_read_tag[TAG_WIDTH-1:0] == cache_op_tag[TAG_WIDTH-1:0]));
   assign cache_op_clean_dirty_hit =
-    cache_op_clean_va_fire && cache_op_metadata_hit && metadata_read_dirty;
+    cache_op_clean_va_fire && cache_op_metadata_hit &&
+    (METADATA_SYNC_READ ? cache_op_class_dirty_q : metadata_read_dirty);
   wire pending_resp_valid = mshr_complete_valid && !mshr_store_refill_q;
   assign lsu_load_resp_valid =
     pending_resp_valid || hit_queue_complete_valid;
@@ -523,7 +549,11 @@ module edge_dcache #(
     mshr_active_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH];
   assign mshr_tag = mshr_active_addr[
     LINE_OFFSET_WIDTH + LINE_INDEX_WIDTH +: TAG_WIDTH];
-  assign metadata_read_index =
+  assign metadata_read_index = METADATA_SYNC_READ ?
+    ((lookup_buffered && registered_classify_valid) ?
+      registered_classify_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH] :
+     (lookup_valid && (!lookup_buffered || hybrid_bypass)) ? load_line_index :
+     lsu_store_req_valid ? store_line_index : cache_op_line_index) :
     cache_op_valid && cache_op_is_va ? cache_op_line_index :
     lookup_buffered && registered_classify_valid ?
       registered_classify_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH] :
@@ -578,7 +608,7 @@ module edge_dcache #(
   assign clean_wb_done = clean_wb_fire && clean_wb_last;
   assign dirty_victim_line_index = store_dirty_conflict ?
     store_line_index : load_line_index;
-  assign dirty_victim_tag = store_dirty_conflict ? metadata_read_tag :
+  assign dirty_victim_tag = store_dirty_conflict ? store_victim_tag :
     (lookup_buffered && !hybrid_bypass) ?
     (registered_select_index ? registered_candidate1_dirty_tag :
                                registered_candidate0_dirty_tag) :
@@ -741,7 +771,7 @@ module edge_dcache #(
         .push1_epoch(lsu_load_req1_epoch), .push1_addr(lsu_load_req1_addr),
         .push1_size(lsu_load_req1_size),
         .push1_signed(lsu_load_req1_signed),
-        .classify_valid(registered_classify_valid),
+        .classify_valid(registered_classify_valid && metadata_classify_ready),
         .classify_index(registered_classify_index),
         .classify_hit(registered_metadata_hit),
         .classify_dirty_conflict(registered_dirty_conflict),
@@ -984,25 +1014,84 @@ module edge_dcache #(
     .LINES(LINES)
   ) tag_array (
     .clk(forever_cpuclk),
-    .write_valid(metadata_write_valid),
+    .write_valid(metadata_write_valid && !METADATA_SYNC_READ),
     .write_index(metadata_write_index),
     .write_tag(metadata_write_tag),
     .write_valid_bit(metadata_write_valid_bit),
     .read_index(metadata_read_index),
-    .read_tag(metadata_read_tag),
-    .read_valid_bit(metadata_read_valid)
+    .read_tag(async_metadata_tag),
+    .read_valid_bit(async_metadata_valid)
   );
 
   edge_dcache_dirty_array #(
     .LINES(LINES)
   ) dirty_array (
     .clk(forever_cpuclk),
-    .write_valid(metadata_write_valid),
+    .write_valid(metadata_write_valid && !METADATA_SYNC_READ),
     .write_index(metadata_write_index),
     .write_dirty_bit(metadata_write_dirty_bit),
     .read_index(metadata_read_index),
-    .read_dirty_bit(metadata_read_dirty)
+    .read_dirty_bit(async_metadata_dirty)
   );
+
+  generate if (METADATA_SYNC_READ) begin : g_metadata_sram
+    edge_dcache_metadata_array #(.TAG_WIDTH(TAG_WIDTH), .LINES(LINES)) metadata (
+      .clk(forever_cpuclk), .reset_b(cpurst_b),
+      .write_valid(metadata_write_valid), .write_index(metadata_write_index),
+      .write_tag(metadata_write_tag), .write_valid_bit(metadata_write_valid_bit),
+      .write_dirty_bit(metadata_write_dirty_bit), .read_index(metadata_read_index),
+      .read_tag(sync_metadata_tag), .read_valid_bit(sync_metadata_valid),
+      .read_dirty_bit(sync_metadata_dirty), .read_ready(sync_metadata_ready)
+    );
+  end else begin : g_metadata_async
+    assign sync_metadata_tag = {TAG_WIDTH{1'b0}};
+    assign sync_metadata_valid = 1'b0;
+    assign sync_metadata_dirty = 1'b0;
+    assign sync_metadata_ready = 1'b0;
+  end endgenerate
+  assign metadata_read_tag = METADATA_SYNC_READ ? sync_metadata_tag : async_metadata_tag;
+  assign metadata_read_valid = METADATA_SYNC_READ ? sync_metadata_valid : async_metadata_valid;
+  assign metadata_read_dirty = METADATA_SYNC_READ ? sync_metadata_dirty : async_metadata_dirty;
+  assign metadata_read_ready = !METADATA_SYNC_READ || sync_metadata_ready;
+
+  // The requester owns a stable address until acceptance. Preserve the SRAM
+  // decision through stalls; any metadata write invalidates it before reuse.
+  // This breaks SRAM availability/tag comparison -> data-SRAM store control.
+  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+    if (!cpurst_b) begin
+      store_class_valid_q <= 1'b0;
+      store_class_hit_q <= 1'b0;
+      store_class_dirty_conflict_q <= 1'b0;
+      store_class_tag_q <= {TAG_WIDTH{1'b0}};
+      cache_op_class_valid_q <= 1'b0;
+      cache_op_class_hit_q <= 1'b0;
+      cache_op_class_dirty_q <= 1'b0;
+    end else if (METADATA_SYNC_READ) begin
+      if (metadata_write_valid) begin
+        store_class_valid_q <= 1'b0;
+        cache_op_class_valid_q <= 1'b0;
+      end else begin
+        if (!lsu_store_req_valid || store_fire)
+          store_class_valid_q <= 1'b0;
+        else if (!store_class_valid_q && metadata_store_read_ready) begin
+          store_class_valid_q <= 1'b1;
+          store_class_hit_q <= metadata_read_valid && metadata_read_tag == store_tag;
+          store_class_dirty_conflict_q <= metadata_read_valid && metadata_read_dirty &&
+                                         metadata_read_tag != store_tag;
+          store_class_tag_q <= metadata_read_tag;
+        end
+        if (!cache_op_valid || cache_op_fire)
+          cache_op_class_valid_q <= 1'b0;
+        else if (!cache_op_class_valid_q && !lsu_store_req_valid && lookup_empty &&
+                 !registered_classify_valid && metadata_read_ready &&
+                 metadata_read_index == cache_op_line_index) begin
+          cache_op_class_valid_q <= 1'b1;
+          cache_op_class_hit_q <= metadata_read_valid && metadata_read_tag == cache_op_tag;
+          cache_op_class_dirty_q <= metadata_read_dirty;
+        end
+      end
+    end
+  end
 
   function [VALUE_WIDTH-1:0] format_load_value;
     input [VALUE_WIDTH-1:0] word;
@@ -1102,7 +1191,7 @@ module edge_dcache #(
       end else if (store_dirty_conflict_start) begin
         clean_writeback_addr_q <= dirty_victim_base_addr;
         clean_writeback_line_index_q <= store_line_index;
-        clean_writeback_tag_q <= metadata_read_tag;
+        clean_writeback_tag_q <= store_victim_tag;
       end
 
       if (!clean_wb_active_q &&
