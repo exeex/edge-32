@@ -237,10 +237,10 @@ module edge_dcache #(
   wire [CLEAN_BEAT_INDEX_WIDTH-1:0] store_beat_index;
   wire [CLEAN_BEAT_INDEX_WIDTH-1:0] req_load1_beat_index;
   wire [CLEAN_BEAT_INDEX_WIDTH-1:0] store1_beat_index;
-  wire req_load_word_is_hi;
-  wire store_word_is_hi;
-  wire req_load1_word_is_hi;
-  wire store1_word_is_hi;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] req_load_word_is_hi;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] store_word_is_hi;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] req_load1_word_is_hi;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] store1_word_is_hi;
   wire load_backend_blocked;
   wire lookup_empty;
   wire lookup_push_ready;
@@ -322,20 +322,20 @@ module edge_dcache #(
   wire data_lsu_write;
   wire [LINE_INDEX_WIDTH-1:0] data_lsu_line_index;
   wire [CLEAN_BEAT_INDEX_WIDTH-1:0] data_lsu_beat_index;
-  wire data_lsu_word_hi;
-  wire [63:0] data_lsu_wdata;
-  wire [7:0] data_lsu_wstrb;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] data_lsu_word_hi;
+  wire [VALUE_WIDTH-1:0] data_lsu_wdata;
+  wire [VALUE_WIDTH/8-1:0] data_lsu_wstrb;
   wire data_lsu_rvalid;
-  wire [63:0] data_lsu_rdata;
+  wire [VALUE_WIDTH-1:0] data_lsu_rdata;
   wire data_lsu1_valid;
   wire data_lsu1_write;
   wire [LINE_INDEX_WIDTH-1:0] data_lsu1_line_index;
   wire [CLEAN_BEAT_INDEX_WIDTH-1:0] data_lsu1_beat_index;
-  wire data_lsu1_word_hi;
-  wire [63:0] data_lsu1_wdata;
-  wire [7:0] data_lsu1_wstrb;
+  wire [$clog2(128/VALUE_WIDTH)-1:0] data_lsu1_word_hi;
+  wire [VALUE_WIDTH-1:0] data_lsu1_wdata;
+  wire [VALUE_WIDTH/8-1:0] data_lsu1_wstrb;
   wire data_lsu1_rvalid;
-  wire [63:0] data_lsu1_rdata;
+  wire [VALUE_WIDTH-1:0] data_lsu1_rdata;
   wire clean_wb_read_valid;
   wire refill_data_write_valid;
   wire data_mem_valid;
@@ -626,10 +626,10 @@ module edge_dcache #(
     lookup1_addr[4 +: CLEAN_BEAT_INDEX_WIDTH];
   assign store1_beat_index =
     lsu_store_req1_addr[4 +: CLEAN_BEAT_INDEX_WIDTH];
-  assign req_load_word_is_hi = lookup_addr[3];
-  assign store_word_is_hi = lsu_store_req_addr[3];
-  assign req_load1_word_is_hi = lookup1_addr[3];
-  assign store1_word_is_hi = lsu_store_req1_addr[3];
+  assign req_load_word_is_hi = lookup_addr[3:BYTE_OFFSET_WIDTH];
+  assign store_word_is_hi = lsu_store_req_addr[3:BYTE_OFFSET_WIDTH];
+  assign req_load1_word_is_hi = lookup1_addr[3:BYTE_OFFSET_WIDTH];
+  assign store1_word_is_hi = lsu_store_req1_addr[3:BYTE_OFFSET_WIDTH];
   assign data_lsu_valid = load_hit_fire || store_fire;
   assign data_lsu_write = store_fire;
   assign data_lsu_line_index = store_fire ? store_line_index : load_line_index;
@@ -972,6 +972,7 @@ module edge_dcache #(
   );
 
   edge_dcache_banked_data_array #(
+    .SCALAR_WIDTH(VALUE_WIDTH),
     .LINE_COUNT(LINES),
     .LINE_INDEX_WIDTH(LINE_INDEX_WIDTH)
   ) data_array (
@@ -1245,8 +1246,8 @@ module edge_dcache #(
 
 `ifdef IVERILOG_SIM
   initial begin
-    if (VALUE_WIDTH != 64) begin
-      $display("EDGE_DCACHE CONFIG FAIL: VALUE_WIDTH must be 64");
+    if (VALUE_WIDTH != 32 && VALUE_WIDTH != 64) begin
+      $display("EDGE_DCACHE CONFIG FAIL: VALUE_WIDTH must be 32 or 64");
       $finish;
     end
     if ((ICACHE_BYTES != (16 * 1024)) && (ICACHE_BYTES != (32 * 1024))) begin

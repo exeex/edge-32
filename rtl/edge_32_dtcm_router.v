@@ -10,16 +10,16 @@ module edge_32_dtcm_router #(
   input  wire core_req_valid, output wire core_req_ready,
   input  wire core_req_write,
   input  wire [ADDR_WIDTH-1:0] core_req_addr,
-  input  wire [63:0] core_req_wdata, input wire [7:0] core_req_wstrb,
+  input  wire [31:0] core_req_wdata, input wire [3:0] core_req_wstrb,
   input  wire [1:0] core_req_size, input wire core_req_signed,
   output wire core_resp_valid, output wire core_resp_error,
-  output wire [63:0] core_resp_rdata,
+  output wire [31:0] core_resp_rdata,
   output wire cache_req_valid, input wire cache_req_ready,
   output wire cache_req_write,
   output wire [ADDR_WIDTH-1:0] cache_req_addr,
-  output wire [63:0] cache_req_wdata, output wire [7:0] cache_req_wstrb,
+  output wire [31:0] cache_req_wdata, output wire [3:0] cache_req_wstrb,
   input  wire cache_resp_valid, input wire cache_resp_error,
-  input  wire [63:0] cache_resp_rdata,
+  input  wire [31:0] cache_resp_rdata,
   output wire dtcm_req, input wire dtcm_ready,
   output wire dtcm_we, output wire [DTCM_ADDR_WIDTH-1:0] dtcm_addr,
   output wire [63:0] dtcm_wdata, output wire [7:0] dtcm_wstrb,
@@ -41,20 +41,17 @@ module edge_32_dtcm_router #(
   wire [ADDR_WIDTH-1:0] dtcm_byte_offset = core_req_addr-dtcm_base;
   wire [63:0] dtcm_shifted_rdata = dtcm_rdata >>
                                    (dtcm_load_offset_q * 8);
-  reg [63:0] dtcm_formatted_rdata;
+  reg [31:0] dtcm_formatted_rdata;
 
   always @* begin
     case (dtcm_load_size_q)
       2'd0: dtcm_formatted_rdata = dtcm_load_signed_q ?
-        {{56{dtcm_shifted_rdata[7]}}, dtcm_shifted_rdata[7:0]} :
-        {56'd0, dtcm_shifted_rdata[7:0]};
+        {{24{dtcm_shifted_rdata[7]}}, dtcm_shifted_rdata[7:0]} :
+        {24'd0, dtcm_shifted_rdata[7:0]};
       2'd1: dtcm_formatted_rdata = dtcm_load_signed_q ?
-        {{48{dtcm_shifted_rdata[15]}}, dtcm_shifted_rdata[15:0]} :
-        {48'd0, dtcm_shifted_rdata[15:0]};
-      2'd2: dtcm_formatted_rdata = dtcm_load_signed_q ?
-        {{32{dtcm_shifted_rdata[31]}}, dtcm_shifted_rdata[31:0]} :
-        {32'd0, dtcm_shifted_rdata[31:0]};
-      default: dtcm_formatted_rdata = dtcm_shifted_rdata;
+        {{16{dtcm_shifted_rdata[15]}}, dtcm_shifted_rdata[15:0]} :
+        {16'd0, dtcm_shifted_rdata[15:0]};
+      default: dtcm_formatted_rdata = dtcm_shifted_rdata[31:0];
     endcase
   end
 
@@ -67,8 +64,8 @@ module edge_32_dtcm_router #(
   assign dtcm_req = select_dtcm;
   assign dtcm_we = core_req_write;
   assign dtcm_addr = dtcm_byte_offset[DTCM_ADDR_WIDTH+2:3];
-  assign dtcm_wdata = core_req_wdata;
-  assign dtcm_wstrb = core_req_wstrb;
+  assign dtcm_wdata = {32'b0,core_req_wdata} << (dtcm_byte_offset[2]*32);
+  assign dtcm_wstrb = {4'b0,core_req_wstrb} << (dtcm_byte_offset[2]*4);
   assign core_resp_valid = dtcm_store_resp_q ||
     ((owner_q==OWNER_DTCM_LOAD) && dtcm_rvalid) ||
     ((owner_q==OWNER_CACHE) && cache_resp_valid);

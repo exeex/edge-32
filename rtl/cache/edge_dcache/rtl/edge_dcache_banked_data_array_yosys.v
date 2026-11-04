@@ -2,6 +2,7 @@
 // Synchronous RAM outputs are muxed directly so rvalid/rdata preserve the
 // canonical array's one-cycle read contract.
 module edge_dcache_banked_data_array #(
+  parameter SCALAR_WIDTH = 64,
   parameter LINE_COUNT       = 256,
   parameter LINE_INDEX_WIDTH = (LINE_COUNT <= 2) ? 1 : $clog2(LINE_COUNT),
   parameter ROW_COUNT        = LINE_COUNT * 2,
@@ -16,22 +17,22 @@ module edge_dcache_banked_data_array #(
   input  wire                         lsu0_write,
   input  wire [LINE_INDEX_WIDTH-1:0]  lsu0_line_index,
   input  wire [1:0]                   lsu0_beat_index,
-  input  wire                         lsu0_word_hi,
-  input  wire [63:0]                  lsu0_wdata,
-  input  wire [7:0]                   lsu0_wstrb,
+  input wire [$clog2(128/SCALAR_WIDTH)-1:0] lsu0_word_hi,
+  input  wire [SCALAR_WIDTH-1:0]                  lsu0_wdata,
+  input  wire [SCALAR_WIDTH/8-1:0]                   lsu0_wstrb,
   output reg                          lsu0_rvalid,
-  output wire [63:0]                  lsu0_rdata,
+  output wire [SCALAR_WIDTH-1:0]                  lsu0_rdata,
 
   input  wire                         lsu1_valid,
   output wire                         lsu1_ready,
   input  wire                         lsu1_write,
   input  wire [LINE_INDEX_WIDTH-1:0]  lsu1_line_index,
   input  wire [1:0]                   lsu1_beat_index,
-  input  wire                         lsu1_word_hi,
-  input  wire [63:0]                  lsu1_wdata,
-  input  wire [7:0]                   lsu1_wstrb,
+  input wire [$clog2(128/SCALAR_WIDTH)-1:0] lsu1_word_hi,
+  input  wire [SCALAR_WIDTH-1:0]                  lsu1_wdata,
+  input  wire [SCALAR_WIDTH/8-1:0]                   lsu1_wstrb,
   output reg                          lsu1_rvalid,
-  output wire [63:0]                  lsu1_rdata,
+  output wire [SCALAR_WIDTH-1:0]                  lsu1_rdata,
 
   input  wire                         mem_valid,
   output wire                         mem_ready,
@@ -43,11 +44,37 @@ module edge_dcache_banked_data_array #(
   output reg                          mem_rvalid,
   output wire [127:0]                 mem_rdata
 );
+  // Scalar word selection is local to the physical 64-bit bank door.
+  // A 128-bit line beat and the four-bank phase policy are unchanged.
+  initial if (SCALAR_WIDTH != 32 && SCALAR_WIDTH != 64) $error("unsupported scalar width");
+  wire lsu0_physical_hi = lsu0_word_hi[$clog2(128/SCALAR_WIDTH)-1];
+  wire lsu0_subword = (SCALAR_WIDTH == 32) && lsu0_word_hi[0];
+  wire [63:0] lsu0_bank_wdata = {{(64-SCALAR_WIDTH){1'b0}}, lsu0_wdata} << (lsu0_subword*32);
+  wire [7:0] lsu0_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu0_wstrb} << (lsu0_subword*4);
+  wire [63:0] lsu0_bank_rdata;
+  reg lsu0_read_subword_q;
+  always @(posedge clk or negedge reset_b) begin
+    if (!reset_b) lsu0_read_subword_q <= 1'b0;
+    else if (lsu0_fire && !lsu0_write) lsu0_read_subword_q <= lsu0_subword;
+  end
+  assign lsu0_rdata = lsu0_bank_rdata[lsu0_read_subword_q*32 +: SCALAR_WIDTH];
+  wire lsu1_physical_hi = lsu1_word_hi[$clog2(128/SCALAR_WIDTH)-1];
+  wire lsu1_subword = (SCALAR_WIDTH == 32) && lsu1_word_hi[0];
+  wire [63:0] lsu1_bank_wdata = {{(64-SCALAR_WIDTH){1'b0}}, lsu1_wdata} << (lsu1_subword*32);
+  wire [7:0] lsu1_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu1_wstrb} << (lsu1_subword*4);
+  wire [63:0] lsu1_bank_rdata;
+  reg lsu1_read_subword_q;
+  always @(posedge clk or negedge reset_b) begin
+    if (!reset_b) lsu1_read_subword_q <= 1'b0;
+    else if (lsu1_fire && !lsu1_write) lsu1_read_subword_q <= lsu1_subword;
+  end
+  assign lsu1_rdata = lsu1_bank_rdata[lsu1_read_subword_q*32 +: SCALAR_WIDTH];
+
 
   wire lsu0_half = lsu0_beat_index[0];
   wire lsu1_half = lsu1_beat_index[0];
-  wire lsu0_bank_hi = lsu0_word_hi;
-  wire lsu1_bank_hi = lsu1_word_hi;
+  wire lsu0_bank_hi = lsu0_physical_hi;
+  wire lsu1_bank_hi = lsu1_physical_hi;
   wire lsu_bank_conflict =
     lsu0_valid && lsu1_valid &&
     (lsu0_half == lsu1_half) &&
@@ -121,37 +148,37 @@ module edge_dcache_banked_data_array #(
     (mem_fire && mem_half) ? mem_row_index : {ROW_INDEX_WIDTH{1'b0}};
 
   wire [63:0] bank0_wdata =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[0]) ? lsu0_wdata :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[0]) ? lsu1_wdata :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[0]) ? lsu0_bank_wdata :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[0]) ? lsu1_bank_wdata :
     mem_wdata[63:0];
   wire [63:0] bank1_wdata =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[1]) ? lsu0_wdata :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[1]) ? lsu1_wdata :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[1]) ? lsu0_bank_wdata :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[1]) ? lsu1_bank_wdata :
     mem_wdata[127:64];
   wire [63:0] bank2_wdata =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[2]) ? lsu0_wdata :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[2]) ? lsu1_wdata :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[2]) ? lsu0_bank_wdata :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[2]) ? lsu1_bank_wdata :
     mem_wdata[63:0];
   wire [63:0] bank3_wdata =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[3]) ? lsu0_wdata :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[3]) ? lsu1_wdata :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[3]) ? lsu0_bank_wdata :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[3]) ? lsu1_bank_wdata :
     mem_wdata[127:64];
 
   assign bank0_wstrb =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[0]) ? lsu0_wstrb :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[0]) ? lsu1_wstrb :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[0]) ? lsu0_bank_wstrb :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[0]) ? lsu1_bank_wstrb :
     mem_wstrb[7:0];
   assign bank1_wstrb =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[1]) ? lsu0_wstrb :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[1]) ? lsu1_wstrb :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[1]) ? lsu0_bank_wstrb :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[1]) ? lsu1_bank_wstrb :
     mem_wstrb[15:8];
   assign bank2_wstrb =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[2]) ? lsu0_wstrb :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[2]) ? lsu1_wstrb :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[2]) ? lsu0_bank_wstrb :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[2]) ? lsu1_bank_wstrb :
     mem_wstrb[7:0];
   assign bank3_wstrb =
-    (lsu0_fire && lsu0_write && lsu0_bank_sel[3]) ? lsu0_wstrb :
-    (lsu1_fire && lsu1_write && lsu1_bank_sel[3]) ? lsu1_wstrb :
+    (lsu0_fire && lsu0_write && lsu0_bank_sel[3]) ? lsu0_bank_wstrb :
+    (lsu1_fire && lsu1_write && lsu1_bank_sel[3]) ? lsu1_bank_wstrb :
     mem_wstrb[15:8];
 
   genvar byte_idx;
@@ -188,10 +215,10 @@ module edge_dcache_banked_data_array #(
     end
   endgenerate
 
-  assign lsu0_rdata = lsu0_rbank_q == 2'b00 ? bank0_rdata :
+  assign lsu0_bank_rdata = lsu0_rbank_q == 2'b00 ? bank0_rdata :
                       lsu0_rbank_q == 2'b01 ? bank1_rdata :
                       lsu0_rbank_q == 2'b10 ? bank2_rdata : bank3_rdata;
-  assign lsu1_rdata = lsu1_rbank_q == 2'b00 ? bank0_rdata :
+  assign lsu1_bank_rdata = lsu1_rbank_q == 2'b00 ? bank0_rdata :
                       lsu1_rbank_q == 2'b01 ? bank1_rdata :
                       lsu1_rbank_q == 2'b10 ? bank2_rdata : bank3_rdata;
   assign mem_rdata = mem_rhalf_q ?

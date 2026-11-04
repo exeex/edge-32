@@ -31,7 +31,7 @@ module edge_32_cached_core #(
 
   output wire                   dmem_refill_req_valid,
   input  wire                   dmem_refill_req_ready,
-  output wire [63:0]            dmem_refill_req_addr,
+  output wire [31:0]            dmem_refill_req_addr,
   input  wire                   dmem_refill_resp_valid,
   output wire                   dmem_refill_resp_ready,
   input  wire [127:0]           dmem_refill_resp_data,
@@ -40,7 +40,7 @@ module edge_32_cached_core #(
 
   output wire                   dmem_clean_wb_valid,
   input  wire                   dmem_clean_wb_ready,
-  output wire [63:0]            dmem_clean_wb_addr,
+  output wire [31:0]            dmem_clean_wb_addr,
   output wire [127:0]           dmem_clean_wb_data,
   output wire                   dmem_clean_wb_last,
   input  wire                   dmem_clean_wb_complete,
@@ -87,19 +87,19 @@ module edge_32_cached_core #(
   wire core_dmem_req_valid;
   wire core_dmem_req_ready;
   wire core_dmem_req_write;
-  wire [63:0] core_dmem_req_addr;
-  wire [63:0] core_dmem_req_wdata;
-  wire [7:0] core_dmem_req_wstrb;
+  wire [31:0] core_dmem_req_addr;
+  wire [31:0] core_dmem_req_wdata;
+  wire [3:0] core_dmem_req_wstrb;
   wire [1:0] core_dmem_req_size;
   wire core_dmem_req_signed;
   wire core_dmem_resp_valid;
   wire core_dmem_resp_error;
-  wire [63:0] core_dmem_resp_rdata;
+  wire [31:0] core_dmem_resp_rdata;
   wire cache_core_req_valid,cache_core_req_ready,cache_core_req_write;
-  wire [63:0] cache_core_req_addr,cache_core_req_wdata;
-  wire [7:0] cache_core_req_wstrb;
+  wire [31:0] cache_core_req_addr,cache_core_req_wdata;
+  wire [3:0] cache_core_req_wstrb;
   wire cache_core_resp_valid,cache_core_resp_error;
-  wire [63:0] cache_core_resp_rdata;
+  wire [31:0] cache_core_resp_rdata;
 
   wire icache_req_valid;
   wire icache_req_ready;
@@ -115,27 +115,9 @@ module edge_32_cached_core #(
   wire icache_invalidate_busy;
   reg icache_invalidate_inflight_q;
 
-  wire dcache_load_req_valid;
-  wire dcache_load_req_ready;
-  wire [7:0] dcache_load_req_seq_id;
-  wire [3:0] dcache_load_req_epoch;
-  wire [63:0] dcache_load_req_addr;
-  wire [1:0] dcache_load_req_size;
-  wire dcache_load_req_signed;
-  wire dcache_load_resp_valid;
-  wire dcache_load_resp_error;
-  wire [63:0] dcache_load_resp_value;
-  wire dcache_store_req_valid;
-  wire dcache_store_req_ready;
-  wire [7:0] dcache_store_req_seq_id;
-  wire [3:0] dcache_store_req_epoch;
-  wire [63:0] dcache_store_req_addr;
-  wire [1:0] dcache_store_req_size;
-  wire [63:0] dcache_store_req_data;
-  wire [7:0] dcache_store_req_wstrb;
   wire cache_op_valid,cache_op_ready,cache_op_is_va;
   wire [1:0] cache_op_kind;
-  wire [63:0] cache_op_addr;
+  wire [31:0] cache_op_addr;
   wire cache_op_complete_valid;
 
   edge_32_core #(
@@ -198,15 +180,17 @@ module edge_32_cached_core #(
   );
 
   generate if(ENABLE_DTCM_PORT) begin: g_dtcm
+    wire [63:0] dtcm_cache_addr;
+    assign cache_core_req_addr=dtcm_cache_addr[31:0];
     edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) dtcm_router(
       .clk(clk),.reset_n(reset_n),.dtcm_base(dtcm_base),.dtcm_mask(dtcm_mask),
       .dtcm_enable(dtcm_enable),.core_req_valid(core_dmem_req_valid),
       .core_req_ready(core_dmem_req_ready),.core_req_write(core_dmem_req_write),
-      .core_req_addr(core_dmem_req_addr),.core_req_wdata(core_dmem_req_wdata),
+      .core_req_addr({32'b0,core_dmem_req_addr}),.core_req_wdata(core_dmem_req_wdata),
       .core_req_wstrb(core_dmem_req_wstrb),.core_resp_valid(core_dmem_resp_valid),
       .core_resp_error(core_dmem_resp_error),.core_resp_rdata(core_dmem_resp_rdata),
       .cache_req_valid(cache_core_req_valid),.cache_req_ready(cache_core_req_ready),
-      .cache_req_write(cache_core_req_write),.cache_req_addr(cache_core_req_addr),
+      .cache_req_write(cache_core_req_write),.cache_req_addr(dtcm_cache_addr),
       .cache_req_wdata(cache_core_req_wdata),.cache_req_wstrb(cache_core_req_wstrb),
       .core_req_size(core_dmem_req_size),.core_req_signed(core_dmem_req_signed),
       .cache_resp_valid(cache_core_resp_valid),.cache_resp_error(cache_core_resp_error),
@@ -273,98 +257,42 @@ module edge_32_cached_core #(
     end
   end
 
-  edge_32_dcache_adapter dcache_adapter (
-    .clk(clk), .reset_n(reset_n),
-    .core_req_valid(cache_core_req_valid),
-    .core_req_ready(cache_core_req_ready),
-    .core_req_write(cache_core_req_write),
-    .core_req_addr(cache_core_req_addr),
-    .core_req_wdata(cache_core_req_wdata),
-    .core_req_wstrb(cache_core_req_wstrb),
-    .core_req_size(core_dmem_req_size),
-    .core_req_signed(core_dmem_req_signed),
-    .core_resp_valid(cache_core_resp_valid),
-    .core_resp_error(cache_core_resp_error),
-    .core_resp_rdata(cache_core_resp_rdata),
-    .cache_load_req_valid(dcache_load_req_valid),
-    .cache_load_req_ready(dcache_load_req_ready),
-    .cache_load_req_seq_id(dcache_load_req_seq_id),
-    .cache_load_req_epoch(dcache_load_req_epoch),
-    .cache_load_req_addr(dcache_load_req_addr),
-    .cache_load_req_size(dcache_load_req_size),
-    .cache_load_req_signed(dcache_load_req_signed),
-    .cache_load_resp_valid(dcache_load_resp_valid),
-    .cache_load_resp_error(dcache_load_resp_error),
-    .cache_load_resp_value(dcache_load_resp_value),
-    .cache_store_req_valid(dcache_store_req_valid),
-    .cache_store_req_ready(dcache_store_req_ready),
-    .cache_store_req_seq_id(dcache_store_req_seq_id),
-    .cache_store_req_epoch(dcache_store_req_epoch),
-    .cache_store_req_addr(dcache_store_req_addr),
-    .cache_store_req_size(dcache_store_req_size),
-    .cache_store_req_data(dcache_store_req_data),
-    .cache_store_req_wstrb(dcache_store_req_wstrb)
-  );
-
-  edge_dcache #(
-    .SEQ_ID_WIDTH(8), .EPOCH_WIDTH(4), .VALUE_WIDTH(64),
+  edge_32_dcache #(
     .ICACHE_BYTES(ICACHE_BYTES), .DCACHE_BYTES(DCACHE_BYTES)
-  ) dcache (
-    .forever_cpuclk(clk), .cpurst_b(reset_n),
-    .redirect_kill_valid(1'b0), .redirect_kill_seq_id(8'd0),
-    .redirect_kill_epoch(4'd0),
-    .backend_load_pause(1'b0), .backend_store_pause(1'b0),
-    .lsu_load_req_valid(dcache_load_req_valid),
-    .lsu_load_req_ready(dcache_load_req_ready),
-    .lsu_load_req_seq_id(dcache_load_req_seq_id),
-    .lsu_load_req_epoch(dcache_load_req_epoch),
-    .lsu_load_req_addr(dcache_load_req_addr),
-    .lsu_load_req_size(dcache_load_req_size),
-    .lsu_load_req_signed(dcache_load_req_signed),
-    .lsu_load_req1_valid(1'b0), .lsu_load_req1_ready(),
-    .lsu_load_req1_seq_id(8'd0), .lsu_load_req1_epoch(4'd0),
-    .lsu_load_req1_addr(64'd0), .lsu_load_req1_size(2'd0),
-    .lsu_load_req1_signed(1'b0),
-    .lsu_load_resp_valid(dcache_load_resp_valid),
-    .lsu_load_resp_seq_id(), .lsu_load_resp_epoch(),
-    .lsu_load_resp_error(dcache_load_resp_error),
-    .lsu_load_resp_value(dcache_load_resp_value),
-    .lsu_store_req_valid(dcache_store_req_valid),
-    .lsu_store_req_ready(dcache_store_req_ready),
-    .lsu_store_req_seq_id(dcache_store_req_seq_id),
-    .lsu_store_req_epoch(dcache_store_req_epoch),
-    .lsu_store_req_addr(dcache_store_req_addr),
-    .lsu_store_req_size(dcache_store_req_size),
-    .lsu_store_req_data(dcache_store_req_data),
-    .lsu_store_req_wstrb(dcache_store_req_wstrb),
-    .lsu_store_req1_valid(1'b0), .lsu_store_req1_ready(),
-    .lsu_store_req1_seq_id(8'd0), .lsu_store_req1_epoch(4'd0),
-    .lsu_store_req1_addr(64'd0), .lsu_store_req1_size(2'd0),
-    .lsu_store_req1_data(64'd0), .lsu_store_req1_wstrb(8'd0),
-    .cache_op_valid(cache_op_valid), .cache_op_ready(cache_op_ready),
+  ) dcache_boundary (
+    .clk(clk),
+    .reset_n(reset_n),
+    .core_dmem_req_valid(cache_core_req_valid),
+    .core_dmem_req_ready(cache_core_req_ready),
+    .core_dmem_req_write(cache_core_req_write),
+    .core_dmem_req_addr(cache_core_req_addr),
+    .core_dmem_req_wdata(cache_core_req_wdata),
+    .core_dmem_req_wstrb(cache_core_req_wstrb),
+    .core_dmem_req_size(core_dmem_req_size),
+    .core_dmem_req_signed(core_dmem_req_signed),
+    .core_dmem_resp_valid(cache_core_resp_valid),
+    .core_dmem_resp_error(cache_core_resp_error),
+    .core_dmem_resp_rdata(cache_core_resp_rdata),
+    .cache_op_valid(cache_op_valid),
+    .cache_op_ready(cache_op_ready),
     .cache_op_is_va(cache_op_is_va),
-    .cache_op_kind(cache_op_kind), .cache_op_addr(cache_op_addr),
-    .cache_op_seq_id(8'd0), .cache_op_epoch(4'd0),
-    .cache_op_complete_valid(cache_op_complete_valid), .cache_op_complete_seq_id(),
-    .cache_op_complete_epoch(),
-    .clean_wb_valid(dmem_clean_wb_valid),
-    .clean_wb_ready(dmem_clean_wb_ready),
-    .clean_wb_addr(dmem_clean_wb_addr), .clean_wb_data(dmem_clean_wb_data),
-    .clean_wb_last(dmem_clean_wb_last),
-    .clean_wb_complete(dmem_clean_wb_complete),
-    .refill_req_valid(dmem_refill_req_valid),
-    .refill_req_ready(dmem_refill_req_ready),
-    .refill_req_addr(dmem_refill_req_addr),
-    .refill_resp_valid(dmem_refill_resp_valid),
-    .refill_resp_ready(dmem_refill_resp_ready),
-    .refill_resp_data(dmem_refill_resp_data),
-    .refill_resp_last(dmem_refill_resp_last),
-    .refill_resp_error(dmem_refill_resp_error),
-    .debug_icache_bytes(), .debug_dcache_bytes(), .debug_load_pending(),
-    .debug_load_miss_pending(debug_dcache_load_miss_pending),
-    .debug_store_fire(), .store_predict_phase(),
-    .store_predict_mem_active(), .store_predict_backend_blocked(),
-    .debug_cache_op_fire(), .debug_cache_op_kind(),
-    .debug_cache_op_is_va()
+    .cache_op_kind(cache_op_kind),
+    .cache_op_addr(cache_op_addr),
+    .cache_op_complete_valid(cache_op_complete_valid),
+    .dmem_refill_req_valid(dmem_refill_req_valid),
+    .dmem_refill_req_ready(dmem_refill_req_ready),
+    .dmem_refill_req_addr(dmem_refill_req_addr),
+    .dmem_refill_resp_valid(dmem_refill_resp_valid),
+    .dmem_refill_resp_ready(dmem_refill_resp_ready),
+    .dmem_refill_resp_data(dmem_refill_resp_data),
+    .dmem_refill_resp_last(dmem_refill_resp_last),
+    .dmem_refill_resp_error(dmem_refill_resp_error),
+    .dmem_clean_wb_valid(dmem_clean_wb_valid),
+    .dmem_clean_wb_ready(dmem_clean_wb_ready),
+    .dmem_clean_wb_addr(dmem_clean_wb_addr),
+    .dmem_clean_wb_data(dmem_clean_wb_data),
+    .dmem_clean_wb_last(dmem_clean_wb_last),
+    .dmem_clean_wb_complete(dmem_clean_wb_complete),
+    .debug_dcache_load_miss_pending(debug_dcache_load_miss_pending)
   );
 endmodule

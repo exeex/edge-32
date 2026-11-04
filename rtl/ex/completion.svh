@@ -8,7 +8,7 @@
   assign cache_op_valid=ex_issue_ok&&is_edge_cache&&!cache_started_q;
   assign cache_op_is_va=cache_is_va;
   assign cache_op_kind=cache_kind;
-  assign cache_op_addr={32'd0,ex_rs1_value};
+  assign cache_op_addr=ex_rs1_value;
     assign cache_req_fire=cache_op_valid&&cache_op_ready;
     assign cache_done=is_edge_cache&&cache_started_q&&cache_op_complete_valid;
   assign icache_invalidate_valid=

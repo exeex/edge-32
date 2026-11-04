@@ -1,5 +1,6 @@
 // Experimental macro-friendly 4-bank D-cache data array slice.
 module edge_dcache_banked_data_array #(
+  parameter SCALAR_WIDTH = 64,
   parameter LINE_COUNT       = 256,
   parameter LINE_INDEX_WIDTH = (LINE_COUNT <= 2) ? 1 : $clog2(LINE_COUNT),
   parameter ROW_COUNT        = LINE_COUNT * 2,
@@ -14,22 +15,22 @@ module edge_dcache_banked_data_array #(
   input  wire                         lsu0_write,
   input  wire [LINE_INDEX_WIDTH-1:0]  lsu0_line_index,
   input  wire [1:0]                   lsu0_beat_index,
-  input  wire                         lsu0_word_hi,
-  input  wire [63:0]                  lsu0_wdata,
-  input  wire [7:0]                   lsu0_wstrb,
+  input wire [$clog2(128/SCALAR_WIDTH)-1:0] lsu0_word_hi,
+  input  wire [SCALAR_WIDTH-1:0]                  lsu0_wdata,
+  input  wire [SCALAR_WIDTH/8-1:0]                   lsu0_wstrb,
   output reg                          lsu0_rvalid,
-  output reg  [63:0]                  lsu0_rdata,
+  output reg  [SCALAR_WIDTH-1:0]                  lsu0_rdata,
 
   input  wire                         lsu1_valid,
   output wire                         lsu1_ready,
   input  wire                         lsu1_write,
   input  wire [LINE_INDEX_WIDTH-1:0]  lsu1_line_index,
   input  wire [1:0]                   lsu1_beat_index,
-  input  wire                         lsu1_word_hi,
-  input  wire [63:0]                  lsu1_wdata,
-  input  wire [7:0]                   lsu1_wstrb,
+  input wire [$clog2(128/SCALAR_WIDTH)-1:0] lsu1_word_hi,
+  input  wire [SCALAR_WIDTH-1:0]                  lsu1_wdata,
+  input  wire [SCALAR_WIDTH/8-1:0]                   lsu1_wstrb,
   output reg                          lsu1_rvalid,
-  output reg  [63:0]                  lsu1_rdata,
+  output reg  [SCALAR_WIDTH-1:0]                  lsu1_rdata,
 
   input  wire                         mem_valid,
   output wire                         mem_ready,
@@ -41,6 +42,18 @@ module edge_dcache_banked_data_array #(
   output reg                          mem_rvalid,
   output reg  [127:0]                 mem_rdata
 );
+  // Scalar word selection is local to the physical 64-bit bank door.
+  // A 128-bit line beat and the four-bank phase policy are unchanged.
+  initial if (SCALAR_WIDTH != 32 && SCALAR_WIDTH != 64) $error("unsupported scalar width");
+  wire lsu0_physical_hi = lsu0_word_hi[$clog2(128/SCALAR_WIDTH)-1];
+  wire lsu0_subword = (SCALAR_WIDTH == 32) && lsu0_word_hi[0];
+  wire [63:0] lsu0_bank_wdata = {{(64-SCALAR_WIDTH){1'b0}}, lsu0_wdata} << (lsu0_subword*32);
+  wire [7:0] lsu0_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu0_wstrb} << (lsu0_subword*4);
+  wire lsu1_physical_hi = lsu1_word_hi[$clog2(128/SCALAR_WIDTH)-1];
+  wire lsu1_subword = (SCALAR_WIDTH == 32) && lsu1_word_hi[0];
+  wire [63:0] lsu1_bank_wdata = {{(64-SCALAR_WIDTH){1'b0}}, lsu1_wdata} << (lsu1_subword*32);
+  wire [7:0] lsu1_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu1_wstrb} << (lsu1_subword*4);
+
 
   reg [63:0] bank0_q [0:ROW_COUNT-1];
   reg [63:0] bank1_q [0:ROW_COUNT-1];
@@ -62,8 +75,8 @@ module edge_dcache_banked_data_array #(
 
   assign lsu0_half = lsu0_beat_index[0];
   assign lsu1_half = lsu1_beat_index[0];
-  assign lsu0_bank_hi = lsu0_word_hi;
-  assign lsu1_bank_hi = lsu1_word_hi;
+  assign lsu0_bank_hi = lsu0_physical_hi;
+  assign lsu1_bank_hi = lsu1_physical_hi;
   assign lsu_bank_conflict =
     lsu0_valid && lsu1_valid &&
     (lsu0_half == lsu1_half) &&
@@ -86,9 +99,9 @@ module edge_dcache_banked_data_array #(
   always @(posedge clk or negedge reset_b) begin
     if (!reset_b) begin
       lsu0_rvalid <= 1'b0;
-      lsu0_rdata <= 64'b0;
+      lsu0_rdata <= {SCALAR_WIDTH{1'b0}};
       lsu1_rvalid <= 1'b0;
-      lsu1_rdata <= 64'b0;
+      lsu1_rdata <= {SCALAR_WIDTH{1'b0}};
       mem_rvalid <= 1'b0;
       mem_rdata <= 128'b0;
 `ifdef IVERILOG_SIM
@@ -106,18 +119,18 @@ module edge_dcache_banked_data_array #(
 
       if (lsu0_fire && !lsu0_write) begin
         case ({lsu0_half, lsu0_bank_hi})
-          2'b00: lsu0_rdata <= bank0_q[lsu0_row_index];
-          2'b01: lsu0_rdata <= bank1_q[lsu0_row_index];
-          2'b10: lsu0_rdata <= bank2_q[lsu0_row_index];
-          default: lsu0_rdata <= bank3_q[lsu0_row_index];
+          2'b00: lsu0_rdata <= bank0_q[lsu0_row_index][lsu0_subword*32 +: SCALAR_WIDTH];
+          2'b01: lsu0_rdata <= bank1_q[lsu0_row_index][lsu0_subword*32 +: SCALAR_WIDTH];
+          2'b10: lsu0_rdata <= bank2_q[lsu0_row_index][lsu0_subword*32 +: SCALAR_WIDTH];
+          default: lsu0_rdata <= bank3_q[lsu0_row_index][lsu0_subword*32 +: SCALAR_WIDTH];
         endcase
       end
       if (lsu1_fire && !lsu1_write) begin
         case ({lsu1_half, lsu1_bank_hi})
-          2'b00: lsu1_rdata <= bank0_q[lsu1_row_index];
-          2'b01: lsu1_rdata <= bank1_q[lsu1_row_index];
-          2'b10: lsu1_rdata <= bank2_q[lsu1_row_index];
-          default: lsu1_rdata <= bank3_q[lsu1_row_index];
+          2'b00: lsu1_rdata <= bank0_q[lsu1_row_index][lsu1_subword*32 +: SCALAR_WIDTH];
+          2'b01: lsu1_rdata <= bank1_q[lsu1_row_index][lsu1_subword*32 +: SCALAR_WIDTH];
+          2'b10: lsu1_rdata <= bank2_q[lsu1_row_index][lsu1_subword*32 +: SCALAR_WIDTH];
+          default: lsu1_rdata <= bank3_q[lsu1_row_index][lsu1_subword*32 +: SCALAR_WIDTH];
         endcase
       end
       if (mem_fire && !mem_write) begin
@@ -129,21 +142,21 @@ module edge_dcache_banked_data_array #(
       if (lsu0_fire && lsu0_write) begin
         if (lsu0_half) begin
           for (byte_idx = 0; byte_idx < 8; byte_idx = byte_idx + 1) begin
-            if (lsu0_wstrb[byte_idx] && !lsu0_word_hi)
+            if (lsu0_bank_wstrb[byte_idx] && !lsu0_physical_hi)
               bank2_q[lsu0_row_index][byte_idx*8 +: 8] <=
-                lsu0_wdata[byte_idx*8 +: 8];
-            if (lsu0_wstrb[byte_idx] && lsu0_word_hi)
+                lsu0_bank_wdata[byte_idx*8 +: 8];
+            if (lsu0_bank_wstrb[byte_idx] && lsu0_physical_hi)
               bank3_q[lsu0_row_index][byte_idx*8 +: 8] <=
-                lsu0_wdata[byte_idx*8 +: 8];
+                lsu0_bank_wdata[byte_idx*8 +: 8];
           end
         end else begin
           for (byte_idx = 0; byte_idx < 8; byte_idx = byte_idx + 1) begin
-            if (lsu0_wstrb[byte_idx] && !lsu0_word_hi)
+            if (lsu0_bank_wstrb[byte_idx] && !lsu0_physical_hi)
               bank0_q[lsu0_row_index][byte_idx*8 +: 8] <=
-                lsu0_wdata[byte_idx*8 +: 8];
-            if (lsu0_wstrb[byte_idx] && lsu0_word_hi)
+                lsu0_bank_wdata[byte_idx*8 +: 8];
+            if (lsu0_bank_wstrb[byte_idx] && lsu0_physical_hi)
               bank1_q[lsu0_row_index][byte_idx*8 +: 8] <=
-                lsu0_wdata[byte_idx*8 +: 8];
+                lsu0_bank_wdata[byte_idx*8 +: 8];
           end
         end
       end
@@ -151,21 +164,21 @@ module edge_dcache_banked_data_array #(
       if (lsu1_fire && lsu1_write) begin
         if (lsu1_half) begin
           for (byte_idx = 0; byte_idx < 8; byte_idx = byte_idx + 1) begin
-            if (lsu1_wstrb[byte_idx] && !lsu1_word_hi)
+            if (lsu1_bank_wstrb[byte_idx] && !lsu1_physical_hi)
               bank2_q[lsu1_row_index][byte_idx*8 +: 8] <=
-                lsu1_wdata[byte_idx*8 +: 8];
-            if (lsu1_wstrb[byte_idx] && lsu1_word_hi)
+                lsu1_bank_wdata[byte_idx*8 +: 8];
+            if (lsu1_bank_wstrb[byte_idx] && lsu1_physical_hi)
               bank3_q[lsu1_row_index][byte_idx*8 +: 8] <=
-                lsu1_wdata[byte_idx*8 +: 8];
+                lsu1_bank_wdata[byte_idx*8 +: 8];
           end
         end else begin
           for (byte_idx = 0; byte_idx < 8; byte_idx = byte_idx + 1) begin
-            if (lsu1_wstrb[byte_idx] && !lsu1_word_hi)
+            if (lsu1_bank_wstrb[byte_idx] && !lsu1_physical_hi)
               bank0_q[lsu1_row_index][byte_idx*8 +: 8] <=
-                lsu1_wdata[byte_idx*8 +: 8];
-            if (lsu1_wstrb[byte_idx] && lsu1_word_hi)
+                lsu1_bank_wdata[byte_idx*8 +: 8];
+            if (lsu1_bank_wstrb[byte_idx] && lsu1_physical_hi)
               bank1_q[lsu1_row_index][byte_idx*8 +: 8] <=
-                lsu1_wdata[byte_idx*8 +: 8];
+                lsu1_bank_wdata[byte_idx*8 +: 8];
           end
         end
       end

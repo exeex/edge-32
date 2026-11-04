@@ -19,13 +19,13 @@ module edge_32_lsu #(
   input  wire        mem_req_ready,
   output wire        mem_req_write,
   output wire [31:0] mem_req_addr,
-  output wire [63:0] mem_req_wdata,
-  output wire [7:0]  mem_req_wstrb,
+  output wire [31:0] mem_req_wdata,
+  output wire [3:0]  mem_req_wstrb,
   output wire [1:0]  mem_req_size,
   output wire        mem_req_signed,
   input  wire        mem_resp_valid,
   input  wire        mem_resp_error,
-  input  wire [63:0] mem_resp_rdata,
+  input  wire [31:0] mem_resp_rdata,
   output reg         op_done,
   output reg         op_error,
   output reg  [31:0] op_load_value,
@@ -47,11 +47,11 @@ module edge_32_lsu #(
     (incoming_size == 2'd2 && |incoming_addr[1:0]);
   wire [1:0] size = fp_q && (funct3_q[2:1] == 2'b11) ?
                     2'b00 : funct3_q[1:0];
-  wire [2:0] byte_offset = addr_q[2:0];
-  wire [63:0] shifted_store = {32'd0, store_data_q} << (byte_offset * 8);
-  wire [7:0] base_strobe = size == 2'd0 ? 8'h01 :
-                           size == 2'd1 ? 8'h03 : 8'h0f;
-  wire [63:0] shifted_load = mem_resp_rdata >> (byte_offset * 8);
+  wire [1:0] byte_offset = addr_q[1:0];
+  wire [31:0] shifted_store = store_data_q << (byte_offset * 8);
+  wire [3:0] base_strobe = size == 2'd0 ? 4'h1 :
+                           size == 2'd1 ? 4'h3 : 4'hf;
+  wire [31:0] shifted_load = mem_resp_rdata >> (byte_offset * 8);
   reg [31:0] formatted_load;
 
   assign op_ready = state_q == IDLE;

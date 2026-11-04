@@ -48,7 +48,7 @@
     .mem_req_signed(dmem_req_signed),.mem_resp_valid(dmem_resp_valid),
     .mem_resp_error(dmem_resp_error),.mem_resp_rdata(dmem_resp_rdata),
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
-  assign dmem_req_addr={32'd0,lsu_mem_addr};
+  assign dmem_req_addr=lsu_mem_addr;
 
   generate if(ENABLE_FPU) begin: g_fpu
     edge_32_fpu fpu(

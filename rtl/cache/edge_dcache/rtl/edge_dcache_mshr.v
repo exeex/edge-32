@@ -89,7 +89,7 @@ module edge_dcache_mshr #(
   wire refill_resp_fire = refill_resp_valid && refill_resp_ready;
   wire requested_beat = beat_q ==
     addr_q[4 +: BEAT_INDEX_WIDTH];
-  wire requested_word_hi = addr_q[3];
+  wire [$clog2(128/VALUE_WIDTH)-1:0] requested_word = addr_q[3:$clog2(VALUE_WIDTH/8)];
 
   assign miss_ready = !valid_q;
   assign miss_allocate = miss_fire;
@@ -172,8 +172,7 @@ module edge_dcache_mshr #(
         if (refill_resp_error)
           refill_error_q <= 1'b1;
         if (requested_beat)
-          selected_word_q <= requested_word_hi ? refill_resp_data[127:64] :
-                                                   refill_resp_data[63:0];
+          selected_word_q <= refill_resp_data[requested_word*VALUE_WIDTH +: VALUE_WIDTH];
         if (refill_resp_last) begin
           refill_active_q <= 1'b0;
           complete_q <= 1'b1;
