@@ -516,16 +516,12 @@ module edge_dcache #(
   assign lsu_load_resp_epoch = pending_resp_valid ? mshr_complete_epoch :
                                                     hit_queue_complete_epoch;
   assign lsu_load_resp_error = pending_resp_valid && mshr_complete_error;
-  assign lsu_load_resp_value = pending_resp_valid ? format_load_value(
-    mshr_complete_word,
-    mshr_complete_addr[BYTE_OFFSET_WIDTH-1:0],
-    mshr_complete_size,
-    mshr_complete_signed
-  ) : format_load_value(
-    hit_queue_complete_word,
-    hit_queue_complete_addr[BYTE_OFFSET_WIDTH-1:0],
-    hit_queue_complete_size,
-    hit_queue_complete_signed
+  assign lsu_load_resp_value = format_load_value(
+    pending_resp_valid ? mshr_complete_word : hit_queue_complete_word,
+    pending_resp_valid ? mshr_complete_addr[BYTE_OFFSET_WIDTH-1:0] :
+                         hit_queue_complete_addr[BYTE_OFFSET_WIDTH-1:0],
+    pending_resp_valid ? mshr_complete_size : hit_queue_complete_size,
+    pending_resp_valid ? mshr_complete_signed : hit_queue_complete_signed
   );
   assign load_line_index =
     lookup_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH];
