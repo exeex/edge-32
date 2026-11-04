@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 // Converts the lite core's single 32-bit fetch into the maintained Edge
-// I-cache request/128-bit response contract. The core owns at most one request.
+// I-cache scalar request/32-bit response contract. One request is outstanding.
 module edge_32_icache_adapter #(
   parameter PC_WIDTH = 32
 ) (
@@ -20,11 +20,10 @@ module edge_32_icache_adapter #(
   output wire [PC_WIDTH-1:0] cache_req_addr,
   input  wire                cache_resp_valid,
   output wire                cache_resp_ready,
-  input  wire [127:0]        cache_resp_bits,
+  input  wire [31:0]         cache_resp_bits,
   input  wire                cache_resp_error
 );
   reg pending_q;
-  reg [1:0] word_q;
   wire request_fire = core_req_valid && core_req_ready;
   wire response_fire = cache_resp_valid && cache_resp_ready;
 
@@ -34,20 +33,15 @@ module edge_32_icache_adapter #(
   assign cache_resp_ready = pending_q;
   assign core_resp_valid = cache_resp_valid && pending_q;
   assign core_resp_error = cache_resp_error && pending_q;
-  assign core_resp_data = word_q == 2'd0 ? cache_resp_bits[31:0] :
-                          word_q == 2'd1 ? cache_resp_bits[63:32] :
-                          word_q == 2'd2 ? cache_resp_bits[95:64] :
-                                          cache_resp_bits[127:96];
+  assign core_resp_data = cache_resp_bits;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       pending_q <= 1'b0;
-      word_q <= 2'd0;
     end else begin
       if (response_fire) pending_q <= 1'b0;
       if (request_fire) begin
         pending_q <= 1'b1;
-        word_q <= core_req_addr[3:2];
       end
     end
   end

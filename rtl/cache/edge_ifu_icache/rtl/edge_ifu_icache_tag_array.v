@@ -13,7 +13,9 @@ module edge_ifu_icache_tag_array #(
   input  wire [$clog2(LINES)-1:0] clear_index,
   input  wire [$clog2(LINES)-1:0] read_index,
   output wire [TAG_WIDTH-1:0]     read_tag,
-  output wire                     read_valid_bit
+  output wire                     read_valid_bit,
+  input wire [TAG_WIDTH-1:0] read_compare_tag,
+  output wire read_match
 );
 
   localparam METADATA_WIDTH = TAG_WIDTH + 1;
@@ -43,4 +45,5 @@ module edge_ifu_icache_tag_array #(
   end
 `endif
 
+  assign read_match = read_valid_bit && (read_tag == read_compare_tag);
 endmodule

@@ -23,6 +23,7 @@ ${EDGE32_ROOT}/rtl/edge_32_frontend.v
 ${EDGE32_ROOT}/rtl/edge_32_lsu.v
 ${EDGE32_ROOT}/rtl/edge_32_fp_mem_format.v
 ${EDGE32_ROOT}/rtl/edge_32_icache_adapter.v
+${EDGE32_ROOT}/rtl/edge_32_icache.v
 ${EDGE32_ROOT}/rtl/edge_32_dcache_adapter.v
 ${EDGE32_ROOT}/rtl/edge_32_dcache.v
 ${EDGE32_ROOT}/rtl/edge_32_dtcm_router.v

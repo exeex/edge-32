@@ -1,6 +1,8 @@
-// First Edge IFU I-cache slice.
+// Single-request I-cache: 128-bit line refill, scalar instruction response.
 module edge_ifu_icache #(
-  parameter PC_WIDTH = 40,
+  parameter PC_WIDTH = 32,
+  // Legacy line-consuming frontends explicitly select 128. RV32 uses 32.
+  parameter FETCH_WIDTH = 32,
   parameter ICACHE_BYTES = 16384,
   parameter LINE_BYTES = 16
 ) (
@@ -16,7 +18,7 @@ module edge_ifu_icache #(
 
   output wire                    fetch_resp_valid,
   input  wire                    fetch_resp_ready,
-  output wire [127:0]            fetch_resp_bits,
+  output wire [FETCH_WIDTH-1:0]   fetch_resp_bits,
   output wire                    fetch_resp_error,
 
   output wire                    imem_req_valid,
@@ -41,11 +43,9 @@ module edge_ifu_icache #(
   localparam [31:0] ICACHE_BYTES_U32 = ICACHE_BYTES;
 
   reg resp_valid_q;
-  reg [127:0] resp_bits_q;
+  reg [FETCH_WIDTH-1:0] resp_bits_q;
+  reg [1:0] lookup_word_q;
   reg resp_error_q;
-  reg miss_resp_buf_valid_q;
-  reg [127:0] miss_resp_buf_bits_q;
-  reg miss_resp_buf_error_q;
 
   reg miss_pending_q;
   reg [LINE_INDEX_WIDTH-1:0] miss_index_q;
@@ -60,9 +60,7 @@ module edge_ifu_icache #(
   wire [PC_WIDTH-1:0] aligned_req_addr;
   wire [LINE_INDEX_WIDTH-1:0] req_index;
   wire [TAG_WIDTH-1:0] req_tag;
-  wire [127:0] req_data;
-  wire [TAG_WIDTH-1:0] req_array_tag;
-  wire req_array_valid;
+  wire [FETCH_WIDTH-1:0] req_data;
   wire lookup_hit;
   wire lookup_complete;
   wire req_fire;
@@ -70,9 +68,6 @@ module edge_ifu_icache #(
   wire miss_resp_fire;
   wire resp_can_update;
   wire resp_primary_ready;
-  wire miss_resp_to_primary;
-  wire miss_resp_to_buffer;
-  wire miss_buf_promote;
   wire invalidate_fire;
   wire invalidate_last;
   wire tag_clear_valid;
@@ -83,11 +78,8 @@ module edge_ifu_icache #(
     fetch_req_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH];
   assign req_tag =
     fetch_req_addr[LINE_OFFSET_WIDTH + LINE_INDEX_WIDTH +: TAG_WIDTH];
-  assign lookup_hit =
-    req_array_valid &&
-    (req_array_tag[TAG_WIDTH-1:0] == lookup_tag_q[TAG_WIDTH-1:0]);
   assign resp_primary_ready = !resp_valid_q || fetch_resp_ready;
-  assign resp_can_update = resp_primary_ready && !miss_resp_buf_valid_q;
+  assign resp_can_update = resp_primary_ready;
   assign fetch_req_ready =
     !invalidate_active_q && !lookup_valid_q && !miss_pending_q &&
     resp_can_update;
@@ -98,18 +90,24 @@ module edge_ifu_icache #(
 
   assign imem_req_valid = lookup_valid_q && !lookup_hit;
   assign imem_req_addr = lookup_addr_q;
-  assign imem_resp_ready = miss_pending_q && !miss_resp_buf_valid_q;
+  assign imem_resp_ready = miss_pending_q && resp_primary_ready;
   assign miss_resp_fire = imem_resp_valid && imem_resp_ready;
-  assign miss_resp_to_primary = miss_resp_fire && resp_primary_ready;
-  assign miss_resp_to_buffer = miss_resp_fire && !resp_primary_ready;
-  assign miss_buf_promote =
-    miss_resp_buf_valid_q && resp_primary_ready && !miss_resp_to_primary;
   assign invalidate_ready =
     !invalidate_active_q && !lookup_valid_q && !miss_pending_q &&
     !resp_valid_q;
   assign invalidate_fire = invalidate_valid && invalidate_ready;
   assign invalidate_last = invalidate_index_q == {LINE_INDEX_WIDTH{1'b1}};
   assign tag_clear_valid = invalidate_active_q;
+
+  wire [FETCH_WIDTH-1:0] selected_hit_word;
+  wire [FETCH_WIDTH-1:0] selected_refill_word;
+  generate if (FETCH_WIDTH == 32) begin : g_scalar_fetch
+    assign selected_hit_word = req_data;
+    assign selected_refill_word = imem_resp_bits[lookup_word_q*32 +: 32];
+  end else begin : g_legacy_line_fetch
+    assign selected_hit_word = req_data;
+    assign selected_refill_word = imem_resp_bits;
+  end endgenerate
 
   assign fetch_resp_valid = resp_valid_q;
   assign fetch_resp_bits = resp_bits_q;
@@ -120,7 +118,7 @@ module edge_ifu_icache #(
   assign debug_invalidate_busy = invalidate_active_q;
 
   edge_ifu_icache_data_array #(
-    .LINE_BITS(128),
+    .LINE_BITS(128), .READ_BITS(FETCH_WIDTH),
     .LINES(LINES)
   ) data_array (
     .clk(forever_cpuclk),
@@ -128,6 +126,7 @@ module edge_ifu_icache #(
     .write_index(miss_index_q),
     .write_data(imem_resp_bits),
     .read_index(req_fire ? req_index : lookup_index_q),
+    .read_word(req_fire ? fetch_req_addr[3:2] : lookup_word_q),
     .read_data(req_data)
   );
 
@@ -144,18 +143,16 @@ module edge_ifu_icache #(
     .clear_valid(tag_clear_valid),
     .clear_index(invalidate_index_q),
     .read_index(req_fire ? req_index : lookup_index_q),
-    .read_tag(req_array_tag),
-    .read_valid_bit(req_array_valid)
+    .read_tag(), .read_valid_bit(),
+    .read_compare_tag(lookup_tag_q), .read_match(lookup_hit)
   );
 
   always @(posedge forever_cpuclk or negedge cpurst_b) begin
     if (!cpurst_b) begin
       resp_valid_q <= 1'b0;
-      resp_bits_q <= 128'd0;
+      resp_bits_q <= {FETCH_WIDTH{1'b0}};
+      lookup_word_q <= 2'b0;
       resp_error_q <= 1'b0;
-      miss_resp_buf_valid_q <= 1'b0;
-      miss_resp_buf_bits_q <= 128'd0;
-      miss_resp_buf_error_q <= 1'b0;
       miss_pending_q <= 1'b0;
       miss_index_q <= {LINE_INDEX_WIDTH{1'b0}};
       miss_tag_q <= {TAG_WIDTH{1'b0}};
@@ -183,32 +180,20 @@ module edge_ifu_icache #(
         resp_valid_q <= 1'b0;
       end
 
-      if (miss_buf_promote) begin
-        resp_valid_q <= 1'b1;
-        resp_bits_q <= miss_resp_buf_bits_q;
-        resp_error_q <= miss_resp_buf_error_q;
-        miss_resp_buf_valid_q <= 1'b0;
-      end
-
       if (lookup_complete && lookup_hit) begin
         resp_valid_q <= 1'b1;
-        resp_bits_q <= req_data;
+        resp_bits_q <= selected_hit_word;
         resp_error_q <= 1'b0;
-      end else if (miss_resp_to_primary) begin
+      end else if (miss_resp_fire) begin
         resp_valid_q <= 1'b1;
-        resp_bits_q <= imem_resp_bits;
+        resp_bits_q <= selected_refill_word;
         resp_error_q <= imem_resp_error;
-      end
-
-      if (miss_resp_to_buffer) begin
-        miss_resp_buf_valid_q <= 1'b1;
-        miss_resp_buf_bits_q <= imem_resp_bits;
-        miss_resp_buf_error_q <= imem_resp_error;
       end
 
       if (req_fire) begin
         lookup_valid_q <= 1'b1;
         lookup_addr_q <= aligned_req_addr;
+        lookup_word_q <= fetch_req_addr[3:2];
         lookup_index_q <= req_index;
         lookup_tag_q <= req_tag;
       end else if (lookup_complete) begin
@@ -223,6 +208,11 @@ module edge_ifu_icache #(
         miss_pending_q <= 1'b0;
       end
     end
+  end
+
+initial begin
+    if (FETCH_WIDTH != 32 && FETCH_WIDTH != 128)
+      $error("I-cache FETCH_WIDTH must be 32 or legacy 128");
   end
 
 `ifdef IVERILOG_SIM

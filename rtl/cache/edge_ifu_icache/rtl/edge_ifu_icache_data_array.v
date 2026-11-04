@@ -1,6 +1,7 @@
 // First Edge I-cache data array slice with one-cycle synchronous reads.
 module edge_ifu_icache_data_array #(
   parameter LINE_BITS = 128,
+  parameter READ_BITS = LINE_BITS,
   parameter LINES = 1024
 ) (
   input  wire                     clk,
@@ -8,13 +9,14 @@ module edge_ifu_icache_data_array #(
   input  wire [$clog2(LINES)-1:0] write_index,
   input  wire [LINE_BITS-1:0]     write_data,
   input  wire [$clog2(LINES)-1:0] read_index,
-  output reg  [LINE_BITS-1:0]     read_data
+  input wire [1:0] read_word,
+  output reg  [READ_BITS-1:0]     read_data
 );
 
   reg [LINE_BITS-1:0] mem_q [0:LINES-1];
 
   always @(posedge clk) begin
-    read_data <= mem_q[read_index];
+    read_data <= READ_BITS == 32 ? mem_q[read_index][read_word*32 +: 32] : mem_q[read_index];
     if (write_valid) begin
       mem_q[write_index] <= write_data[LINE_BITS-1:0];
     end
@@ -23,7 +25,7 @@ module edge_ifu_icache_data_array #(
 `ifdef IVERILOG_SIM
   integer init_i;
   initial begin
-    read_data = {LINE_BITS{1'b0}};
+    read_data = {READ_BITS{1'b0}};
     for (init_i = 0; init_i < LINES; init_i = init_i + 1) begin
       mem_q[init_i] = {LINE_BITS{1'b0}};
     end
