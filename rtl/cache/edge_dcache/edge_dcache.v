@@ -3,6 +3,8 @@ module edge_dcache #(
   parameter SEQ_ID_WIDTH = 8,
   parameter EPOCH_WIDTH  = 4,
   parameter VALUE_WIDTH  = 64,
+  // Public scalar wrapper has one outstanding operation; generic lanes retain queues.
+  parameter SERIAL_SCALAR = 0,
   parameter ICACHE_BYTES = 16384,
   parameter DCACHE_BYTES = 16384,
   parameter LINE_BYTES   = 64,
@@ -108,6 +110,9 @@ module edge_dcache #(
   output wire                       debug_cache_op_is_va
 );
 
+  localparam HIT_DEPTH = SERIAL_SCALAR ? 1 : 4;
+  localparam HIT_PTR_WIDTH = SERIAL_SCALAR ? 1 : 2;
+  localparam HIT_COUNT_WIDTH = SERIAL_SCALAR ? 1 : 3;
   localparam VALUE_BYTES = VALUE_WIDTH / 8;
   localparam WORDS = DCACHE_BYTES / VALUE_BYTES;
   localparam LINES = DCACHE_BYTES / LINE_BYTES;
@@ -138,9 +143,6 @@ module edge_dcache #(
   localparam LOOKUP_SEQ1_LSB = LOOKUP_EPOCH1_LSB + EPOCH_WIDTH;
   localparam LOOKUP_LANE1_VALID_BIT = 2*LOOKUP_LANE_WIDTH;
 
-  reg clean_writeback_req_q;
-  reg [VALUE_WIDTH-1:0] clean_writeback_addr_q;
-  reg [LINE_INDEX_WIDTH-1:0] clean_writeback_line_index_q;
   reg [TAG_WIDTH-1:0] clean_writeback_tag_q;
   reg clean_immediate_complete_valid_q;
   reg [SEQ_ID_WIDTH-1:0] clean_immediate_complete_seq_id_q;
@@ -159,9 +161,9 @@ module edge_dcache #(
   reg [LINE_INDEX_WIDTH-1:0] clean_wb_line_index_q;
   reg phase_q;
   reg hit_read_valid_q;
-  reg [1:0] hit_read_slot_q;
+  reg [HIT_PTR_WIDTH-1:0] hit_read_slot_q;
   reg hit_read1_valid_q;
-  reg [1:0] hit_read1_slot_q;
+  reg [HIT_PTR_WIDTH-1:0] hit_read1_slot_q;
   reg clean_wb_data_valid_q;
   reg [127:0] clean_wb_data_q;
   reg metadata_init_active_q;
@@ -303,10 +305,10 @@ module edge_dcache #(
   wire hit_under_miss_fire;
   wire hit_queue_alloc_ready;
   wire hit_queue_buffered_alloc_ready;
-  wire [1:0] hit_queue_alloc_slot;
+  wire [HIT_PTR_WIDTH-1:0] hit_queue_alloc_slot;
   wire hit_queue_alloc1_ready;
   wire hit_queue_buffered_alloc1_ready;
-  wire [1:0] hit_queue_alloc1_slot;
+  wire [HIT_PTR_WIDTH-1:0] hit_queue_alloc1_slot;
   wire hit_queue_complete_valid;
   wire [SEQ_ID_WIDTH-1:0] hit_queue_complete_seq_id;
   wire [EPOCH_WIDTH-1:0] hit_queue_complete_epoch;
@@ -314,7 +316,7 @@ module edge_dcache #(
   wire [1:0] hit_queue_complete_size;
   wire hit_queue_complete_signed;
   wire [VALUE_WIDTH-1:0] hit_queue_complete_word;
-  wire [2:0] hit_queue_count;
+  wire [HIT_COUNT_WIDTH-1:0] hit_queue_count;
   wire store_backend_blocked;
   wire load1_same_line;
   wire store1_same_line;
@@ -491,7 +493,7 @@ module edge_dcache #(
   assign store1_fire = lsu_store_req1_valid && lsu_store_req1_ready;
   assign cache_op_ready =
     !metadata_init_active_q && !store_fire && !clean_wb_busy && !mshr_active &&
-    (hit_queue_count == 3'd0) && lookup_empty &&
+    (hit_queue_count == 0) && lookup_empty &&
     (!METADATA_SYNC_READ || (!lsu_store_req_valid &&
       (!cache_op_is_va || cache_op_class_valid_q)));
   assign cache_op_fire = cache_op_valid && cache_op_ready;
@@ -587,7 +589,7 @@ module edge_dcache #(
      mshr_complete) ? 1'b0 : 1'b1;
   assign debug_icache_bytes = ICACHE_BYTES;
   assign debug_dcache_bytes = DCACHE_BYTES;
-  assign debug_load_pending = mshr_active || (hit_queue_count != 3'd0);
+  assign debug_load_pending = mshr_active || (hit_queue_count != 0);
   assign debug_load_miss_pending = mshr_active;
   assign debug_store_fire = store_fire;
   assign store_predict_phase = phase_q;
@@ -738,6 +740,7 @@ module edge_dcache #(
         !load_backend_blocked && data_mem_valid && lookup_addr[4] != phase_q;
     end else begin : gen_registered_lookup
       edge_dcache_registered_lookup_buffer #(
+        .ENTRIES(SERIAL_SCALAR ? 1 : 2),
         .SEQ_ID_WIDTH(SEQ_ID_WIDTH), .EPOCH_WIDTH(EPOCH_WIDTH),
         .VALUE_WIDTH(VALUE_WIDTH),
         .LINE_OFFSET_WIDTH(LINE_OFFSET_WIDTH),
@@ -922,9 +925,9 @@ module edge_dcache #(
   );
 
   edge_dcache_hit_queue #(
-    .DEPTH(4),
-    .PTR_WIDTH(2),
-    .COUNT_WIDTH(3),
+    .DEPTH(HIT_DEPTH),
+    .PTR_WIDTH(HIT_PTR_WIDTH),
+    .COUNT_WIDTH(HIT_COUNT_WIDTH),
     .SEQ_ID_WIDTH(SEQ_ID_WIDTH),
     .EPOCH_WIDTH(EPOCH_WIDTH),
     .VALUE_WIDTH(VALUE_WIDTH),
@@ -1125,9 +1128,6 @@ module edge_dcache #(
 
   always @(posedge forever_cpuclk or negedge cpurst_b) begin
     if (!cpurst_b) begin
-      clean_writeback_req_q <= 1'b0;
-      clean_writeback_addr_q <= {VALUE_WIDTH{1'b0}};
-      clean_writeback_line_index_q <= {LINE_INDEX_WIDTH{1'b0}};
       clean_writeback_tag_q <= {TAG_WIDTH{1'b0}};
       clean_immediate_complete_valid_q <= 1'b0;
       clean_immediate_complete_seq_id_q <= {SEQ_ID_WIDTH{1'b0}};
@@ -1146,9 +1146,9 @@ module edge_dcache #(
       clean_wb_line_index_q <= {LINE_INDEX_WIDTH{1'b0}};
       phase_q <= 1'b0;
       hit_read_valid_q <= 1'b0;
-      hit_read_slot_q <= 2'b00;
+      hit_read_slot_q <= {HIT_PTR_WIDTH{1'b0}};
       hit_read1_valid_q <= 1'b0;
-      hit_read1_slot_q <= 2'b00;
+      hit_read1_slot_q <= {HIT_PTR_WIDTH{1'b0}};
       clean_wb_data_valid_q <= 1'b0;
       clean_wb_data_q <= 128'b0;
       metadata_init_active_q <= 1'b1;
@@ -1176,22 +1176,16 @@ module edge_dcache #(
         clean_immediate_complete_epoch_q <= cache_op_epoch;
       end
 
-      clean_writeback_req_q <= cache_op_clean_dirty_hit ||
-                               load_dirty_conflict_fire ||
-                               store_dirty_conflict_start;
       if (cache_op_clean_dirty_hit) begin
-        clean_writeback_addr_q <= cache_op_addr;
-        clean_writeback_line_index_q <= cache_op_line_index;
+
         clean_writeback_tag_q <= cache_op_tag;
         clean_wb_seq_id_q <= cache_op_seq_id;
         clean_wb_epoch_q <= cache_op_epoch;
       end else if (load_dirty_conflict_fire) begin
-        clean_writeback_addr_q <= dirty_victim_base_addr;
-        clean_writeback_line_index_q <= load_line_index;
+
         clean_writeback_tag_q <= dirty_victim_tag;
       end else if (store_dirty_conflict_start) begin
-        clean_writeback_addr_q <= dirty_victim_base_addr;
-        clean_writeback_line_index_q <= store_line_index;
+
         clean_writeback_tag_q <= store_victim_tag;
       end
 
@@ -1267,10 +1261,7 @@ module edge_dcache #(
 
   wire unused_store = |{lsu_store_req_seq_id, lsu_store_req_epoch,
                         lsu_store_req_size};
-  wire unused_metadata = |{load_tag, clean_writeback_req_q,
-                           clean_writeback_addr_q,
-                           clean_writeback_line_index_q,
-                           clean_writeback_tag_q};
+  wire unused_metadata = |{load_tag};
   wire unused_cache_op = |{cache_op_seq_id, cache_op_epoch, refill_resp_last};
 
 endmodule

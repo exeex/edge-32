@@ -122,14 +122,8 @@ module edge_dcache_hit_queue #(
       tail_q <= {PTR_WIDTH{1'b0}};
       count_q <= {COUNT_WIDTH{1'b0}};
       for (i = 0; i < DEPTH; i = i + 1) begin
-        seq_q[i] <= {SEQ_ID_WIDTH{1'b0}};
-        epoch_q[i] <= {EPOCH_WIDTH{1'b0}};
-        addr_q[i] <= {VALUE_WIDTH{1'b0}};
-        size_q[i] <= 2'b00;
-        signed_q[i] <= 1'b0;
         stale_q[i] <= 1'b0;
         data_valid_q[i] <= 1'b0;
-        word_q[i] <= {VALUE_WIDTH{1'b0}};
         latency_q[i] <= {LATENCY_WIDTH{1'b0}};
       end
     end else begin
@@ -144,22 +138,15 @@ module edge_dcache_hit_queue #(
 
       if (capture0_valid) begin
         data_valid_q[capture0_slot] <= 1'b1;
-        word_q[capture0_slot] <= capture0_word;
       end
       if (capture1_valid) begin
         data_valid_q[capture1_slot] <= 1'b1;
-        word_q[capture1_slot] <= capture1_word;
       end
 
       if (pop_fire)
         head_q <= ptr_inc(head_q);
 
       if (alloc0_fire) begin
-        seq_q[alloc0_slot] <= alloc0_seq_id;
-        epoch_q[alloc0_slot] <= alloc0_epoch;
-        addr_q[alloc0_slot] <= alloc0_addr;
-        size_q[alloc0_slot] <= alloc0_size;
-        signed_q[alloc0_slot] <= alloc0_signed;
         stale_q[alloc0_slot] <= redirect_valid &&
           (alloc0_epoch == redirect_epoch) &&
           seq_is_younger(alloc0_seq_id, redirect_seq_id);
@@ -167,11 +154,6 @@ module edge_dcache_hit_queue #(
         latency_q[alloc0_slot] <= LOAD_LATENCY[LATENCY_WIDTH-1:0];
       end
       if (alloc1_fire) begin
-        seq_q[alloc1_slot] <= alloc1_seq_id;
-        epoch_q[alloc1_slot] <= alloc1_epoch;
-        addr_q[alloc1_slot] <= alloc1_addr;
-        size_q[alloc1_slot] <= alloc1_size;
-        signed_q[alloc1_slot] <= alloc1_signed;
         stale_q[alloc1_slot] <= redirect_valid &&
           (alloc1_epoch == redirect_epoch) &&
           seq_is_younger(alloc1_seq_id, redirect_seq_id);
@@ -185,6 +167,25 @@ module edge_dcache_hit_queue #(
                  {{(COUNT_WIDTH-1){1'b0}}, alloc0_fire} +
                  {{(COUNT_WIDTH-1){1'b0}}, alloc1_fire} -
                  {{(COUNT_WIDTH-1){1'b0}}, pop_fire};
+    end
+  end
+  // Occupancy and data_valid own payload visibility; payload needs no reset.
+  always @(posedge forever_cpuclk) begin
+    if (capture0_valid) word_q[capture0_slot] <= capture0_word;
+    if (capture1_valid) word_q[capture1_slot] <= capture1_word;
+    if (alloc0_fire) begin
+      seq_q[alloc0_slot] <= alloc0_seq_id;
+      epoch_q[alloc0_slot] <= alloc0_epoch;
+      addr_q[alloc0_slot] <= alloc0_addr;
+      size_q[alloc0_slot] <= alloc0_size;
+      signed_q[alloc0_slot] <= alloc0_signed;
+    end
+    if (alloc1_fire) begin
+      seq_q[alloc1_slot] <= alloc1_seq_id;
+      epoch_q[alloc1_slot] <= alloc1_epoch;
+      addr_q[alloc1_slot] <= alloc1_addr;
+      size_q[alloc1_slot] <= alloc1_size;
+      signed_q[alloc1_slot] <= alloc1_signed;
     end
   end
 endmodule

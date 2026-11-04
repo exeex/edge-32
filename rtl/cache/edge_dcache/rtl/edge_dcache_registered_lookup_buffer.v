@@ -1,5 +1,6 @@
-// Two-entry registered, classified lookup buffer for edge_dcache experiments.
+// Stationary registered lookup slots: one for serial scalar, two for generic lanes.
 module edge_dcache_registered_lookup_buffer #(
+  parameter ENTRIES = 2,
   parameter SEQ_ID_WIDTH = 8,
   parameter EPOCH_WIDTH = 4,
   parameter VALUE_WIDTH = 64,
@@ -54,6 +55,7 @@ module edge_dcache_registered_lookup_buffer #(
   output wire empty,
   output wire [1:0] count
 );
+  initial if (ENTRIES != 1 && ENTRIES != 2) $error("lookup entries must be 1 or 2");
   localparam LANE_WIDTH = SEQ_ID_WIDTH + EPOCH_WIDTH + VALUE_WIDTH + 3;
   localparam TAG_WIDTH = VALUE_WIDTH - LINE_OFFSET_WIDTH - LINE_INDEX_WIDTH;
   localparam SIGNED0_BIT = 0;
@@ -104,7 +106,7 @@ module edge_dcache_registered_lookup_buffer #(
     bundle1_q[EPOCH1_LSB +: EPOCH_WIDTH] == redirect_epoch &&
     seq_is_younger(bundle1_q[SEQ1_LSB +: SEQ_ID_WIDTH], redirect_seq_id);
 
-  assign push_ready = !(valid0_q && valid1_q);
+  assign push_ready = ENTRIES == 1 ? !valid0_q : !(valid0_q && valid1_q);
   assign candidate0_valid = valid0_q;
   assign candidate0_classified = classified0_q;
   assign candidate0_hit = hit0_q;
@@ -117,7 +119,7 @@ module edge_dcache_registered_lookup_buffer #(
   assign candidate1_dirty_conflict = dirty1_q;
   assign candidate1_dirty_tag = dirty_tag1_q;
   assign candidate1_bundle = bundle1_q;
-  assign oldest_index = oldest_q;
+  assign oldest_index = ENTRIES == 1 ? 1'b0 : oldest_q;
   assign count = {1'b0, valid0_q} + {1'b0, valid1_q};
   assign empty = count == 2'd0;
 
@@ -209,7 +211,7 @@ module edge_dcache_registered_lookup_buffer #(
         valid0_d = 1'b1; classified0_d = push_classified;
         hit0_d = push_hit; dirty0_d = push_dirty_conflict;
         dirty_tag0_d = push_dirty_tag;
-      end else if (!valid1_d) begin
+      end else if (ENTRIES > 1 && !valid1_d) begin
         push_slot = 1'b1;
         valid1_d = 1'b1; classified1_d = push_classified;
         hit1_d = push_hit; dirty1_d = push_dirty_conflict;
@@ -218,36 +220,36 @@ module edge_dcache_registered_lookup_buffer #(
     end
   end
 
+  // Only ownership/classification state needs reset. Payload is observable
+  // only while valid/classified, and is overwritten before acquiring ownership.
   always @(posedge clk or negedge reset_b) begin
     if (!reset_b) begin
       valid0_q <= 1'b0; valid1_q <= 1'b0;
       classified0_q <= 1'b0; classified1_q <= 1'b0;
-      hit0_q <= 1'b0; hit1_q <= 1'b0; dirty0_q <= 1'b0; dirty1_q <= 1'b0;
-      dirty_tag0_q <= {TAG_WIDTH{1'b0}};
-      dirty_tag1_q <= {TAG_WIDTH{1'b0}};
       oldest_q <= 1'b0;
-      bundle0_q <= {BUNDLE_WIDTH{1'b0}};
-      bundle1_q <= {BUNDLE_WIDTH{1'b0}};
     end else begin
-      valid0_q <= valid0_d; valid1_q <= valid1_d;
+      valid0_q <= valid0_d; valid1_q <= (ENTRIES > 1) && valid1_d;
       classified0_q <= classified0_d; classified1_q <= classified1_d;
-      hit0_q <= hit0_d; hit1_q <= hit1_d;
-      dirty0_q <= dirty0_d; dirty1_q <= dirty1_d;
-      dirty_tag0_q <= dirty_tag0_d;
-      dirty_tag1_q <= dirty_tag1_d;
       oldest_q <= oldest_d;
-      if (clear_lane1_0)
-        bundle0_q[LANE1_VALID_BIT] <= 1'b0;
-      if (clear_lane1_1)
-        bundle1_q[LANE1_VALID_BIT] <= 1'b0;
-      if (promote0)
-        bundle0_q <= promote_lane1(bundle0_q);
-      if (promote1)
-        bundle1_q <= promote_lane1(bundle1_q);
-      if (push_fire && !push_slot)
-        bundle0_q <= push_bundle;
-      if (push_fire && push_slot)
-        bundle1_q <= push_bundle;
     end
+  end
+
+  always @(posedge clk) begin
+    hit0_q <= hit0_d; hit1_q <= hit1_d;
+    dirty0_q <= dirty0_d; dirty1_q <= dirty1_d;
+    dirty_tag0_q <= dirty_tag0_d;
+    dirty_tag1_q <= dirty_tag1_d;
+    if (clear_lane1_0)
+      bundle0_q[LANE1_VALID_BIT] <= 1'b0;
+    if (clear_lane1_1)
+      bundle1_q[LANE1_VALID_BIT] <= 1'b0;
+    if (promote0)
+      bundle0_q <= promote_lane1(bundle0_q);
+    if (promote1)
+      bundle1_q <= promote_lane1(bundle1_q);
+    if (push_fire && !push_slot)
+      bundle0_q <= push_bundle;
+    if (push_fire && push_slot)
+      bundle1_q <= push_bundle;
   end
 endmodule

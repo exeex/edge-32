@@ -14,8 +14,11 @@ module edge_32_dcache #(
   parameter LOOKUP_HYBRID=0
 `endif
 )(
+  // Clock/reset: right edge. One clock domain; active-low reset.
   input wire clk,
   input wire reset_n,
+
+  // CPU request: top edge. RV32 address/data, four byte enables.
   input wire core_dmem_req_valid,
   output wire core_dmem_req_ready,
   input wire core_dmem_req_write,
@@ -24,29 +27,41 @@ module edge_32_dcache #(
   input wire [3:0] core_dmem_req_wstrb,
   input wire [1:0] core_dmem_req_size,
   input wire core_dmem_req_signed,
+
+  // CPU response: top edge. Always accepted (no response-ready pin).
   output wire core_dmem_resp_valid,
   output wire core_dmem_resp_error,
   output wire [31:0] core_dmem_resp_rdata,
+
+  // Maintenance: top-left edge. Request handshake plus completion pulse.
   input wire cache_op_valid,
   output wire cache_op_ready,
   input wire cache_op_is_va,
   input wire [1:0] cache_op_kind,
   input wire [31:0] cache_op_addr,
   output wire cache_op_complete_valid,
+
+  // Refill request: bottom edge. One 64-byte line per request.
   output wire dmem_refill_req_valid,
   input wire dmem_refill_req_ready,
   output wire [31:0] dmem_refill_req_addr,
+
+  // Refill response: bottom edge. Four 128-bit transport beats per line.
   input wire dmem_refill_resp_valid,
   output wire dmem_refill_resp_ready,
   input wire [127:0] dmem_refill_resp_data,
   input wire dmem_refill_resp_last,
   input wire dmem_refill_resp_error,
+
+  // Writeback: bottom edge. Four beats; completion follows final handshake.
   output wire dmem_clean_wb_valid,
   input wire dmem_clean_wb_ready,
   output wire [31:0] dmem_clean_wb_addr,
   output wire [127:0] dmem_clean_wb_data,
   output wire dmem_clean_wb_last,
   input wire dmem_clean_wb_complete,
+
+  // Status: right edge. Internal SRAM/queue/phase signals stay private.
   output wire debug_dcache_load_miss_pending
 );
   wire dcache_load_req_valid;
@@ -103,6 +118,7 @@ module edge_32_dcache #(
 
   edge_dcache #(
     .SEQ_ID_WIDTH(8), .EPOCH_WIDTH(4), .VALUE_WIDTH(32),
+    .SERIAL_SCALAR(1),
     .METADATA_SYNC_READ(METADATA_SYNC_READ),
     .LOOKUP_REGISTERED(LOOKUP_REGISTERED), .LOOKUP_HYBRID(LOOKUP_HYBRID),
     .ICACHE_BYTES(ICACHE_BYTES), .DCACHE_BYTES(DCACHE_BYTES)

@@ -125,13 +125,7 @@ module edge_dcache_mshr #(
       refill_active_q <= 1'b0;
       complete_q <= 1'b0;
       refill_error_q <= 1'b0;
-      seq_id_q <= {SEQ_ID_WIDTH{1'b0}};
-      epoch_q <= {EPOCH_WIDTH{1'b0}};
-      addr_q <= {VALUE_WIDTH{1'b0}};
-      size_q <= 2'b00;
-      signed_q <= 1'b0;
       beat_q <= {BEAT_INDEX_WIDTH{1'b0}};
-      selected_word_q <= {VALUE_WIDTH{1'b0}};
     end else begin
       complete_q <= 1'b0;
       if (killed_now)
@@ -149,11 +143,6 @@ module edge_dcache_mshr #(
         refill_req_valid_q <= !miss_wait_writeback;
         refill_active_q <= 1'b0;
         refill_error_q <= 1'b0;
-        seq_id_q <= miss_seq_id;
-        epoch_q <= miss_epoch;
-        addr_q <= miss_addr;
-        size_q <= miss_size;
-        signed_q <= miss_signed;
         beat_q <= {BEAT_INDEX_WIDTH{1'b0}};
       end
 
@@ -171,8 +160,6 @@ module edge_dcache_mshr #(
       if (refill_resp_fire) begin
         if (refill_resp_error)
           refill_error_q <= 1'b1;
-        if (requested_beat)
-          selected_word_q <= refill_resp_data[requested_word*VALUE_WIDTH +: VALUE_WIDTH];
         if (refill_resp_last) begin
           refill_active_q <= 1'b0;
           complete_q <= 1'b1;
@@ -181,5 +168,17 @@ module edge_dcache_mshr #(
         end
       end
     end
+  end
+  // Payload lifetime is owned by valid/refill/complete state above.
+  always @(posedge forever_cpuclk) begin
+    if (miss_fire) begin
+      seq_id_q <= miss_seq_id;
+      epoch_q <= miss_epoch;
+      addr_q <= miss_addr;
+      size_q <= miss_size;
+      signed_q <= miss_signed;
+    end
+    if (refill_resp_fire && requested_beat)
+      selected_word_q <= refill_resp_data[requested_word*VALUE_WIDTH +: VALUE_WIDTH];
   end
 endmodule
