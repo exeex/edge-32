@@ -22,19 +22,69 @@
   wire [7:0] t_strb [0:1];
 
   for (genvar lane=0; lane<2; lane=lane+1) begin: g_lsu_route
-    edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) route(
-      .clk(clk),.reset_n(reset_n),.dtcm_base(dtcm_base),.dtcm_mask(dtcm_mask),
+    wire router_valid, router_ready, router_resp, router_error;
+    wire [71:0] router_payload;
+    wire [63:0] router_base;
+    wire [31:0] router_rdata, router_cache_addr, router_cache_data;
+    wire [3:0] router_cache_strb;
+    wire router_cache_valid, router_cache_write;
+`ifdef EDGE32_INT_DTCM_PIPE
+    localparam DTCM_ONLY = lane == 0;
+`else
+    localparam DTCM_ONLY = 0;
+`endif
+`ifdef EDGE32_INT_DTCM_PIPE
+    if (DTCM_ONLY) begin: g_int_dtcm_pipe
+      reg pending;
+      reg [71:0] payload_q;
+      reg [DTCM_ADDR_WIDTH+2:0] base_q;
+      wire enqueue = lane_valid[lane] && int_dtcm_hit && !pending;
+      assign lane_ready[lane] = int_dtcm_hit ? !pending : c_ready[lane];
+      assign c_valid[lane] = lane_valid[lane] && !int_dtcm_hit;
+      assign {c_addr[lane],c_data[lane],c_strb[lane],c_write[lane]} =
+        {lane_payload[lane][71:4],lane_payload[lane][0]};
+      assign lane_resp[lane] = router_resp || c_resp[lane];
+      assign lane_error[lane] = c_resp[lane] && cache_core_resp_error;
+      assign lane_rdata[lane] = router_resp ? router_rdata : cache_core_resp_rdata;
+      assign router_payload = payload_q;
+      assign router_base = {{(61-DTCM_ADDR_WIDTH){1'b0}},base_q};
+      assign router_valid = pending;
+      always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) pending <= 1'b0;
+        else if (enqueue) pending <= 1'b1;
+        else if (router_valid && router_ready) pending <= 1'b0;
+      end
+      always @(posedge clk) begin
+        if (enqueue) begin
+          payload_q <= lane_payload[lane];
+          base_q <= int_dtcm_base_snapshot[DTCM_ADDR_WIDTH+2:0];
+        end
+      end
+    end else
+`endif
+    begin: g_direct_route
+      assign router_valid = lane_valid[lane];
+      assign lane_ready[lane] = router_ready;
+      assign router_payload = lane_payload[lane];
+      assign router_base = dtcm_base;
+      assign lane_resp[lane] = router_resp;
+      assign lane_error[lane] = router_error;
+      assign lane_rdata[lane] = router_rdata;
+      assign {c_valid[lane],c_addr[lane],c_data[lane],c_strb[lane],c_write[lane]} =
+        {router_cache_valid,router_cache_addr,router_cache_data,router_cache_strb,router_cache_write};
+    end
+    edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH),.DTCM_ONLY(DTCM_ONLY)) route(
+      .clk(clk),.reset_n(reset_n),.dtcm_base(router_base),.dtcm_mask(dtcm_mask),
       .dtcm_enable(ENABLE_DTCM_PORT && dtcm_enable),
-      .core_req_valid(lane_valid[lane]),.core_req_ready(lane_ready[lane]),
-      .core_req_addr(lane_payload[lane][71:40]),.core_req_wdata(lane_payload[lane][39:8]),
-      .core_req_wstrb(lane_payload[lane][7:4]),.core_req_size(lane_payload[lane][3:2]),
-      .core_req_signed(lane_payload[lane][1]),.core_req_write(lane_payload[lane][0]),
-      .core_resp_valid(lane_resp[lane]),.core_resp_error(lane_error[lane]),
-      .core_resp_rdata(lane_rdata[lane]),
-      .cache_req_valid(c_valid[lane]),.cache_req_ready(c_ready[lane]),
-      .cache_req_addr(c_addr[lane]),.cache_req_wdata(c_data[lane]),
-      .cache_req_wstrb(c_strb[lane]),.cache_req_write(c_write[lane]),
-      .cache_resp_valid(c_resp[lane]),.cache_resp_error(cache_core_resp_error),
+      .core_req_valid(router_valid),.core_req_ready(router_ready),
+      .core_req_addr(router_payload[71:40]),.core_req_wdata(router_payload[39:8]),
+      .core_req_wstrb(router_payload[7:4]),.core_req_size(router_payload[3:2]),
+      .core_req_signed(router_payload[1]),.core_req_write(router_payload[0]),
+      .core_resp_valid(router_resp),.core_resp_error(router_error),.core_resp_rdata(router_rdata),
+      .cache_req_valid(router_cache_valid),.cache_req_ready(!DTCM_ONLY && c_ready[lane]),
+      .cache_req_addr(router_cache_addr),.cache_req_wdata(router_cache_data),
+      .cache_req_wstrb(router_cache_strb),.cache_req_write(router_cache_write),
+      .cache_resp_valid(!DTCM_ONLY && c_resp[lane]),.cache_resp_error(cache_core_resp_error),
       .cache_resp_rdata(cache_core_resp_rdata),
       .dtcm_req(t_valid[lane]),.dtcm_ready(t_ready[lane]),.dtcm_we(t_we[lane]),
       .dtcm_addr(t_addr[lane]),.dtcm_wdata(t_data[lane]),.dtcm_wstrb(t_strb[lane]),

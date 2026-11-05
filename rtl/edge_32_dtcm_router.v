@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 module edge_32_dtcm_router #(
-  parameter DTCM_ADDR_WIDTH = 14
+  parameter DTCM_ADDR_WIDTH = 14,
+  parameter DTCM_ONLY = 0
 ) (
   input  wire clk, input wire reset_n,
   input  wire [63:0] dtcm_base,
@@ -31,8 +32,8 @@ module edge_32_dtcm_router #(
   reg dtcm_load_signed_q;
   reg [2:0] dtcm_load_offset_q;
   wire idle = owner_q==OWNER_NONE && !dtcm_store_resp_q;
-  wire hit = dtcm_enable && !(|(dtcm_base[63:32] & dtcm_mask[63:32])) &&
-             ((core_req_addr & dtcm_mask[31:0]) == (dtcm_base[31:0] & dtcm_mask[31:0]));
+  wire hit = DTCM_ONLY || (dtcm_enable && !(|(dtcm_base[63:32] & dtcm_mask[63:32])) &&
+             ((core_req_addr & dtcm_mask[31:0]) == (dtcm_base[31:0] & dtcm_mask[31:0])));
   wire select_dtcm = idle && core_req_valid && hit;
   wire select_cache = idle && core_req_valid && !hit;
   wire dtcm_fire = select_dtcm && dtcm_ready;

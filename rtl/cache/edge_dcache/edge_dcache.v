@@ -166,7 +166,9 @@ module edge_dcache #(
   reg [HIT_PTR_WIDTH-1:0] hit_read1_slot_q;
   reg clean_wb_data_valid_q;
   reg [127:0] clean_wb_data_q;
-  reg metadata_init_active_q;
+  wire metadata_init_active_q;
+  wire metadata_reset_b;
+  reg metadata_sweep_active_q;
   reg [LINE_INDEX_WIDTH-1:0] metadata_init_index_q;
 
   wire load_fire;
@@ -558,29 +560,63 @@ module edge_dcache #(
     (lsu_store_req_valid && !lsu_load_req_valid) ?
       store_line_index :
       load_line_index;
+`ifdef EDGE32_DCACHE_STAGED_TAG_RESET
+  // Quarantine the interface on the raw reset. The SRAM port and sweep
+  // counter may settle later because neither can authorize a transaction.
+  reg [1:0] metadata_reset_pipe_q;
+  reg metadata_online_q;
+  always @(posedge forever_cpuclk)
+    metadata_reset_pipe_q <= {metadata_reset_pipe_q[0], cpurst_b};
+  assign metadata_reset_b = metadata_reset_pipe_q[1];
+  assign metadata_init_active_q = !metadata_online_q;
+  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+    if (!cpurst_b)
+      metadata_online_q <= 1'b0;
+    else if (metadata_reset_b && metadata_sweep_active_q &&
+             metadata_init_index_q == METADATA_LAST_INDEX)
+      metadata_online_q <= 1'b1;
+  end
+`else
+  assign metadata_reset_b = cpurst_b;
+  assign metadata_init_active_q = metadata_sweep_active_q;
+`endif
+
+  always @(posedge forever_cpuclk or negedge metadata_reset_b) begin
+    if (!metadata_reset_b) begin
+      metadata_sweep_active_q <= 1'b1;
+      metadata_init_index_q <= {LINE_INDEX_WIDTH{1'b0}};
+    end else if (metadata_sweep_active_q) begin
+      if (metadata_init_index_q == METADATA_LAST_INDEX)
+        metadata_sweep_active_q <= 1'b0;
+      else
+        metadata_init_index_q <= metadata_init_index_q +
+          {{(LINE_INDEX_WIDTH-1){1'b0}}, 1'b1};
+    end
+  end
+
   assign metadata_write_valid =
-    metadata_init_active_q || store_fire ||
+    metadata_sweep_active_q || store_fire ||
     (cache_op_invalidate_va_fire && cache_op_metadata_hit) ||
     clean_wb_complete_fire ||
     (mshr_complete && !mshr_complete_error);
   assign metadata_write_index =
-    metadata_init_active_q ? metadata_init_index_q :
+    metadata_sweep_active_q ? metadata_init_index_q :
     cache_op_invalidate_va_fire ? cache_op_line_index :
     mshr_complete ? mshr_line_index :
     clean_wb_complete_fire ? clean_wb_line_index_q :
     store_line_index;
   assign metadata_write_tag =
-    metadata_init_active_q ? {TAG_WIDTH{1'b0}} :
+    metadata_sweep_active_q ? {TAG_WIDTH{1'b0}} :
     cache_op_invalidate_va_fire ? cache_op_tag :
     mshr_complete ? mshr_tag :
     clean_wb_complete_fire ? clean_writeback_tag_q :
     store_tag;
   assign metadata_write_valid_bit =
-    metadata_init_active_q ? 1'b0 :
+    metadata_sweep_active_q ? 1'b0 :
     (cache_op_invalidate_va_fire ||
      (clean_wb_complete_fire && clean_wb_invalidate_q)) ? 1'b0 : 1'b1;
   assign metadata_write_dirty_bit =
-    metadata_init_active_q ? 1'b0 :
+    metadata_sweep_active_q ? 1'b0 :
     (cache_op_invalidate_va_fire || clean_wb_complete_fire ||
      mshr_complete) ? 1'b0 : 1'b1;
   assign debug_icache_bytes = ICACHE_BYTES;
@@ -1036,7 +1072,7 @@ module edge_dcache #(
 
   generate if (METADATA_SYNC_READ) begin : g_metadata_sram
     edge_dcache_metadata_array #(.TAG_WIDTH(TAG_WIDTH), .LINES(LINES)) metadata (
-      .clk(forever_cpuclk), .reset_b(cpurst_b),
+      .clk(forever_cpuclk), .reset_b(metadata_reset_b),
       .write_valid(metadata_write_valid), .write_index(metadata_write_index),
       .write_tag(metadata_write_tag), .write_valid_bit(metadata_write_valid_bit),
       .write_dirty_bit(metadata_write_dirty_bit), .read_index(metadata_read_index),
@@ -1147,17 +1183,7 @@ module edge_dcache #(
       hit_read1_slot_q <= {HIT_PTR_WIDTH{1'b0}};
       clean_wb_data_valid_q <= 1'b0;
       clean_wb_data_q <= 128'b0;
-      metadata_init_active_q <= 1'b1;
-      metadata_init_index_q <= {LINE_INDEX_WIDTH{1'b0}};
     end else begin
-      if (metadata_init_active_q) begin
-        if (metadata_init_index_q == METADATA_LAST_INDEX) begin
-          metadata_init_active_q <= 1'b0;
-        end else begin
-          metadata_init_index_q <= metadata_init_index_q +
-            {{(LINE_INDEX_WIDTH-1){1'b0}}, 1'b1};
-        end
-      end
       phase_q <= ~phase_q;
       clean_immediate_complete_valid_q <= cache_op_fire && !cache_op_clean_dirty_hit;
       clean_wb_complete_valid_q <=

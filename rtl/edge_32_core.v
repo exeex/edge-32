@@ -23,6 +23,12 @@ module edge_32_core #(
   input wire fp_dmem_resp_valid, input wire fp_dmem_resp_error,
   input wire [31:0] fp_dmem_resp_rdata,
 `endif
+`ifdef EDGE32_INT_DTCM_PIPE
+  input wire [63:0] int_dtcm_base, int_dtcm_mask,
+  input wire int_dtcm_enable,
+  output wire int_dtcm_hit,
+  output wire [31:0] int_dtcm_base_snapshot,
+`endif
   output wire dmem_req_valid, input wire dmem_req_ready,
   output wire dmem_req_write, output wire [31:0] dmem_req_addr,
   output wire [31:0] dmem_req_wdata, output wire [3:0] dmem_req_wstrb,
@@ -248,6 +254,11 @@ module edge_32_core #(
     .fp_dmem_req_payload(fp_dmem_req_payload),
     .fp_dmem_resp_valid(fp_dmem_resp_valid), .fp_dmem_resp_error(fp_dmem_resp_error),
     .fp_dmem_resp_rdata(fp_dmem_resp_rdata),
+`endif
+`ifdef EDGE32_INT_DTCM_PIPE
+    .int_dtcm_base(int_dtcm_base),.int_dtcm_mask(int_dtcm_mask),
+    .int_dtcm_enable(int_dtcm_enable),.int_dtcm_hit(int_dtcm_hit),
+    .int_dtcm_base_snapshot(int_dtcm_base_snapshot),
 `endif
     .dmem_req_ready(dmem_req_ready),
     .dmem_resp_error(dmem_resp_error),

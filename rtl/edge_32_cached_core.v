@@ -103,6 +103,10 @@ module edge_32_cached_core #(
   wire fp_dmem_resp_valid, fp_dmem_resp_error;
   wire [31:0] fp_dmem_resp_rdata;
 `endif
+`ifdef EDGE32_INT_DTCM_PIPE
+  wire int_dtcm_hit;
+  wire [31:0] int_dtcm_base_snapshot;
+`endif
   wire [1:0] cache_core_req_size;
   wire cache_core_req_signed;
   wire cache_core_req_valid,cache_core_req_ready,cache_core_req_write;
@@ -143,6 +147,11 @@ module edge_32_cached_core #(
     .fp_dmem_req_payload(fp_dmem_req_payload),
     .fp_dmem_resp_valid(fp_dmem_resp_valid), .fp_dmem_resp_error(fp_dmem_resp_error),
     .fp_dmem_resp_rdata(fp_dmem_resp_rdata),
+`endif
+`ifdef EDGE32_INT_DTCM_PIPE
+    .int_dtcm_base(dtcm_base),.int_dtcm_mask(dtcm_mask),
+    .int_dtcm_enable(ENABLE_DTCM_PORT && dtcm_enable),.int_dtcm_hit(int_dtcm_hit),
+    .int_dtcm_base_snapshot(int_dtcm_base_snapshot),
 `endif
     .dmem_req_ready(core_dmem_req_ready),
     .dmem_req_write(core_dmem_req_write),

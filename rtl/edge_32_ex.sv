@@ -19,6 +19,12 @@ module edge_32_ex_stage #(
   input wire fp_dmem_resp_valid, input wire fp_dmem_resp_error,
   input wire [31:0] fp_dmem_resp_rdata,
 `endif
+`ifdef EDGE32_INT_DTCM_PIPE
+  input wire [63:0] int_dtcm_base, int_dtcm_mask,
+  input wire int_dtcm_enable,
+  output wire int_dtcm_hit,
+  output wire [31:0] int_dtcm_base_snapshot,
+`endif
   input wire dmem_req_ready,
   input wire dmem_resp_error,
   input wire [31:0] dmem_resp_rdata,

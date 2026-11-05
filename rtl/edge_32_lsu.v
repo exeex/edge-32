@@ -5,6 +5,12 @@ module edge_32_lsu #(
   parameter STORE_ACK_ON_ACCEPT = 0,
   parameter MEM_RESP_FORMATTED = 0
 ) (
+`ifdef EDGE32_INT_DTCM_PIPE
+  input wire [63:0] int_dtcm_base, int_dtcm_mask,
+  input wire int_dtcm_enable,
+  output wire int_dtcm_hit,
+  output wire [31:0] int_dtcm_base_snapshot,
+`endif
   input  wire        clk,
   input  wire        reset_n,
   input  wire        op_valid,
@@ -39,6 +45,21 @@ module edge_32_lsu #(
   reg [31:0] addr_q;
   reg [31:0] store_data_q;
   wire [31:0] incoming_addr = op_base + op_offset;
+`ifdef EDGE32_INT_DTCM_PIPE
+  reg int_dtcm_hit_q;
+  reg [31:0] int_dtcm_base_q;
+  assign int_dtcm_base_snapshot = int_dtcm_base_q;
+  assign int_dtcm_hit = int_dtcm_hit_q;
+  // Route ownership shares the effective-address capture edge.
+  always @(posedge clk)
+    if (op_valid && op_ready) begin
+      int_dtcm_base_q <= int_dtcm_base[31:0];
+      int_dtcm_hit_q <= int_dtcm_enable &&
+        !(|(int_dtcm_base[63:32] & int_dtcm_mask[63:32])) &&
+        ((incoming_addr & int_dtcm_mask[31:0]) ==
+         (int_dtcm_base[31:0] & int_dtcm_mask[31:0]));
+    end
+`endif
   wire [1:0] incoming_size = op_fp && (op_funct3[2:1] == 2'b11) ?
                              2'b00 : op_funct3[1:0];
   wire incoming_unsupported = !op_fp && (op_funct3[1:0] == 2'b11);

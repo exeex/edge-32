@@ -45,6 +45,11 @@
   assign lsu_done = is_fp_mem ? fp_done : int_done;
   assign lsu_error = is_fp_mem ? fp_error : int_error;
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
+`ifdef EDGE32_INT_DTCM_PIPE
+    .int_dtcm_base(int_dtcm_base),.int_dtcm_mask(int_dtcm_mask),
+    .int_dtcm_enable(int_dtcm_enable),.int_dtcm_hit(int_dtcm_hit),
+    .int_dtcm_base_snapshot(int_dtcm_base_snapshot),
+`endif
     .clk(clk),.reset_n(reset_n),.op_valid(int_start),
     .op_ready(int_ready),.op_store(is_store),
     .op_fp(1'b0),.op_funct3(f3),
@@ -82,6 +87,10 @@
   generate if(ENABLE_FPU) begin: g_fpu
 `ifdef EDGE32_SPLIT_LSU
     edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) fp_lsu(
+`ifdef EDGE32_INT_DTCM_PIPE
+      .int_dtcm_base(64'b0),.int_dtcm_mask(64'b0),
+      .int_dtcm_enable(1'b0),.int_dtcm_hit(),.int_dtcm_base_snapshot(),
+`endif
       .clk(clk),.reset_n(reset_n),.op_valid(fp_start),.op_ready(fp_ready),
       .op_store(is_fp_store),.op_fp(1'b1),.op_funct3(f3),
       .op_base(ex_rs1_value),.op_offset(ex_imm),.op_store_data(fp_store_value[31:0]),
