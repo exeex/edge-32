@@ -44,11 +44,19 @@ preserves architectural same-cycle reads. The FPR file keeps a separate write
 path through registered WB. Frontend stop and request-capacity logic are kept
 near the frontend rather than joined to a wide EX completion path.
 
-The RV32M owner is `edge_32_muldiv_asap7`. Its six-product 3x2 multiplier tree
-reduces wide multiplier wiring; the native radix-4 divider avoids carrying the
-old RV64 arithmetic datapath into Edge32. These structures were selected for
-physical timing and routing pressure. A multiply occupies a six-stage product
-pipeline, which increases scalar latency relative to the former lite leaf.
+The RV32M owner is `edge_32_muldiv_asap7`. ASIC and FPGA use the same
+`edge32_mul_pipe3` datapath: one signed 33x33 `*`, with operand extension
+covering MUL, MULH, MULHSU and MULHU. Results are valid on the third capture
+edge (two clock intervals after acceptance). Only the validity sideband is
+reset; arithmetic registers run freely. The former six-product tree is removed.
+The native radix-4 divider remains unchanged.
+
+The selected ASAP7 synthesis recipe enables Yosys `-booth` and sequential
+retiming; these are synthesis settings, not floorplan settings. FPGA synthesis
+uses native DSP inference with the same RTL and external latency. The ASIC
+pre-CTS evidence and reproducible recipe live in
+`src/test-32/physical/openroad/targets/rv32-mul-star3-booth-prects` in the
+composed workspace; they do not establish routed timing for a full core.
 
 ### Physical evidence and limit
 
@@ -127,7 +135,9 @@ that core was not rerun.
 
 The two-iteration run is a development checkpoint, not an official CoreMark
 submission. Both cycle figures use the timed `rdcycle` interval rather than
-whole-testbench runtime. The six-stage multiplier contributes to scalar cost,
+whole-testbench runtime. These historical measurements used the former six-stage
+multiplier and have not been rerun with the current three-edge implementation.
+That former multiplier contributes to scalar cost,
 but the measured gap cannot be assigned to it alone: the binaries, pipeline,
 and memory behavior differ. The Edge32 run counted 19,032 integer multiplies
 and two divides across the complete two-iteration image. Verilator does not

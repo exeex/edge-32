@@ -1,92 +1,44 @@
 `timescale 1ns/1ps
 
-// Six parallel 10/11/11 by 16/16 products. The top chunks carry the selected
-// signedness directly; no input magnitude or output negate is needed.
-(* keep_hierarchy = "yes" *)
+// Three capture edges. Only validity owns reset; arithmetic is free to retime.
 module edge_32_mul_asap7 (
-  input wire clk, input wire reset_n,
-  input wire op_valid, output wire op_ready,
-  input wire [31:0] src0, input wire [31:0] src1,
-  input wire [2:0] funct3,
-  output wire result_valid, output wire [31:0] result_value,
-  output wire busy
+ input wire clk,reset_n,op_valid, output wire op_ready,
+ input wire [31:0] src0,src1, input wire [2:0] funct3,
+ output wire result_valid, output wire [31:0] result_value, output wire busy
 );
-  wire accept = op_valid && op_ready;
-  wire lhs_signed = (funct3 == 3'b001) || (funct3 == 3'b010);
-  wire rhs_signed = funct3 == 3'b001;
-  wire lane_valid;
-  wire [63:0] product;
-  reg [5:0] valid_pipe_q;
-  reg [5:0] high_pipe_q;
-
-  edge32_mul3x2_tree tree_lane (
-    .clk(clk), .reset_n(reset_n), .in_valid(accept),
-    .src0(src0), .src1(src1),
-    .lhs_signed(lhs_signed), .rhs_signed(rhs_signed),
-    .out_valid(lane_valid), .product(product)
-  );
-  assign op_ready = !busy;
-  assign busy = |valid_pipe_q;
-  assign result_valid = valid_pipe_q[5];
-  assign result_value = high_pipe_q[5] ? product[63:32] : product[31:0];
-  always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) valid_pipe_q <= 6'd0;
-    else valid_pipe_q <= {valid_pipe_q[4:0],accept};
-  end
-  always @(posedge clk)
-    high_pipe_q <= {high_pipe_q[4:0],funct3 != 3'b000};
+ reg [2:0] is_valid_q;
+ reg [2:0] high_q;
+ wire [63:0] product;
+ wire accept=op_valid && op_ready;
+ assign busy=|is_valid_q;
+ assign op_ready=!busy;
+ assign result_valid=is_valid_q[2];
+ assign result_value=high_q[2] ? product[63:32] : product[31:0];
+ edge32_mul_pipe3 datapath (
+  .clk(clk),
+  .a({src0[31] && ((funct3==3'b001)||(funct3==3'b010)),src0}),
+  .b({src1[31] && (funct3==3'b001),src1}), .product(product)
+ );
+ always @(posedge clk or negedge reset_n)
+  if(!reset_n) is_valid_q<=3'b0;
+  else is_valid_q<={is_valid_q[1:0],accept};
+ always @(posedge clk) high_q<={high_q[1:0],funct3!=3'b000};
 endmodule
 
-// X={A,B,C} (10/11/11), Y={H,L} (16/16).
-// Only A and H carry the instruction-selected sign; all lower chunks are
-// nonnegative. Two three-product rows are summed in parallel, then combined.
-// Six edges: inputs, BC products, BC sums plus A products, ABC rows,
-// full sum, output. Late A products avoid delaying their wider results.
+// One portable multiply. ASIC synthesis enables Booth and sequential retiming;
+// FPGA tools can infer DSP pipelines. Without retiming the middle stage contains
+// the full combinational multiply; the RTL alone does not promise a split tree.
 (* keep_hierarchy = "yes" *)
-module edge32_mul3x2_tree (
-  input wire clk, input wire reset_n, input wire in_valid,
-  input wire [31:0] src0, input wire [31:0] src1,
-  input wire lhs_signed, input wire rhs_signed,
-  output wire out_valid, output reg [63:0] product
+module edge32_mul_pipe3 (
+ input wire clk,input wire signed [32:0] a,b,output reg [63:0] product
 );
-  reg signed [10:0] a_q;
-  reg signed [11:0] b_q, c_q;
-  reg signed [16:0] h_q, l_q;
-  reg signed [28:0] bl_q, cl_q, bh_q, ch_q;
-  reg signed [10:0] a_delay_q;
-  reg signed [16:0] h_delay_q, l_delay_q;
-  reg signed [28:0] al_delay_q, ah_delay_q;
-  reg signed [38:0] bc_l_q, bc_h_q;
-  reg signed [48:0] row_l_q, row_h_q;
-  reg [63:0] sum_q;
-  reg [5:0] valid_q;
-  assign out_valid = valid_q[5];
-  always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) valid_q <= 6'd0;
-    else valid_q <= {valid_q[4:0],in_valid};
-  end
-  always @(posedge clk) begin
-    a_q <= {lhs_signed & src0[31],src0[31:22]};
-    b_q <= {1'b0,src0[21:11]};
-    c_q <= {1'b0,src0[10:0]};
-    h_q <= {rhs_signed & src1[31],src1[31:16]};
-    l_q <= {1'b0,src1[15:0]};
-    a_delay_q <= a_q;
-    h_delay_q <= h_q;
-    l_delay_q <= l_q;
-    bl_q <= b_q * l_q;
-    cl_q <= c_q * l_q;
-    bh_q <= b_q * h_q;
-    ch_q <= c_q * h_q;
-    bc_l_q <= {{10{cl_q[28]}},cl_q} + ({{10{bl_q[28]}},bl_q} << 11);
-    bc_h_q <= {{10{ch_q[28]}},ch_q} + ({{10{bh_q[28]}},bh_q} << 11);
-    al_delay_q <= a_delay_q * l_delay_q;
-    ah_delay_q <= a_delay_q * h_delay_q;
-    row_l_q <= {{10{bc_l_q[38]}},bc_l_q} + ({{20{al_delay_q[28]}},al_delay_q} << 22);
-    row_h_q <= {{10{bc_h_q[38]}},bc_h_q} + ({{20{ah_delay_q[28]}},ah_delay_q} << 22);
-    sum_q <= {{15{row_l_q[48]}},row_l_q} + ({{15{row_h_q[48]}},row_h_q} << 16);
-    product <= sum_q;
-  end
+ reg signed [32:0] a_q,b_q;
+ reg [63:0] product_q;
+ always @(posedge clk) begin
+  a_q<=a; b_q<=b;
+  product_q<=a_q*b_q;
+  product<=product_q;
+ end
 endmodule
 
 // Native RV32 radix-4 nonnegative divider wrapper.
