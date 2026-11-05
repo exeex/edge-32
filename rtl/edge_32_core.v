@@ -17,6 +17,12 @@ module edge_32_core #(
   output wire [PC_WIDTH-1:0] imem_req_addr,
   input wire imem_resp_valid, input wire [31:0] imem_resp_data,
   input wire imem_resp_error,
+`ifdef EDGE32_SPLIT_LSU
+  output wire fp_dmem_req_valid, input wire fp_dmem_req_ready,
+  output wire [71:0] fp_dmem_req_payload,
+  input wire fp_dmem_resp_valid, input wire fp_dmem_resp_error,
+  input wire [31:0] fp_dmem_resp_rdata,
+`endif
   output wire dmem_req_valid, input wire dmem_req_ready,
   output wire dmem_req_write, output wire [31:0] dmem_req_addr,
   output wire [31:0] dmem_req_wdata, output wire [3:0] dmem_req_wstrb,
@@ -237,6 +243,12 @@ module edge_32_core #(
     .core_start_i(core_start_i),
     .cycle_q(cycle_q),
     .dcache_address_header_q(dcache_address_header_q),
+`ifdef EDGE32_SPLIT_LSU
+    .fp_dmem_req_valid(fp_dmem_req_valid), .fp_dmem_req_ready(fp_dmem_req_ready),
+    .fp_dmem_req_payload(fp_dmem_req_payload),
+    .fp_dmem_resp_valid(fp_dmem_resp_valid), .fp_dmem_resp_error(fp_dmem_resp_error),
+    .fp_dmem_resp_rdata(fp_dmem_resp_rdata),
+`endif
     .dmem_req_ready(dmem_req_ready),
     .dmem_resp_error(dmem_resp_error),
     .dmem_resp_rdata(dmem_resp_rdata),

@@ -32,6 +32,34 @@
     .src0(ex_rs1_value),.src1(ex_rs2_value),.funct3(f3),
     .result_valid(mul_result_valid),.result_value(mul_result),.busy());
 
+`ifdef EDGE32_SPLIT_LSU
+  wire int_ready, int_done, int_error, int_busy;
+  wire fp_ready, fp_done, fp_error, fp_busy;
+  wire [31:0] fp_lsu_value;
+  // The EX issue contract remains one memory operation at a time, including
+  // draining the previous LSU after a start/force-stop.
+  wire int_start = ex_issue_ok && is_int_mem && !mem_started_q && !fp_busy;
+  wire fp_start = ex_issue_ok && is_fp_mem && !mem_started_q && !int_busy;
+  assign lsu_start = int_start || fp_start;
+  assign lsu_ready = is_fp_mem ? fp_ready : int_ready;
+  assign lsu_done = is_fp_mem ? fp_done : int_done;
+  assign lsu_error = is_fp_mem ? fp_error : int_error;
+  edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
+    .clk(clk),.reset_n(reset_n),.op_valid(int_start),
+    .op_ready(int_ready),.op_store(is_store),
+    .op_fp(1'b0),.op_funct3(f3),
+    .op_base(ex_rs1_value),
+    .op_offset(ex_imm),
+    .op_store_data(ex_rs2_value),
+    .mem_req_valid(dmem_req_valid),
+    .mem_req_ready(dmem_req_ready),.mem_req_write(dmem_req_write),
+    .mem_req_addr(lsu_mem_addr),.mem_req_wdata(dmem_req_wdata),
+    .mem_req_wstrb(dmem_req_wstrb),.mem_req_size(dmem_req_size),
+    .mem_req_signed(dmem_req_signed),.mem_resp_valid(dmem_resp_valid),
+    .mem_resp_error(dmem_resp_error),.mem_resp_rdata(dmem_resp_rdata),
+    .op_done(int_done),.op_error(int_error),.op_load_value(lsu_value),.busy(int_busy));
+  assign dmem_req_addr=lsu_mem_addr;
+`else
     assign lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
 
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
@@ -50,7 +78,21 @@
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
   assign dmem_req_addr=lsu_mem_addr;
 
+`endif
   generate if(ENABLE_FPU) begin: g_fpu
+`ifdef EDGE32_SPLIT_LSU
+    edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) fp_lsu(
+      .clk(clk),.reset_n(reset_n),.op_valid(fp_start),.op_ready(fp_ready),
+      .op_store(is_fp_store),.op_fp(1'b1),.op_funct3(f3),
+      .op_base(ex_rs1_value),.op_offset(ex_imm),.op_store_data(fp_store_value[31:0]),
+      .mem_req_valid(fp_dmem_req_valid),.mem_req_ready(fp_dmem_req_ready),
+      .mem_req_addr(fp_dmem_req_payload[71:40]),.mem_req_wdata(fp_dmem_req_payload[39:8]),
+      .mem_req_wstrb(fp_dmem_req_payload[7:4]),.mem_req_size(fp_dmem_req_payload[3:2]),
+      .mem_req_signed(fp_dmem_req_payload[1]),.mem_req_write(fp_dmem_req_payload[0]),
+      .mem_resp_valid(fp_dmem_resp_valid),.mem_resp_error(fp_dmem_resp_error),
+      .mem_resp_rdata(fp_dmem_resp_rdata),.op_done(fp_done),.op_error(fp_error),
+      .op_load_value(fp_lsu_value),.busy(fp_busy));
+`endif
     edge_32_fpu fpu(
       .clk(clk),.reset_n(reset_n),.cancel(core_start_i||core_force_stop_i),
       .id_capture_enable(id_capture_enable),.id_inst(id_inst[31:0]),
@@ -59,12 +101,27 @@
       .is_fp_compute(is_fp_compute),.ex_writes_fpr(ex_writes_fpr),
       .is_fp_csr(is_fp_csr),.csr_fflags(csr_fflags),.csr_frm(csr_frm),
       .csr_write(csr_write),.f3(f3),.csr_uimm(csr_uimm),
-      .ex_rs1_value(ex_rs1_value),.lsu_value(lsu_value),
+      .ex_rs1_value(ex_rs1_value),
+`ifdef EDGE32_SPLIT_LSU
+      .lsu_value(fp_lsu_value),
+`else
+      .lsu_value(lsu_value),
+`endif
       .fp_compute_complete(fp_compute_complete),.fpu_value(fpu_value),
       .fp_load_value(fp_load_value),.fp_store_value(fp_store_value),
       .fp_csr_value(fp_csr_value),.wb_commit(wb_commit),.wb_fault_q(wb_fault_q),
-      .wb_rd_q(wb_rd_q),.wb_value_q(wb_value_q),.wb_fp_csr_q(wb_fp_csr_q));
+`ifdef EDGE32_LOCAL_FP_WB
+      .is_fp_load(is_fp_load),.ex_fpr_rd(rd),
+`else
+      .wb_rd_q(wb_rd_q),.wb_value_q(wb_value_q),
+`endif
+      .wb_fp_csr_q(wb_fp_csr_q));
   end else begin: g_no_fpu
+`ifdef EDGE32_SPLIT_LSU
+    assign fp_ready=1'b0, fp_done=1'b0, fp_error=1'b0, fp_busy=1'b0;
+    assign fp_lsu_value=32'b0;
+    assign fp_dmem_req_valid=1'b0, fp_dmem_req_payload=72'b0;
+`endif
     assign id_fpu_control=32'd0;
     assign fp_compute_complete=1'b0;
     assign fpu_value=32'd0; assign fp_csr_value=32'd0;

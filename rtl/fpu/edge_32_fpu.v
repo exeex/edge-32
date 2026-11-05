@@ -16,8 +16,13 @@ module edge_32_fpu (
   output wire [31:0] fpu_value, fp_load_value, fp_csr_value,
   output wire [63:0] fp_store_value,
   input wire wb_commit, wb_fault_q,
+`ifdef EDGE32_LOCAL_FP_WB
+  input wire is_fp_load,
+  input wire [4:0] ex_fpr_rd,
+`else
   input wire [4:0] wb_rd_q,
   input wire [31:0] wb_value_q,
+`endif
   output reg wb_fp_csr_q
 );
   reg [4:0] fflags_q;
@@ -28,6 +33,10 @@ module edge_32_fpu (
   reg [7:0] wb_fp_csr_value_q;
   wire fpu_ready, fpu_done, fpr_load_ready;
   wire [4:0] fpu_fflags;
+`ifdef EDGE32_LOCAL_FP_WB
+  reg [4:0] wb_rd_q;
+  reg [31:0] wb_value_q;
+`endif
   wire wb_fpr_valid=wb_commit&&!wb_fault_q&&wb_fpr_q;
   wire fpu_start=ex_issue_ok&&is_fp_compute&&!fpu_started_q&&fpu_ready;
   assign fp_compute_complete=is_fp_compute&&fpu_started_q&&fpu_done;
@@ -76,6 +85,15 @@ module edge_32_fpu (
                          (fp_csr_old|fp_csr_source[7:0]):
                          (fp_csr_old&~fp_csr_source[7:0]);
   wire fp_csr_write=csr_write;
+
+`ifdef EDGE32_LOCAL_FP_WB
+  always @(posedge clk) begin
+    if (ex_done && ex_writes_fpr) begin
+      wb_rd_q <= ex_fpr_rd;
+      wb_value_q <= is_fp_load ? fp_load_value : fpu_value;
+    end
+  end
+`endif
 
   // Resetless WB payload is visible only under the core's commit authorization.
   always @(posedge clk) begin

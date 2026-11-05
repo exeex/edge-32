@@ -97,6 +97,14 @@ module edge_32_cached_core #(
   wire core_dmem_resp_valid;
   wire core_dmem_resp_error;
   wire [31:0] core_dmem_resp_rdata;
+`ifdef EDGE32_SPLIT_LSU
+  wire fp_dmem_req_valid, fp_dmem_req_ready;
+  wire [71:0] fp_dmem_req_payload;
+  wire fp_dmem_resp_valid, fp_dmem_resp_error;
+  wire [31:0] fp_dmem_resp_rdata;
+`endif
+  wire [1:0] cache_core_req_size;
+  wire cache_core_req_signed;
   wire cache_core_req_valid,cache_core_req_ready,cache_core_req_write;
   wire [31:0] cache_core_req_addr,cache_core_req_wdata;
   wire [3:0] cache_core_req_wstrb;
@@ -130,6 +138,12 @@ module edge_32_cached_core #(
     .imem_resp_data(core_imem_resp_data),
     .imem_resp_error(core_imem_resp_error),
     .dmem_req_valid(core_dmem_req_valid),
+`ifdef EDGE32_SPLIT_LSU
+    .fp_dmem_req_valid(fp_dmem_req_valid), .fp_dmem_req_ready(fp_dmem_req_ready),
+    .fp_dmem_req_payload(fp_dmem_req_payload),
+    .fp_dmem_resp_valid(fp_dmem_resp_valid), .fp_dmem_resp_error(fp_dmem_resp_error),
+    .fp_dmem_resp_rdata(fp_dmem_resp_rdata),
+`endif
     .dmem_req_ready(core_dmem_req_ready),
     .dmem_req_write(core_dmem_req_write),
     .dmem_req_addr(core_dmem_req_addr),
@@ -156,6 +170,11 @@ module edge_32_cached_core #(
     .putchar_valid(putchar_valid), .putchar_char(putchar_char)
   );
 
+`ifdef EDGE32_SPLIT_LSU
+  `include "ex/lsu_doors.svh"
+`else
+  assign cache_core_req_size = core_dmem_req_size;
+  assign cache_core_req_signed = core_dmem_req_signed;
   generate if(ENABLE_DTCM_PORT) begin: g_dtcm
     edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) dtcm_router(
       .clk(clk),.reset_n(reset_n),.dtcm_base(dtcm_base),.dtcm_mask(dtcm_mask),
@@ -188,6 +207,8 @@ module edge_32_cached_core #(
     assign dtcm_lsu_wdata=64'b0;
     assign dtcm_lsu_wstrb=8'b0;
   end endgenerate
+
+`endif
 
   edge_32_icache #(.ICACHE_BYTES(ICACHE_BYTES)) icache_boundary (
     .clk(clk),
@@ -225,8 +246,8 @@ module edge_32_cached_core #(
     .core_dmem_req_addr(cache_core_req_addr),
     .core_dmem_req_wdata(cache_core_req_wdata),
     .core_dmem_req_wstrb(cache_core_req_wstrb),
-    .core_dmem_req_size(core_dmem_req_size),
-    .core_dmem_req_signed(core_dmem_req_signed),
+    .core_dmem_req_size(cache_core_req_size),
+    .core_dmem_req_signed(cache_core_req_signed),
     .core_dmem_resp_valid(cache_core_resp_valid),
     .core_dmem_resp_error(cache_core_resp_error),
     .core_dmem_resp_rdata(cache_core_resp_rdata),

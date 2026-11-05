@@ -13,6 +13,12 @@ module edge_32_ex_stage #(
   input wire core_start_i,
   input wire [63:0] cycle_q,
   input wire [31:0] dcache_address_header_q,
+`ifdef EDGE32_SPLIT_LSU
+  output wire fp_dmem_req_valid, input wire fp_dmem_req_ready,
+  output wire [71:0] fp_dmem_req_payload,
+  input wire fp_dmem_resp_valid, input wire fp_dmem_resp_error,
+  input wire [31:0] fp_dmem_resp_rdata,
+`endif
   input wire dmem_req_ready,
   input wire dmem_resp_error,
   input wire [31:0] dmem_resp_rdata,
