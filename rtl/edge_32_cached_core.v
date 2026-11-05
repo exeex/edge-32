@@ -11,7 +11,8 @@ module edge_32_cached_core #(
   parameter ENABLE_DTCM_PORT = 0,
   parameter ENABLE_FPU = 0,
   parameter AUTO_START = 1,
-  parameter [46:0] EDGE_ASIC_ID = 47'd0
+  parameter [46:0] EDGE_ASIC_ID = 47'd0,
+  parameter DCACHE_METADATA_SYNC_READ = 0
 ) (
   input  wire                   clk,
   input  wire                   reset_n,
@@ -213,7 +214,8 @@ module edge_32_cached_core #(
   );
 
   edge_32_dcache #(
-    .ICACHE_BYTES(ICACHE_BYTES), .DCACHE_BYTES(DCACHE_BYTES)
+    .ICACHE_BYTES(ICACHE_BYTES), .METADATA_SYNC_READ(DCACHE_METADATA_SYNC_READ),
+    .DCACHE_BYTES(DCACHE_BYTES)
   ) dcache_boundary (
     .clk(clk),
     .reset_n(reset_n),

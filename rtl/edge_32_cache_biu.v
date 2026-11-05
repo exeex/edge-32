@@ -85,8 +85,7 @@ module edge_32_cache_biu #(
   reg [ADDR_WIDTH-1:0] icache_buf_addr_q;
   reg read_active_q;
   reg read_owner_q;
-  reg [LEN_WIDTH-1:0] read_len_q;
-  reg [LEN_WIDTH-1:0] read_beat_q;
+  reg [3:0] read_beat_onehot_q;
 
   reg wb_valid_q;
   reg wb_aw_sent_q;
@@ -106,7 +105,7 @@ module edge_32_cache_biu #(
   wire wb_b_fire = axi_bvalid && axi_bready;
   wire [ID_WIDTH-1:0] read_expected_id =
     read_owner_q == OWNER_DCACHE ? DCACHE_AXI_ID : ICACHE_AXI_ID;
-  wire read_expected_last = read_beat_q == read_len_q;
+  wire read_expected_last = read_beat_onehot_q[3];
   wire read_response_error = (axi_rid != read_expected_id) ||
                              |axi_rresp ||
                              (axi_rlast != read_expected_last);
@@ -160,14 +159,22 @@ module edge_32_cache_biu #(
   assign dcache_wb_complete = wb_b_fire && wb_last_q && !wb_response_error;
   assign dcache_wb_error = wb_b_fire && wb_response_error;
 
+  // AR initializes all response context before read_active_q exposes it.
+  // Predecode the final beat on accepted transfers, including across R stalls.
+  always @(posedge clk) begin
+    if (ar_fire) begin
+      read_owner_q <= grant_dcache ? OWNER_DCACHE : OWNER_ICACHE;
+      read_beat_onehot_q <= 4'b0001;
+    end else if (r_fire) begin
+      read_beat_onehot_q <= {read_beat_onehot_q[2:0], 1'b0};
+    end
+  end
+
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       icache_buf_valid_q <= 1'b0;
       icache_buf_addr_q <= {ADDR_WIDTH{1'b0}};
       read_active_q <= 1'b0;
-      read_owner_q <= OWNER_ICACHE;
-      read_len_q <= {LEN_WIDTH{1'b0}};
-      read_beat_q <= {LEN_WIDTH{1'b0}};
     end else begin
       if (icache_req_valid && icache_req_ready) begin
         icache_buf_valid_q <= 1'b1;
@@ -175,18 +182,9 @@ module edge_32_cache_biu #(
       end
       if (ar_fire) begin
         read_active_q <= 1'b1;
-        read_owner_q <= grant_dcache ? OWNER_DCACHE : OWNER_ICACHE;
-        read_len_q <= axi_arlen;
-        read_beat_q <= {LEN_WIDTH{1'b0}};
         if (grant_icache) icache_buf_valid_q <= 1'b0;
       end
-      if (r_fire) begin
-        if (read_terminal) begin
-          read_active_q <= 1'b0;
-        end else begin
-          read_beat_q <= read_beat_q + {{(LEN_WIDTH-1){1'b0}}, 1'b1};
-        end
-      end
+      if (r_fire && read_terminal) read_active_q <= 1'b0;
     end
   end
 
