@@ -39,8 +39,13 @@ module edge_32_dtcm_router #(
   wire dtcm_fire = select_dtcm && dtcm_ready;
   wire cache_fire = select_cache && cache_req_ready;
   wire [ADDR_WIDTH-1:0] dtcm_byte_offset = core_req_addr-dtcm_base;
-  wire [63:0] dtcm_shifted_rdata = dtcm_rdata >>
-                                   (dtcm_load_offset_q * 8);
+  wire [31:0] dtcm_load_word = dtcm_load_offset_q[2] ?
+                               dtcm_rdata[63:32] : dtcm_rdata[31:0];
+  // Keep the following three bytes for a scalar window spanning both words.
+  wire [23:0] dtcm_next_bytes = dtcm_load_offset_q[2] ? 24'd0 : dtcm_rdata[55:32];
+  wire [55:0] dtcm_byte_window = {dtcm_next_bytes, dtcm_load_word};
+  wire [5:0] dtcm_bit_offset = {1'b0, dtcm_load_offset_q[1:0], 3'b000};
+  wire [31:0] dtcm_shifted_rdata = dtcm_byte_window[dtcm_bit_offset +: 32];
   reg [31:0] dtcm_formatted_rdata;
 
   always @* begin
