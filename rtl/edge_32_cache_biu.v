@@ -18,6 +18,7 @@ module edge_32_cache_biu #(
   output wire                       icache_resp_valid,
   input  wire                       icache_resp_ready,
   output wire [DATA_WIDTH-1:0]      icache_resp_data,
+  output wire                       icache_resp_last,
   output wire                       icache_resp_error,
 
   input  wire                       dcache_refill_req_valid,
@@ -121,14 +122,14 @@ module edge_32_cache_biu #(
   assign axi_arburst = 2'b01;
   assign axi_arcache = 4'h0;
   assign axi_arid = grant_dcache ? DCACHE_AXI_ID : ICACHE_AXI_ID;
-  assign axi_arlen = grant_dcache ?
-    {{(LEN_WIDTH-2){1'b0}}, 2'b11} : {LEN_WIDTH{1'b0}};
+  assign axi_arlen = {{(LEN_WIDTH-2){1'b0}}, 2'b11};
   assign axi_arlock = 1'b0;
   assign axi_arprot = 3'b000;
   assign axi_arsize = 3'b100;
 
   assign icache_resp_valid = read_active_q &&
                              (read_owner_q == OWNER_ICACHE) && axi_rvalid;
+  assign icache_resp_last = icache_resp_valid && read_terminal;
   assign icache_resp_data = axi_rdata;
   assign icache_resp_error = icache_resp_valid && read_response_error;
   assign dcache_refill_resp_valid = read_active_q &&

@@ -28,6 +28,7 @@ module edge_ifu_icache #(
   input  wire                    imem_resp_valid,
   output wire                    imem_resp_ready,
   input  wire [127:0]            imem_resp_bits,
+  input  wire                    imem_resp_last,
   input  wire                    imem_resp_error,
 
   output wire [31:0]             debug_icache_bytes,
@@ -47,6 +48,9 @@ module edge_ifu_icache #(
   reg [1:0] lookup_word_q;
   reg resp_error_q;
 
+  localparam BURST = LINE_BYTES == 64;
+  reg [1:0] refill_beat_q, lookup_beat_q;
+  reg refill_error_q;
   reg miss_pending_q;
   reg [LINE_INDEX_WIDTH-1:0] miss_index_q;
   reg [TAG_WIDTH-1:0] miss_tag_q;
@@ -117,16 +121,33 @@ module edge_ifu_icache #(
   assign debug_miss_pending = miss_pending_q;
   assign debug_invalidate_busy = invalidate_active_q;
 
+  wire terminal = !BURST || imem_resp_last || refill_beat_q == 3;
+  wire burst_error = imem_resp_error || (BURST &&
+    (refill_error_q || (imem_resp_last != (refill_beat_q == 3))));
+  localparam DATA_INDEX_WIDTH = $clog2(ICACHE_BYTES/16);
+  wire [DATA_INDEX_WIDTH-1:0] lookup_data_index, data_write_index;
+  generate if (BURST) begin : g_four_beats
+    assign lookup_data_index = {lookup_index_q, lookup_beat_q};
+    assign data_write_index = {miss_index_q, refill_beat_q};
+  end else begin : g_single_beat
+    assign lookup_data_index = lookup_index_q;
+    assign data_write_index = miss_index_q;
+  end endgenerate
+  // Hold the owned lookup across stalls. Otherwise preselect the incoming PC;
+  // only req_fire assigns ownership to the sampled SRAM result.
+  wire [DATA_INDEX_WIDTH-1:0] data_read_index =
+    lookup_valid_q ? lookup_data_index : fetch_req_addr[4 +: DATA_INDEX_WIDTH];
+
   edge_ifu_icache_data_array #(
     .LINE_BITS(128), .READ_BITS(FETCH_WIDTH),
-    .LINES(LINES)
+    .LINES(ICACHE_BYTES/16)
   ) data_array (
     .clk(forever_cpuclk),
     .write_valid(miss_resp_fire && !imem_resp_error),
-    .write_index(miss_index_q),
+    .write_index(data_write_index),
     .write_data(imem_resp_bits),
-    .read_index(req_fire ? req_index : lookup_index_q),
-    .read_word(req_fire ? fetch_req_addr[3:2] : lookup_word_q),
+    .read_index(data_read_index),
+    .read_word(lookup_valid_q ? lookup_word_q : fetch_req_addr[3:2]),
     .read_data(req_data)
   );
 
@@ -136,13 +157,13 @@ module edge_ifu_icache #(
   ) tag_array (
     .clk(forever_cpuclk),
     .rst_b(cpurst_b),
-    .write_valid(miss_resp_fire && !imem_resp_error),
+    .write_valid(miss_resp_fire && terminal),
     .write_index(miss_index_q),
     .write_tag(miss_tag_q),
-    .write_valid_bit(1'b1),
+    .write_valid_bit(!burst_error),
     .clear_valid(tag_clear_valid),
     .clear_index(invalidate_index_q),
-    .read_index(req_fire ? req_index : lookup_index_q),
+    .read_index(lookup_valid_q ? lookup_index_q : req_index),
     .read_tag(), .read_valid_bit(),
     .read_compare_tag(lookup_tag_q), .read_match(lookup_hit)
   );
@@ -152,6 +173,9 @@ module edge_ifu_icache #(
       resp_valid_q <= 1'b0;
       resp_bits_q <= {FETCH_WIDTH{1'b0}};
       lookup_word_q <= 2'b0;
+      lookup_beat_q <= 0;
+      refill_beat_q <= 0;
+      refill_error_q <= 0;
       resp_error_q <= 1'b0;
       miss_pending_q <= 1'b0;
       miss_index_q <= {LINE_INDEX_WIDTH{1'b0}};
@@ -185,15 +209,17 @@ module edge_ifu_icache #(
         resp_bits_q <= selected_hit_word;
         resp_error_q <= 1'b0;
       end else if (miss_resp_fire) begin
-        resp_valid_q <= 1'b1;
-        resp_bits_q <= selected_refill_word;
-        resp_error_q <= imem_resp_error;
+        resp_valid_q <= terminal;
+        if (!BURST || refill_beat_q == lookup_beat_q)
+          resp_bits_q <= selected_refill_word;
+        resp_error_q <= burst_error;
       end
 
       if (req_fire) begin
         lookup_valid_q <= 1'b1;
         lookup_addr_q <= aligned_req_addr;
         lookup_word_q <= fetch_req_addr[3:2];
+        lookup_beat_q <= fetch_req_addr[5:4];
         lookup_index_q <= req_index;
         lookup_tag_q <= req_tag;
       end else if (lookup_complete) begin
@@ -202,10 +228,14 @@ module edge_ifu_icache #(
 
       if (miss_req_fire) begin
         miss_pending_q <= 1'b1;
+        refill_beat_q <= 0;
+        refill_error_q <= 0;
         miss_index_q <= lookup_index_q;
         miss_tag_q <= lookup_tag_q;
       end else if (miss_resp_fire) begin
-        miss_pending_q <= 1'b0;
+        miss_pending_q <= !terminal;
+        refill_beat_q <= refill_beat_q + 1'b1;
+        refill_error_q <= burst_error;
       end
     end
   end
@@ -217,8 +247,8 @@ initial begin
 
 `ifdef IVERILOG_SIM
   initial begin
-    if (LINE_BYTES != 16) begin
-      $display("edge_ifu_icache: first slice requires LINE_BYTES=16");
+    if (LINE_BYTES != 16 && LINE_BYTES != 64) begin
+      $display("edge_ifu_icache: supported line sizes are 16 and 64 bytes");
       $finish;
     end
     if (ICACHE_BYTES != 16384 && ICACHE_BYTES != 32768) begin

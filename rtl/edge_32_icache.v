@@ -19,6 +19,7 @@ module edge_32_icache #(
   input wire imem_refill_resp_valid,
   output wire imem_refill_resp_ready,
   input wire [127:0] imem_refill_resp_data,
+  input wire imem_refill_resp_last,
   input wire imem_refill_resp_error,
   output wire debug_icache_hit,
   output wire debug_icache_miss_pending
@@ -50,7 +51,7 @@ module edge_32_icache #(
   );
 
   edge_ifu_icache #(
-    .PC_WIDTH(32), .ICACHE_BYTES(ICACHE_BYTES), .LINE_BYTES(16)
+    .PC_WIDTH(32), .ICACHE_BYTES(ICACHE_BYTES), .LINE_BYTES(64)
   ) icache (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .fetch_req_valid(icache_req_valid && !icache_invalidate_valid &&
@@ -69,6 +70,7 @@ module edge_32_icache #(
     .imem_resp_valid(imem_refill_resp_valid),
     .imem_resp_ready(imem_refill_resp_ready),
     .imem_resp_bits(imem_refill_resp_data),
+    .imem_resp_last(imem_refill_resp_last),
     .imem_resp_error(imem_refill_resp_error),
     .debug_icache_bytes(), .debug_hit(debug_icache_hit),
     .debug_miss_pending(debug_icache_miss_pending),

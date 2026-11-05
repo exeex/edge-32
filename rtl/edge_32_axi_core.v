@@ -108,6 +108,7 @@ module edge32_axi_core #(
   wire imem_refill_resp_valid;
   wire imem_refill_resp_ready;
   wire [127:0] imem_refill_resp_data;
+  wire imem_refill_resp_last;
   wire imem_refill_resp_error;
   wire dmem_refill_req_valid;
   wire dmem_refill_req_ready;
@@ -146,6 +147,7 @@ module edge32_axi_core #(
     .imem_refill_resp_valid(imem_refill_resp_valid),
     .imem_refill_resp_ready(imem_refill_resp_ready),
     .imem_refill_resp_data(imem_refill_resp_data),
+    .imem_refill_resp_last(imem_refill_resp_last),
     .imem_refill_resp_error(imem_refill_resp_error),
     .dmem_refill_req_valid(dmem_refill_req_valid),
     .dmem_refill_req_ready(dmem_refill_req_ready),
@@ -188,6 +190,7 @@ module edge32_axi_core #(
     .icache_resp_valid(imem_refill_resp_valid),
     .icache_resp_ready(imem_refill_resp_ready),
     .icache_resp_data(imem_refill_resp_data),
+    .icache_resp_last(imem_refill_resp_last),
     .icache_resp_error(imem_refill_resp_error),
     .dcache_refill_req_valid(dmem_refill_req_valid),
     .dcache_refill_req_ready(dmem_refill_req_ready),
