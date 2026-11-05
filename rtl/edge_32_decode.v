@@ -229,7 +229,7 @@ endmodule
 // rounding-mode or semantic FP-control input. Invalid encodings may request
 // reads; only the parallel sideband authorizes EX issue and writes.
 module edge_32_register_decode #(parameter ENABLE_FPU=0,
-  parameter UNMASKED_GPR_READ=0)(
+  parameter UNMASKED_GPR_READ=0, parameter UNMASKED_FPR_READ=0)(
   input wire [31:0] inst,
   output wire [4:0] read_gpr0, read_gpr1, read_fpr0, read_fpr1, read_fpr2,
   output wire [1:0] uses_gpr, output wire [2:0] uses_fpr,
@@ -299,9 +299,9 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   assign read_gpr0=(UNMASKED_GPR_READ || uses_gpr[0]) ? rs1:5'd0;
   assign read_gpr1=(UNMASKED_GPR_READ || uses_gpr[1]) ?
     (accel ? capture_src:rs2):5'd0;
-  assign read_fpr0=uses_fpr[0] ? rs1:5'd0;
-  assign read_fpr1=uses_fpr[1] ? rs2:5'd0;
-  assign read_fpr2=uses_fpr[2] ? rs3:5'd0;
+  assign read_fpr0=(ENABLE_FPU && (UNMASKED_FPR_READ || uses_fpr[0])) ? rs1:5'd0;
+  assign read_fpr1=(ENABLE_FPU && (UNMASKED_FPR_READ || uses_fpr[1])) ? rs2:5'd0;
+  assign read_fpr2=(ENABLE_FPU && (UNMASKED_FPR_READ || uses_fpr[2])) ? rs3:5'd0;
   assign write_rd=edge_break ? 5'd31:inst[11:7];
   assign rd_gpr=(write_rd!=0)&&(op_imm||op_reg||(opcode==rv32::OPCODE_LUI)||
     (opcode==rv32::OPCODE_AUIPC)||(opcode==rv32::OPCODE_JAL)||(opcode==rv32::OPCODE_JALR)||

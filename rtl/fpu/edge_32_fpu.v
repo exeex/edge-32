@@ -60,8 +60,7 @@ module edge_32_fpu (
     .complete_rd(),.complete_value(fpu_value),
     .complete_fflags(fpu_fflags),
     .load_write_valid(wb_fpr_valid),
-    .load_write_ready(fpr_load_ready),.load_write_rd(wb_rd_q),.load_write_value(wb_value_q),
-    .store_read_rs(5'd0),.store_read_value());
+    .load_write_ready(fpr_load_ready),.load_write_rd(wb_rd_q),.load_write_value(wb_value_q));
 
   edge_32_fp_mem_format fp_mem_format(
     .funct3(f3),.load_value({32'd0,lsu_value}),.store_fp32(ex_fsrc1_q),

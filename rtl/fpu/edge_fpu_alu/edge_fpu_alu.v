@@ -33,20 +33,16 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
   input  wire        load_write_valid,
   output wire        load_write_ready,
   input  wire [4:0]  load_write_rd,
-  input  wire [31:0] load_write_value,
-  input  wire [4:0]  store_read_rs,
-  output wire [31:0] store_read_value
+  input  wire [31:0] load_write_value
 );
   localparam [3:0] MISC_SGNJ=0, MISC_MINMAX=1, MISC_CMP=2,
     MISC_CLASS=3, MISC_MV_X_F=4, MISC_MV_F_X=5,
     MISC_MV_X_FP4=6, MISC_MV_FP4_X=7;
   localparam [1:0] CVT_F2F=0, CVT_F2I=1, CVT_I2F=2;
 
-  reg [31:0] fpr [0:31];
   reg busy_q;
   reg cancelled_q;
   reg [4:0] pending_rd_q;
-  integer i;
 
   wire [31:0] control;
   generate if(PREDECODED) begin: decoded_input
@@ -74,7 +70,6 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
   wire slow_ready, slow_done; wire [31:0] slow_value; wire [4:0] slow_flags;
   wire fire=issue_valid&&issue_ready&&issue_legal;
   assign issue_ready=!cancel&&!busy_q && (!fmac_op||!fmac_stall) && (!slow_op||slow_ready);
-  assign store_read_value=fpr[store_read_rs];
   // One FPR write port. Compute completion has priority; an independent load
   // producer must hold valid/address/data until load_write_ready is asserted.
   // External-WB mode disables the internal compute write; the owner returns
@@ -90,10 +85,12 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
   wire fpr_write_valid=compute_write||load_write_fire;
   wire [4:0] fpr_write_rd=compute_write ? pending_rd_q:load_write_rd;
   wire [31:0] fpr_write_value=compute_write ? compute_write_value:load_write_value;
-  // Explicit write-through bypass on every ID read port, including f0.
-  assign read_fsrc0=(fpr_write_valid && fpr_write_rd==read_frs0) ? fpr_write_value : fpr[read_frs0];
-  assign read_fsrc1=(fpr_write_valid && fpr_write_rd==read_frs1) ? fpr_write_value : fpr[read_frs1];
-  assign read_fsrc2=(fpr_write_valid && fpr_write_rd==read_frs2) ? fpr_write_value : fpr[read_frs2];
+  edge_32_fpr fpr_bank (
+    .clk(clk), .reset_n(reset_n),
+    .read_rs0(read_frs0), .read_rs1(read_frs1), .read_rs2(read_frs2),
+    .read_value0(read_fsrc0), .read_value1(read_fsrc1), .read_value2(read_fsrc2),
+    .write_valid(fpr_write_valid), .write_rd(fpr_write_rd), .write_value(fpr_write_value)
+  );
 
   edge_fpu_fmac #(.PREDECODED(1)) fmac(.cpurst_b(reset_n),.forever_cpuclk(clk),.fmac_cancel(1'b0),
     .fmac_inst_vld(fire&&fmac_op),.fmac_func(20'b0),.fmac_ctrl(fmac_ctrl),.fmac_rm(rm),
@@ -134,10 +131,8 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
     if(!reset_n) begin
       busy_q<=0; cancelled_q<=0; complete_valid<=0; complete_gpr_write<=0; complete_rd<=0;
       complete_value<=0; complete_fflags<=0; pending_rd_q<=0;
-      for(i=0;i<32;i=i+1) fpr[i]<=0;
     end else begin
       complete_valid<=0;
-      if(fpr_write_valid) fpr[fpr_write_rd]<=fpr_write_value;
       // Cancel only ownership/results, not architectural FPR state. Units
       // drain normally; keep busy until their old completion is consumed.
       if(cancel && busy_q) cancelled_q<=1;
