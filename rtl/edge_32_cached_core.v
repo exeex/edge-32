@@ -155,17 +155,15 @@ module edge_32_cached_core #(
   );
 
   generate if(ENABLE_DTCM_PORT) begin: g_dtcm
-    wire [63:0] dtcm_cache_addr;
-    assign cache_core_req_addr=dtcm_cache_addr[31:0];
     edge_32_dtcm_router #(.DTCM_ADDR_WIDTH(DTCM_ADDR_WIDTH)) dtcm_router(
       .clk(clk),.reset_n(reset_n),.dtcm_base(dtcm_base),.dtcm_mask(dtcm_mask),
       .dtcm_enable(dtcm_enable),.core_req_valid(core_dmem_req_valid),
       .core_req_ready(core_dmem_req_ready),.core_req_write(core_dmem_req_write),
-      .core_req_addr({32'b0,core_dmem_req_addr}),.core_req_wdata(core_dmem_req_wdata),
+      .core_req_addr(core_dmem_req_addr),.core_req_wdata(core_dmem_req_wdata),
       .core_req_wstrb(core_dmem_req_wstrb),.core_resp_valid(core_dmem_resp_valid),
       .core_resp_error(core_dmem_resp_error),.core_resp_rdata(core_dmem_resp_rdata),
       .cache_req_valid(cache_core_req_valid),.cache_req_ready(cache_core_req_ready),
-      .cache_req_write(cache_core_req_write),.cache_req_addr(dtcm_cache_addr),
+      .cache_req_write(cache_core_req_write),.cache_req_addr(cache_core_req_addr),
       .cache_req_wdata(cache_core_req_wdata),.cache_req_wstrb(cache_core_req_wstrb),
       .core_req_size(core_dmem_req_size),.core_req_signed(core_dmem_req_signed),
       .cache_resp_valid(cache_core_resp_valid),.cache_resp_error(cache_core_resp_error),

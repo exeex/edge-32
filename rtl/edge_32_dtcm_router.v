@@ -1,22 +1,21 @@
 `timescale 1ns/1ps
 module edge_32_dtcm_router #(
-  parameter ADDR_WIDTH = 64,
   parameter DTCM_ADDR_WIDTH = 14
 ) (
   input  wire clk, input wire reset_n,
-  input  wire [ADDR_WIDTH-1:0] dtcm_base,
-  input  wire [ADDR_WIDTH-1:0] dtcm_mask,
+  input  wire [63:0] dtcm_base,
+  input  wire [63:0] dtcm_mask,
   input  wire dtcm_enable,
   input  wire core_req_valid, output wire core_req_ready,
   input  wire core_req_write,
-  input  wire [ADDR_WIDTH-1:0] core_req_addr,
+  input  wire [31:0] core_req_addr,
   input  wire [31:0] core_req_wdata, input wire [3:0] core_req_wstrb,
   input  wire [1:0] core_req_size, input wire core_req_signed,
   output wire core_resp_valid, output wire core_resp_error,
   output wire [31:0] core_resp_rdata,
   output wire cache_req_valid, input wire cache_req_ready,
   output wire cache_req_write,
-  output wire [ADDR_WIDTH-1:0] cache_req_addr,
+  output wire [31:0] cache_req_addr,
   output wire [31:0] cache_req_wdata, output wire [3:0] cache_req_wstrb,
   input  wire cache_resp_valid, input wire cache_resp_error,
   input  wire [31:0] cache_resp_rdata,
@@ -32,13 +31,14 @@ module edge_32_dtcm_router #(
   reg dtcm_load_signed_q;
   reg [2:0] dtcm_load_offset_q;
   wire idle = owner_q==OWNER_NONE && !dtcm_store_resp_q;
-  wire hit = dtcm_enable &&
-             ((core_req_addr & dtcm_mask)==(dtcm_base & dtcm_mask));
+  wire hit = dtcm_enable && !(|(dtcm_base[63:32] & dtcm_mask[63:32])) &&
+             ((core_req_addr & dtcm_mask[31:0]) == (dtcm_base[31:0] & dtcm_mask[31:0]));
   wire select_dtcm = idle && core_req_valid && hit;
   wire select_cache = idle && core_req_valid && !hit;
   wire dtcm_fire = select_dtcm && dtcm_ready;
   wire cache_fire = select_cache && cache_req_ready;
-  wire [ADDR_WIDTH-1:0] dtcm_byte_offset = core_req_addr-dtcm_base;
+  wire [DTCM_ADDR_WIDTH+2:0] dtcm_byte_offset =
+    core_req_addr[DTCM_ADDR_WIDTH+2:0] - dtcm_base[DTCM_ADDR_WIDTH+2:0];
   wire [31:0] dtcm_load_word = dtcm_load_offset_q[2] ?
                                dtcm_rdata[63:32] : dtcm_rdata[31:0];
   // Keep the following three bytes for a scalar window spanning both words.
