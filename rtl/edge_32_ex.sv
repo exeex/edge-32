@@ -1,7 +1,13 @@
+`ifdef EDGE32_EXTERNAL_FPU
+`include "edge32_external_fpu.svh"
+`endif
 // EX stage: explicit ports; implementation is private to this module.
 module edge_32_ex_stage #(
   parameter PC_WIDTH=32, parameter DMEM_RESP_FORMATTED=0, parameter ENABLE_FPU=0, parameter [46:0] EDGE_ASIC_ID=47'd0
 )(
+`ifdef EDGE32_EXTERNAL_FPU
+  `EDGE32_FPU_PORTS
+`endif
   input wire accel_req_ready,
   input wire accel_resp_error,
   input wire accel_resp_valid,

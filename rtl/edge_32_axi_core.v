@@ -1,3 +1,6 @@
+`ifdef EDGE32_EXTERNAL_FPU
+`include "edge32_external_fpu.svh"
+`endif
 `timescale 1ns/1ps
 
 // Bootable Edge-32 cache hierarchy with the Edge 128-bit AXI boundary.
@@ -15,6 +18,9 @@ module edge32_axi_core #(
   parameter [46:0] EDGE_ASIC_ID = 47'd0,
   parameter DCACHE_METADATA_SYNC_READ = 0
 ) (
+`ifdef EDGE32_EXTERNAL_FPU
+  `EDGE32_FPU_PORTS
+`endif
   input  wire                         forever_cpuclk,
   input  wire                         cpurst_b,
   input  wire                         core_start,
@@ -138,6 +144,9 @@ module edge32_axi_core #(
     .AUTO_START(0),
     .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) cached_core (
+`ifdef EDGE32_EXTERNAL_FPU
+    `EDGE32_FPU_CONNECT
+`endif
     .clk(forever_cpuclk), .reset_n(core_reset_n),
     .boot_pc(boot_pc),.core_start(core_start),
     .core_force_stop(core_force_stop),

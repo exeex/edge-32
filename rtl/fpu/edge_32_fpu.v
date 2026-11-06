@@ -7,6 +7,7 @@ module edge_32_fpu (
   input wire [31:0] id_inst,
   input wire [4:0] id_frs0, id_frs1, id_frs2,
   output wire [31:0] id_fpu_control,
+  output wire [2:0] frm,
   input wire ex_issue_ok, ex_done, is_fp_compute, ex_writes_fpr,
   input wire is_fp_csr, csr_fflags, csr_frm, csr_write,
   input wire [2:0] f3,
@@ -27,6 +28,7 @@ module edge_32_fpu (
 );
   reg [4:0] fflags_q;
   reg [2:0] frm_q;
+  assign frm = frm_q;
   reg fpu_started_q;
   reg wb_fpr_q, wb_fp_flags_q, wb_csr_fflags_q, wb_csr_frm_q;
   reg [4:0] wb_fflags_q;
@@ -45,8 +47,8 @@ module edge_32_fpu (
   reg [31:0] ex_fpu_control_q;
   edge_fpu_id_decode #(.GPR_WIDTH(32)) id_fp_decode(
     .inst(id_inst),.frm(frm_q),.control(id_fpu_control));
-  // Same ID->EX advance/stall/flush boundary as GPR operands. EX valid owns
-  // observability; these numerical payload registers do not need reset.
+  // Capture decode and FPR operands on the core-provided capture pulse.
+  // EX validity masks these resetless payload registers.
   always @(posedge clk) begin
     if (id_capture_enable) begin
       ex_fpu_control_q <= id_fpu_control;

@@ -1,3 +1,6 @@
+`ifdef EDGE32_EXTERNAL_FPU
+`include "edge32_external_fpu.svh"
+`endif
 `timescale 1ns/1ps
 
 // Bootable lite scalar core composed with the maintained Edge I/D caches.
@@ -14,6 +17,9 @@ module edge_32_cached_core #(
   parameter [46:0] EDGE_ASIC_ID = 47'd0,
   parameter DCACHE_METADATA_SYNC_READ = 0
 ) (
+`ifdef EDGE32_EXTERNAL_FPU
+  `EDGE32_FPU_PORTS
+`endif
   input  wire                   clk,
   input  wire                   reset_n,
   input  wire [PC_WIDTH-1:0]    boot_pc,
@@ -130,6 +136,9 @@ module edge_32_cached_core #(
     .AUTO_START(AUTO_START),
     .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) core (
+`ifdef EDGE32_EXTERNAL_FPU
+    `EDGE32_FPU_CONNECT
+`endif
     .clk(clk), .reset_n(reset_n),
     .boot_pc(boot_pc),.core_start(core_start),
     .core_force_stop(core_force_stop),

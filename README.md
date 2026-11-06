@@ -25,6 +25,16 @@ repository and is not described here.
 | Product behavior | Recorded 64x64 Tensor windows improve by 0.74% and 0.97% against the matched RV64-lite reference. |
 | Scalar cost | CoreMark grows from 785,777 to 985,783 cycles per iteration at the measured RTL checkpoints. |
 
+In the opt-in `EDGE32_EXTERNAL_FPU` configuration, FP instructions spend
+their first EX cycle transferring the registered instruction and FPR read
+addresses to the external owner. FP compute, FP LSU and FP CSR execution
+wait for this capture cycle. The core retains hazard and retirement
+ownership and checks FP instruction legality using the owner's registered
+rounding mode (`fpu_frm`).
+The core registers FP completion and holds EX through the delivery cycle.
+The owner captures the matching result and flags on `fpu_ex_done`, then
+updates architectural state when the corresponding FP WB commits.
+
 ## Architecture chosen for ASAP7 timing
 
 The scalar pipeline has four stages:

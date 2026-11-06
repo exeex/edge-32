@@ -1,3 +1,6 @@
+`ifdef EDGE32_EXTERNAL_FPU
+`include "edge32_external_fpu.svh"
+`endif
 `include "edge_32_stage_types.svh"
 `timescale 1ns/1ps
 // RV32IM_Zba IF/predecode -> ID/read -> EX/execute -> WB/retire core.
@@ -8,6 +11,9 @@ module edge_32_core #(
   parameter AUTO_START = 1,
   parameter [46:0] EDGE_ASIC_ID = 47'd0
 ) (
+`ifdef EDGE32_EXTERNAL_FPU
+  `EDGE32_FPU_PORTS
+`endif
   input wire clk, input wire reset_n,
   input wire [PC_WIDTH-1:0] boot_pc,
   input wire core_start,input wire core_force_stop,
@@ -238,6 +244,9 @@ module edge_32_core #(
   );
 
   edge_32_ex_stage #(.PC_WIDTH(PC_WIDTH), .DMEM_RESP_FORMATTED(DMEM_RESP_FORMATTED), .ENABLE_FPU(ENABLE_FPU), .EDGE_ASIC_ID(EDGE_ASIC_ID)) ex_stage (
+`ifdef EDGE32_EXTERNAL_FPU
+    `EDGE32_FPU_CONNECT
+`endif
     .accel_req_ready(accel_req_ready),
     .accel_resp_error(accel_resp_error),
     .accel_resp_valid(accel_resp_valid),

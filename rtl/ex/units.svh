@@ -4,6 +4,26 @@
     is_branch ? {{19{ex_imm_q[11]}}, ex_imm_q[11:0], 1'b0} :
                 {{20{ex_imm_q[11]}}, ex_imm_q[11:0]};
 // Implementation owned by this stage module.
+`ifdef EDGE32_EXTERNAL_FPU
+  reg fp_capture_pending_q;
+  reg [4:0] fp_frs0_q, fp_frs1_q, fp_frs2_q;
+  wire fp_capture_pending = ENABLE_FPU && fp_capture_pending_q;
+  always @(posedge clk or negedge reset_n) begin
+    if (!reset_n) fp_capture_pending_q <= 1'b0;
+    else fp_capture_pending_q <= ENABLE_FPU && id_capture_enable && id_valid &&
+      !id_error && id_issue_legal &&
+      (id_issue_control.is_fp_compute || id_issue_control.is_fp_mem ||
+       id_issue_control.is_fp_csr);
+  end
+  always @(posedge clk) begin
+    if (id_capture_enable)
+      {fp_frs0_q, fp_frs1_q, fp_frs2_q} <= {id_frs0, id_frs1, id_frs2};
+  end
+`else
+  wire fp_capture_pending = 1'b0;
+`endif
+  wire fp_issue_ok = ex_issue_ok && !fp_capture_pending;
+
     assign is_address_header_csr=is_icache_header_csr||is_dcache_header_csr;
     assign ex_issue_ok=ex_valid&&!halted&&!wb_terminal&&!ex_decode_fault_q&&
                    !core_start_i&&!core_force_stop_i;
@@ -39,7 +59,7 @@
   // The EX issue contract remains one memory operation at a time, including
   // draining the previous LSU after a start/force-stop.
   wire int_start = ex_issue_ok && is_int_mem && !mem_started_q && !fp_busy;
-  wire fp_start = ex_issue_ok && is_fp_mem && !mem_started_q && !int_busy;
+  wire fp_start = fp_issue_ok && is_fp_mem && !mem_started_q && !int_busy;
   assign lsu_start = int_start || fp_start;
   assign lsu_ready = is_fp_mem ? fp_ready : int_ready;
   assign lsu_done = is_fp_mem ? fp_done : int_done;
@@ -65,7 +85,7 @@
     .op_done(int_done),.op_error(int_error),.op_load_value(lsu_value),.busy(int_busy));
   assign dmem_req_addr=lsu_mem_addr;
 `else
-    assign lsu_start=ex_issue_ok&&(is_int_mem||is_fp_mem)&&!mem_started_q;
+    assign lsu_start=((ex_issue_ok&&is_int_mem)||(fp_issue_ok&&is_fp_mem))&&!mem_started_q;
 
   edge_32_lsu #(.MEM_RESP_FORMATTED(DMEM_RESP_FORMATTED)) lsu(
     .clk(clk),.reset_n(reset_n),.op_valid(lsu_start),
@@ -83,6 +103,39 @@
     .op_done(lsu_done),.op_error(lsu_error),.op_load_value(lsu_value),.busy());
   assign dmem_req_addr=lsu_mem_addr;
 
+`endif
+`ifdef EDGE32_EXTERNAL_FPU
+  assign fpu_cancel = core_start_i || core_force_stop_i;
+  assign fpu_id_capture_enable = fp_capture_pending;
+  assign fpu_id_inst = ex_inst;
+  assign fpu_id_frs0 = fp_frs0_q;
+  assign fpu_id_frs1 = fp_frs1_q;
+  assign fpu_id_frs2 = fp_frs2_q;
+  assign fpu_ex_issue_ok = ENABLE_FPU && fp_issue_ok;
+  assign fpu_ex_done = fp_done_q;
+  assign fpu_is_fp_compute = is_fp_compute;
+  assign fpu_ex_writes_fpr = ex_writes_fpr;
+  assign fpu_is_fp_csr = is_fp_csr;
+  assign fpu_csr_fflags = csr_fflags;
+  assign fpu_csr_frm = csr_frm;
+  assign fpu_csr_write = csr_write;
+  assign fpu_f3 = f3;
+  assign fpu_csr_uimm = csr_uimm;
+  assign fpu_ex_rs1_value = ex_rs1_value;
+`ifdef EDGE32_SPLIT_LSU
+  assign fpu_lsu_value = fp_lsu_value;
+`else
+  assign fpu_lsu_value = lsu_value;
+`endif
+  assign fpu_wb_commit = wb_commit && fp_wb_valid_q;
+  assign fpu_wb_fault_q = wb_fault_q;
+`ifdef EDGE32_LOCAL_FP_WB
+  assign fpu_is_fp_load = is_fp_load;
+  assign fpu_ex_fpr_rd = rd;
+`else
+  assign fpu_wb_rd_q = wb_rd_q;
+  assign fpu_wb_value_q = wb_value_q;
+`endif
 `endif
   generate if(ENABLE_FPU) begin: g_fpu
 `ifdef EDGE32_SPLIT_LSU
@@ -102,11 +155,23 @@
       .mem_resp_rdata(fp_dmem_resp_rdata),.op_done(fp_done),.op_error(fp_error),
       .op_load_value(fp_lsu_value),.busy(fp_busy));
 `endif
+`ifdef EDGE32_EXTERNAL_FPU
+    // Resolve legality in scalar ID using the owner's registered FRM.
+    // The owner independently decodes the registered instruction payload.
+    edge_fpu_id_decode #(.GPR_WIDTH(32)) id_fp_legal_decode(
+      .inst(id_inst),.frm(fpu_frm),.control(id_fpu_control));
+    assign fp_compute_complete = fpu_fp_compute_complete;
+    assign fpu_value = fpu_fpu_value;
+    assign fp_load_value = fpu_fp_load_value;
+    assign fp_store_value = fpu_fp_store_value;
+    assign fp_csr_value = fpu_fp_csr_value;
+    assign wb_fp_csr_q = fp_wb_valid_q && fpu_wb_fp_csr_q;
+`else
     edge_32_fpu fpu(
       .clk(clk),.reset_n(reset_n),.cancel(core_start_i||core_force_stop_i),
       .id_capture_enable(id_capture_enable),.id_inst(id_inst[31:0]),
       .id_frs0(id_frs0),.id_frs1(id_frs1),.id_frs2(id_frs2),
-      .id_fpu_control(id_fpu_control),.ex_issue_ok(ex_issue_ok),.ex_done(ex_done),
+      .id_fpu_control(id_fpu_control),.frm(),.ex_issue_ok(ex_issue_ok),.ex_done(ex_done),
       .is_fp_compute(is_fp_compute),.ex_writes_fpr(ex_writes_fpr),
       .is_fp_csr(is_fp_csr),.csr_fflags(csr_fflags),.csr_frm(csr_frm),
       .csr_write(csr_write),.f3(f3),.csr_uimm(csr_uimm),
@@ -125,6 +190,7 @@
       .wb_rd_q(wb_rd_q),.wb_value_q(wb_value_q),
 `endif
       .wb_fp_csr_q(wb_fp_csr_q));
+`endif
   end else begin: g_no_fpu
 `ifdef EDGE32_SPLIT_LSU
     assign fp_ready=1'b0, fp_done=1'b0, fp_error=1'b0, fp_busy=1'b0;
