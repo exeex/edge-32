@@ -1,2 +1,2 @@
-${ROOT_DIR}/src/edge-32/rtl/edge_32_div_nonnegative.v
-${ROOT_DIR}/src/edge-32/rtl/edge_32_muldiv_asap7.v
+${ROOT_DIR}/src/edge-32/rtl/ex/muldiv/edge_32_div_nonnegative.v
+${ROOT_DIR}/src/edge-32/rtl/ex/muldiv/edge_32_muldiv_asap7.v

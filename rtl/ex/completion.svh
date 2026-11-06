@@ -1,22 +1,6 @@
 // Implementation owned by this stage module.
-  assign accel_req_valid=ex_issue_ok&&is_accel&&!accel_started_q;
-  assign accel_req_inst=ex_inst[31:0];
-  assign accel_req_src0={32'd0,ex_rs1_value};
-  assign accel_req_src1={32'd0,ex_rs2_value};
-    assign accel_req_fire=accel_req_valid&&accel_req_ready;
-    assign accel_done=is_accel&&accel_started_q&&accel_resp_valid;
-  assign cache_op_valid=ex_issue_ok&&is_edge_cache&&!cache_started_q;
-  assign cache_op_is_va=cache_is_va;
-  assign cache_op_kind=cache_kind;
-  assign cache_op_addr=ex_rs1_value;
-    assign cache_req_fire=cache_op_valid&&cache_op_ready;
-    assign cache_done=is_edge_cache&&cache_started_q&&cache_op_complete_valid;
-  assign icache_invalidate_valid=
-    ex_issue_ok&&is_fence_i&&!icache_invalidate_started_q;
-    assign icache_invalidate_fire=
-    icache_invalidate_valid&&icache_invalidate_ready;
-    assign fence_i_done=is_fence_i&&icache_invalidate_started_q&&
-    icache_invalidate_complete;
+`include "ex/asic_control/issue.svh"
+`include "ex/csr/cache_control.svh"
     assign fast_done=ex_issue_ok&&is_fast_class;
   // Capacity is independent of validity, launch permission and cancellation.
   // Static one-cycle classes were decoded at ID capture; slow units expose

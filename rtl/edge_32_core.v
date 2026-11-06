@@ -366,8 +366,8 @@ module edge_32_core #(
 endmodule
 
 // Stage module definitions compile with this core; includes do not share scope.
-`include "edge_32_if.sv"
-`include "edge_32_id.sv"
-`include "edge_32_gpr_read_port.sv"
-`include "edge_32_ex.sv"
-`include "edge_32_wb.sv"
+`include "if/edge_32_if.sv"
+`include "id/edge_32_id.sv"
+`include "id/gpr/edge_32_gpr_read_port.sv"
+`include "ex/edge_32_ex.sv"
+`include "wb/edge_32_wb.sv"
