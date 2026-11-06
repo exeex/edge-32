@@ -48,3 +48,5 @@ ${EDGE32_ROOT}/rtl/edge_32_core.v
 ${EDGE32_ROOT}/rtl/cache/edge_32_cached_core.v
 ${EDGE32_ROOT}/rtl/cache/edge_32_cache_biu.v
 ${EDGE32_ROOT}/rtl/cache/edge_32_axi_core.v
+
+${EDGE32_ROOT}/rtl/reset/edge32_reset_manager.v
