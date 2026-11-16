@@ -1,7 +1,14 @@
 // Single-hart run-control DM subset over the existing addressed debug interface.
-// No SBA/program buffer/memory commands: this is not a complete Debug Spec DM.
+// SBA is independent of run-control. Program Buffer/full Debug Spec compliance remain unsupported.
 module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_DEPTH=64)(
   input wire clk, reset_n, core_reset_n,
+  output wire mem_req_valid, mem_req_write,
+  output wire [31:0] mem_req_addr, mem_req_wdata,
+  output wire [1:0] mem_req_size,
+  input wire mem_req_ready, mem_resp_valid,
+  input wire [31:0] mem_resp_rdata,
+  input wire [2:0] mem_resp_error,
+  output wire mem_resp_ready,
   input wire putchar_valid,
   input wire [7:0] putchar_char,
   input wire dmi_valid, dmi_write,
@@ -21,6 +28,20 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
   output wire resp_ready
 );
   reg active, selected, havereset, resumeack, step;
+  wire [31:0] sba_data;
+  edge32_debug_sba sba(.clk(clk),.reset_n(reset_n),.enable(active),
+    .access_valid(dmi_valid && dmi_ready),.access_write(dmi_write),
+    .access_addr(dmi_addr),.access_data(dmi_wdata),.read_data(sba_data),
+    .mem_req_valid(mem_req_valid),
+    .mem_req_write(mem_req_write),
+    .mem_req_addr(mem_req_addr),
+    .mem_req_wdata(mem_req_wdata),
+    .mem_req_size(mem_req_size),
+    .mem_req_ready(mem_req_ready),
+    .mem_resp_valid(mem_resp_valid),
+    .mem_resp_rdata(mem_resp_rdata),
+    .mem_resp_error(mem_resp_error),
+    .mem_resp_ready(mem_resp_ready));
   wire [31:0] console_status,console_data;
   wire console_pop=dmi_valid && dmi_ready && active && !dmi_write && dmi_addr==7'h75;
   wire console_clear=dmi_valid && dmi_ready && active && dmi_write &&
@@ -139,6 +160,7 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
         end else if(dmi_addr==7'h10) dmi_rdata<={15'd0,selected,14'd0,ndmreset,active};
         else if(active) begin
           case(dmi_addr)
+            7'h38,7'h39,7'h3c: dmi_rdata<=sba_data;
             7'h04: dmi_rdata<=data0;
             7'h11: if(selected || ndmreset || !core_reset_n) dmi_rdata<=status_word(0); else dispatch(0,0,0,STATUS);
             7'h12: dmi_rdata<=0; // no data access/program buffer, one hart
