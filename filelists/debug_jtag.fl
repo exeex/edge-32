@@ -1,0 +1,4 @@
+# Optional JTAG transport for the maintained addressed debug/control interface.
+${EDGE32_ROOT}/rtl/debug_control/edge32_jtag_dtm.v
+${EDGE32_ROOT}/rtl/debug_control/edge32_dmi_debug.v
+${EDGE32_ROOT}/rtl/debug_control/edge32_jtag_debug.v
