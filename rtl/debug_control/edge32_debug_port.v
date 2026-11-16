@@ -17,6 +17,12 @@ module edge32_debug_port #(
   input wire halted,
   input wire illegal,
   input wire debug_gpr_allowed,
+  input wire [PC_WIDTH-1:0] debug_pc,
+  input wire [2:0] debug_cause,
+  output reg [PC_WIDTH-1:0] debug_break_pc,
+  output reg debug_break_enable,
+  output reg debug_gpr_write,
+  output reg [31:0] debug_gpr_wdata,
   output reg debug_gpr_req_valid,
   input wire debug_gpr_req_ready,
   output reg [4:0] debug_gpr_addr,
@@ -34,17 +40,24 @@ module edge32_debug_port #(
   localparam [2:0] ID_GPR = 3'd2;
   localparam [2:0] ID_CYCLE = 3'd3;
   localparam [2:0] ID_INSTRET = 3'd4;
+  localparam [2:0] ID_PC = 3'd5;
+  localparam [2:0] ID_BREAK_PC = 3'd6;
+  localparam [2:0] ID_BREAK_ENABLE = 3'd7;
 
   reg stopped_q;
   reg gpr_pending_q;
+  reg halt_pending_q;
   assign debug_gpr_resp_ready = reset_n && gpr_pending_q && !debug_gpr_req_valid && !resp_valid;
   reg halted_q;
 
-  assign req_ready = reset_n && !resp_valid && !gpr_pending_q;
+  assign req_ready = reset_n && !resp_valid && !gpr_pending_q && !halt_pending_q;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       stopped_q <= 1'b1;
+      debug_gpr_write <= 0; debug_gpr_wdata <= 0;
+      debug_break_pc <= 0; debug_break_enable <= 0;
+      halt_pending_q <= 0;
       gpr_pending_q <= 0; debug_gpr_req_valid <= 0; debug_gpr_addr <= 0;
       halted_q <= 1'b0;
       interrupt <= 1'b0;
@@ -55,11 +68,19 @@ module edge32_debug_port #(
       core_start <= 1'b0;
       core_force_stop <= 1'b0;
     end else begin
-      halted_q <= halted;
+      halted_q <= debug_gpr_allowed;
+      // Do not acknowledge the command pulse itself or stale pre-stop permission.
+      // The core owns quiescence; the external requester sees only completion.
+      if (halt_pending_q && !core_force_stop && debug_gpr_allowed) begin
+        halt_pending_q <= 0;
+        resp_valid <= 1;
+        resp_error <= 0;
+        resp_data <= 64'd0;
+      end
       if(debug_gpr_req_valid && debug_gpr_req_ready) debug_gpr_req_valid <= 0;
       if(debug_gpr_resp_valid && debug_gpr_resp_ready) begin
         gpr_pending_q <= 0; resp_valid <= 1; resp_error <= 0;
-        resp_data <= {32'd0, debug_gpr_data};
+        resp_data <= debug_gpr_write ? 64'd0 : {32'd0, debug_gpr_data};
       end
       core_start <= 1'b0;
       core_force_stop <= 1'b0;
@@ -80,20 +101,47 @@ module edge32_debug_port #(
                 if (req_data[0] || req_data[1]) stopped_q <= req_data[1];
                 core_start <= req_data[0];
                 core_force_stop <= req_data[1];
+                if (req_data[1]) begin
+                  halt_pending_q <= 1;
+                  resp_valid <= 0;
+                end
               end
+            end
+            ID_GPR: begin
+              if (|req_data[31:5] || !debug_gpr_allowed) resp_error <= 1;
+              else begin
+                resp_valid <= 0; gpr_pending_q <= 1;
+                debug_gpr_req_valid <= 1; debug_gpr_addr <= req_data[4:0];
+                debug_gpr_write <= 1; debug_gpr_wdata <= req_data[63:32];
+              end
+            end
+            ID_BREAK_PC: begin
+              if (!debug_gpr_allowed || |req_data[63:32] || |req_data[1:0]) resp_error <= 1;
+              else debug_break_pc <= req_data[PC_WIDTH-1:0];
+            end
+            ID_BREAK_ENABLE: begin
+              if (!debug_gpr_allowed || |req_data[63:1]) resp_error <= 1;
+              else debug_break_enable <= req_data[0];
             end
             ID_BOOT_PC: boot_pc <= req_data[PC_WIDTH-1:0];
             default: resp_error <= 1'b1;
           endcase
         end else begin
           case (req_id)
-            ID_CONTROL: resp_data <= {60'd0, interrupt, stopped_q, illegal, halted};
+            ID_CONTROL: resp_data <= {57'd0, debug_cause, interrupt, stopped_q, illegal, debug_gpr_allowed};
+            ID_PC: begin
+              if (!debug_gpr_allowed) resp_error <= 1;
+              else resp_data <= {{(64-PC_WIDTH){1'b0}}, debug_pc};
+            end
+            ID_BREAK_PC: resp_data <= {{(64-PC_WIDTH){1'b0}}, debug_break_pc};
+            ID_BREAK_ENABLE: resp_data <= {63'd0, debug_break_enable};
             ID_BOOT_PC: resp_data <= {{(64-PC_WIDTH){1'b0}}, boot_pc};
             ID_GPR: begin
               if(|req_data[63:5] || !debug_gpr_allowed) resp_error <= 1;
               else begin
                 resp_valid <= 0; gpr_pending_q <= 1;
                 debug_gpr_req_valid <= 1; debug_gpr_addr <= req_data[4:0];
+                debug_gpr_write <= 0;
               end
             end
             ID_CYCLE: resp_data <= cycle_count;
@@ -103,7 +151,7 @@ module edge32_debug_port #(
         end
       end
       // A new event wins over simultaneous software acknowledgement.
-      if ((halted && !halted_q) || core_force_stop) interrupt <= 1'b1;
+      if (debug_gpr_allowed && !halted_q) interrupt <= 1'b1;
     end
   end
 endmodule
