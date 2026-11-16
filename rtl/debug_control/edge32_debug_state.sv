@@ -12,7 +12,7 @@ module edge32_debug_state #(
   input wire ex_valid, ex_complete, wb_pending, wb_commit,
   input wire ex_terminal, ex_fault,
   input wire [PC_WIDTH-1:0] ex_next_pc,
-  output wire block_issue,
+  output wire block_issue, block_fetch,
   output reg debug_halted,
   output reg [PC_WIDTH-1:0] debug_pc,
   output reg [2:0] debug_cause
@@ -21,6 +21,10 @@ module edge32_debug_state #(
   reg step_active, step_issued;
   reg [PC_WIDTH-1:0] arch_next_pc, wb_next_pc;
   assign block_issue = halt_req || breakpoint_hit || halt_pending || debug_halted || step_issued;
+  // ID suppresses the breakpoint instruction immediately. Fetch may stop one
+  // edge later, once halt_pending owns the event; no branch-result cone is
+  // allowed to control the external instruction request in this cycle.
+  assign block_fetch = halt_req || halt_pending || debug_halted || step_issued;
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       control_ack <= 0;
