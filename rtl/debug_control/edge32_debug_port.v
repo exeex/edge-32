@@ -14,6 +14,9 @@ module edge32_debug_port #(
   output reg resp_error,
   output reg interrupt,
   output reg [63:0] resp_data,
+  output reg debug_dcache_req_valid, debug_dcache_invalidate,
+  output reg [31:0] debug_dcache_addr,
+  input wire debug_dcache_req_ready, debug_dcache_complete,
   output reg debug_icache_req_valid,
   output reg [31:0] debug_icache_addr,
   input wire debug_icache_req_ready,
@@ -54,13 +57,13 @@ module edge32_debug_port #(
   reg stopped_q;
   reg gpr_pending_q;
   reg halt_pending_q;
-  reg icache_pending_q;
+  reg icache_pending_q, dcache_pending_q;
   reg control_pending_q;
   reg step_pending_q, step_launched_q;
   assign debug_gpr_resp_ready = reset_n && gpr_pending_q && !debug_gpr_req_valid && !resp_valid;
   reg halted_q;
 
-  assign req_ready = reset_n && !resp_valid && !gpr_pending_q && !halt_pending_q && !icache_pending_q && !control_pending_q && !step_pending_q;
+  assign req_ready = reset_n && !resp_valid && !gpr_pending_q && !halt_pending_q && !icache_pending_q && !dcache_pending_q && !control_pending_q && !step_pending_q;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
@@ -70,6 +73,7 @@ module edge32_debug_port #(
       control_pending_q <= 0;
       debug_gpr_write <= 0; debug_gpr_wdata <= 0;
       debug_break_pc <= 0; debug_break_enable <= 0;
+      dcache_pending_q <= 0; debug_dcache_req_valid <= 0; debug_dcache_addr <= 0; debug_dcache_invalidate <= 0;
       icache_pending_q <= 0; debug_icache_req_valid <= 0; debug_icache_addr <= 0;
       halt_pending_q <= 0;
       gpr_pending_q <= 0; debug_gpr_req_valid <= 0; debug_gpr_addr <= 0;
@@ -92,6 +96,10 @@ module edge32_debug_port #(
       if (control_pending_q && debug_control_ack) begin
         control_pending_q <= 0;
         resp_valid <= 1; resp_error <= 0; resp_data <= 0;
+      end
+      if (debug_dcache_req_valid && debug_dcache_req_ready) debug_dcache_req_valid <= 0;
+      if (dcache_pending_q && !debug_dcache_req_valid && debug_dcache_complete) begin
+        dcache_pending_q <= 0; resp_valid <= 1; resp_error <= 0; resp_data <= 0;
       end
       if (debug_icache_req_valid && debug_icache_req_ready)
         debug_icache_req_valid <= 0;
@@ -123,8 +131,9 @@ module edge32_debug_port #(
         if (req_write) begin
           case (req_id)
             ID_CONTROL: begin
-              // START, HALT, SYNC, RESUME and STEP are exclusive actions.
-              if (|req_data[31:6] || (!req_data[3] && |req_data[63:32]) ||
+              // START, HALT, I-SYNC, D-CLEAN, RESUME and STEP are exclusive actions.
+              if (|req_data[31:8] || (!(req_data[3] || |req_data[7:6]) && |req_data[63:32]) ||
+                  ((|req_data[7:6]) && ((&req_data[7:6]) || |req_data[5:3] || |req_data[1:0] || !debug_gpr_allowed)) ||
                   (req_data[3] && |req_data[33:32]) || (&req_data[1:0]) ||
                   (req_data[3] && (|req_data[1:0] || !debug_gpr_allowed)) ||
                   (req_data[4] && (|req_data[1:0] || req_data[3] || !debug_gpr_allowed)) ||
@@ -135,6 +144,11 @@ module edge32_debug_port #(
                 if (req_data[0] || req_data[1]) stopped_q <= req_data[1];
                 core_start <= req_data[0];
                 core_force_stop <= req_data[1];
+                if (|req_data[7:6]) begin
+                  debug_dcache_invalidate <= req_data[7];
+                  dcache_pending_q <= 1; debug_dcache_req_valid <= 1;
+                  debug_dcache_addr <= req_data[63:32]; resp_valid <= 0;
+                end
                 if (req_data[5]) begin
                   debug_step <= 1; step_pending_q <= 1; step_launched_q <= 0;
                   stopped_q <= 0; resp_valid <= 0;
