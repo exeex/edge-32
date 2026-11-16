@@ -70,6 +70,7 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
   input wire [4:0] register_rd, input wire rd_gpr, rd_fpr,
   input wire [31:0] fpu_control,
   output wire rv32::issue_control_t control,
+  output wire rv32::operand_select_t operand_select,
   output wire terminal_break,
   output wire [19:0] imm,
   output wire writes_gpr, writes_fpr,
@@ -182,6 +183,17 @@ module edge_32_issue_decode #(parameter ENABLE_FPU=0)(
                ({20{imm_is_b}} & imm_b) |
                ({20{imm_is_u}} & imm_u) |
                ({20{imm_is_j}} & imm_j);
+  // Select the payload delivered over each ID->EX GPR lane using the existing
+  // issue-family predicates. Consumers select their immediate/PC lanes locally.
+  // All ASIC commands receive the already-routed rs1 on both GPR lanes; capture
+  // subop qualification belongs to the ASIC unit, not the hazard/ready path.
+  wire fp_gpr_payload = ENABLE_FPU && (opcode==rv32::OPCODE_OP_FP) &&
+    ((inst[31:27]==5'b11010)||(inst[31:27]==5'b11110));
+  assign operand_select.rs1_read_port = is_opimm || is_opimm32 || is_op || is_op32 ||
+    is_jalr || is_branch || is_load || is_store || is_fp_load || is_fp_store ||
+    is_edge_cache || is_accel || (is_csr_op && !funct3[2]) || fp_gpr_payload;
+  assign operand_select.rs2_read_port = is_op || is_op32 || is_branch || is_store || is_accel;
+
   rv32::issue_control_t issue_packet;
   assign issue_packet.is_lui = is_lui;
   assign issue_packet.is_auipc = is_auipc;

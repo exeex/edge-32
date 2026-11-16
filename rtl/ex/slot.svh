@@ -7,6 +7,7 @@
   always @(posedge clk) begin
     if (id_capture_enable) begin
       ex_pc <= id_pc; ex_inst <= id_inst;
+      // id_uses_gpr carries the ID operand-select sideband, not a use re-decode.
       ex_rs1_value <= id_uses_gpr[0] ? id_rs1_value : 32'd0;
       ex_rs2_value <= id_uses_gpr[1] ? id_rs2_value : 32'd0;
     end

@@ -64,8 +64,12 @@ module edge32_debug_state #(
             if (!halt_pending)
               debug_cause <= halt_req ? 3'd3 : breakpoint_hit ? 3'd2 : ex_fault ? 3'd7 : ex_terminal ? 3'd1 : 3'd4;
           end
-          // Wait one full edge beyond the last commit; debug_pc and GPRs agree.
-          if ((halt_pending || halt_req || breakpoint_hit) && !ex_valid && !wb_pending) begin
+          // Publish only a registered stop request after the pipe drains.
+          // A new event first records halt_pending/cause; it must not drive
+          // the wide debug-PC capture mux in the same cycle. Idle HALT and
+          // breakpoint acknowledgement gain one edge; fetch/issue still stop
+          // immediately through their existing control paths.
+          if (halt_pending && !ex_valid && !wb_pending) begin
             debug_halted <= 1;
             step_active <= 0; step_issued <= 0;
             debug_pc <= arch_next_pc;

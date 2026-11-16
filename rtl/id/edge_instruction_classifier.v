@@ -113,6 +113,13 @@ package rv32;
     A_ZBA_UW = 4'd10
   } alu_op_t;
 
+  // ID->EX GPR payload routes. Immediate and PC retain separate payload lanes.
+  // These mux controls also qualify RAW hazards; there is no second use decode.
+  typedef struct packed {
+    logic rs2_read_port;
+    logic rs1_read_port;
+  } operand_select_t;
+
   // Keep the packet typed end-to-end so adding a control bit cannot silently
   // truncate a fixed-width decode port. EX valid owns observability; this
   // packet has no reset or validity field.
