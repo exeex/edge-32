@@ -1,7 +1,9 @@
 // Single-hart run-control DM subset over the existing addressed debug interface.
 // No SBA/program buffer/memory commands: this is not a complete Debug Spec DM.
-module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120)(
+module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_DEPTH=64)(
   input wire clk, reset_n, core_reset_n,
+  input wire putchar_valid,
+  input wire [7:0] putchar_char,
   input wire dmi_valid, dmi_write,
   input wire [6:0] dmi_addr,
   input wire [31:0] dmi_wdata,
@@ -19,6 +21,15 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120)(
   output wire resp_ready
 );
   reg active, selected, havereset, resumeack, step;
+  wire [31:0] console_status,console_data;
+  wire console_pop=dmi_valid && dmi_ready && active && !dmi_write && dmi_addr==7'h75;
+  wire console_clear=dmi_valid && dmi_ready && active && dmi_write &&
+    dmi_addr==7'h74 && dmi_wdata==32'd4;
+  edge32_debug_console #(.DEPTH(CONSOLE_DEPTH)) console(
+    .clk(clk),.reset_n(reset_n),.putchar_valid(putchar_valid && core_reset_n),
+    .putchar_char(putchar_char),.pop(console_pop),.clear_overflow(console_clear),
+    .status(console_status),.data(console_data));
+
   reg [31:0] data0, command, raw_lo, raw_hi;
   reg [2:0] cmderr;
   reg [15:0] csr_number;
@@ -117,6 +128,8 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120)(
                   end
                 end
               end
+              7'h74: if(dmi_wdata!=4) dmi_error<=1;
+              7'h75: dmi_error<=1; // read-only destructive data register
               7'h70: raw_lo<=dmi_wdata;
               7'h71: raw_hi<=dmi_wdata;
               7'h72: if(|dmi_wdata[31:4]) dmi_error<=1; else dispatch(dmi_wdata[2:0],dmi_wdata[3],{raw_hi,raw_lo},RAW);
@@ -131,6 +144,8 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120)(
             7'h12: dmi_rdata<=0; // no data access/program buffer, one hart
             7'h16: dmi_rdata<={21'd0,cmderr,4'd0,4'd1}; // datacount=1, progbufsize=0
             7'h17: dmi_rdata<=command;
+            7'h74: dmi_rdata<=console_status;
+            7'h75: dmi_rdata<=console_data;
             7'h70: dmi_rdata<=raw_lo;
             7'h71: dmi_rdata<=raw_hi;
             7'h73: dmi_rdata<={31'd0,raw_error};

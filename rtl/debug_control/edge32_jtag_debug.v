@@ -1,10 +1,13 @@
 // Transport adapter. req/resp connect directly to edge32_debug_port (no AXI).
 module edge32_jtag_debug #(
   parameter [31:0] IDCODE=32'h00000ffd,
-  parameter [31:0] MISA=32'h40001120
+  parameter [31:0] MISA=32'h40001120,
+  parameter CONSOLE_DEPTH=64
 )(
   input wire clk, reset_n, core_reset_n, tck, trst_n, tms, tdi,
   output wire tdo, ndmreset,
+  input wire putchar_valid,
+  input wire [7:0] putchar_char,
   output wire req_valid, req_write,
   output wire [2:0] req_id,
   output wire [63:0] req_data,
@@ -33,10 +36,11 @@ module edge32_jtag_debug #(
     .dmi_rdata(dmi_rdata),
     .dmi_error(dmi_error)
   );
-  edge32_dmi_debug #(.MISA(MISA)) dm(
+  edge32_dmi_debug #(.MISA(MISA),.CONSOLE_DEPTH(CONSOLE_DEPTH)) dm(
     .clk(clk),
     .reset_n(reset_n),
     .core_reset_n(core_reset_n),
+    .putchar_valid(putchar_valid),.putchar_char(putchar_char),
     .dmi_valid(dmi_valid),
     .dmi_write(dmi_write),
     .dmi_addr(dmi_addr),
