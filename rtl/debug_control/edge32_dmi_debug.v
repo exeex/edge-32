@@ -29,6 +29,14 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
 );
   reg active, selected, havereset, resumeack, step;
   wire [31:0] sba_data;
+  wire sba_resp_ready;
+  reg sync_done, sync_error;
+  // Retain the RAM response until a halted core has invalidated this line.
+  // Aligned SBA accesses are at most four bytes, so cannot cross a 64-byte line.
+  wire sync_needed=mem_resp_valid && mem_req_write && mem_resp_error==0 &&
+                   active && core_reset_n && !ndmreset;
+  wire sync_pending=sync_needed && !sync_done;
+  assign mem_resp_ready=sba_resp_ready && !sync_pending;
   edge32_debug_sba sba(.clk(clk),.reset_n(reset_n),.enable(active),
     .access_valid(dmi_valid && dmi_ready),.access_write(dmi_write),
     .access_addr(dmi_addr),.access_data(dmi_wdata),.read_data(sba_data),
@@ -38,10 +46,10 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
     .mem_req_wdata(mem_req_wdata),
     .mem_req_size(mem_req_size),
     .mem_req_ready(mem_req_ready),
-    .mem_resp_valid(mem_resp_valid),
+    .mem_resp_valid(mem_resp_valid && !sync_pending),
     .mem_resp_rdata(mem_resp_rdata),
-    .mem_resp_error(mem_resp_error),
-    .mem_resp_ready(mem_resp_ready));
+    .mem_resp_error(sync_error ? 3'd7 : mem_resp_error),
+    .mem_resp_ready(sba_resp_ready));
   wire [31:0] console_status,console_data;
   wire console_pop=dmi_valid && dmi_ready && active && !dmi_write && dmi_addr==7'h75;
   wire console_clear=dmi_valid && dmi_ready && active && dmi_write &&
@@ -57,8 +65,8 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
   reg busy;
   reg [2:0] operation;
   reg abstract_read, raw_error;
-  localparam STATUS=0, ABSTRACT=1, DCSR=2, HALT=3, RESUME=4, RAW=5;
-  assign dmi_ready=!dmi_resp_valid && !busy;
+  localparam STATUS=0, ABSTRACT=1, DCSR=2, HALT=3, RESUME=4, RAW=5, SYNC_CHECK=6, SYNC_LINE=7;
+  assign dmi_ready=!dmi_resp_valid && !busy && !sync_pending;
   assign resp_ready=busy && !req_valid;
   function [31:0] status_word(input [63:0] s);
     begin
@@ -76,17 +84,30 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
   endtask
   always @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
+      sync_done<=0; sync_error<=0;
       active<=0; selected<=0; havereset<=1; resumeack<=0; step<=0; ndmreset<=0;
       data0<=0; command<=0; csr_number<=0; raw_lo<=0; raw_hi<=0; cmderr<=0;
       busy<=0; operation<=0; abstract_read<=0; raw_error<=0;
       req_valid<=0; req_write<=0; req_id<=0; req_data<=0;
       dmi_resp_valid<=0; dmi_rdata<=0; dmi_error<=0;
     end else begin
+      if(mem_resp_valid && mem_resp_ready) begin sync_done<=0; sync_error<=0; end
+      if(sync_pending && !busy && !dmi_resp_valid)
+        dispatch(0,0,0,SYNC_CHECK);
       if(dmi_resp_valid && dmi_resp_ready) dmi_resp_valid<=0;
       if(req_valid && req_ready) req_valid<=0;
       if(resp_valid && resp_ready) begin
         busy<=0; dmi_resp_valid<=1; dmi_rdata<=0;
         case(operation)
+          SYNC_CHECK: begin
+            dmi_resp_valid<=0;
+            if(!resp_error && resp_data[0])
+              dispatch(0,1,{mem_req_addr,32'd8},SYNC_LINE);
+            else begin sync_done<=1; sync_error<=resp_error; end
+          end
+          SYNC_LINE: begin
+            dmi_resp_valid<=0; sync_done<=1; sync_error<=resp_error;
+          end
           STATUS: dmi_rdata<=status_word(resp_data);
           DCSR: begin
             if(resp_error || !resp_data[0]) cmderr<=4;
@@ -177,9 +198,12 @@ module edge32_dmi_debug #(parameter [31:0] MISA=32'h40001120, parameter CONSOLE_
       end
       // A target reset cancels its backend transaction but preserves DMI/TAP access.
       if(!core_reset_n) begin
-        havereset<=1; req_valid<=0;
+        havereset<=1; req_valid<=0; sync_done<=0; sync_error<=0;
         if(busy) begin
           busy<=0; dmi_resp_valid<=1; dmi_rdata<=0;
+          if(operation==SYNC_CHECK || operation==SYNC_LINE) begin
+            dmi_resp_valid<=0;
+          end
           if(operation==ABSTRACT || operation==DCSR) cmderr<=4;
           if(operation==RAW) raw_error<=1;
           if(operation==STATUS) dmi_rdata<=status_word(0);
