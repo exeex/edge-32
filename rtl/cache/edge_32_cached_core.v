@@ -238,6 +238,7 @@ module edge_32_cached_core #(
     .core_imem_resp_data(core_imem_resp_data),
     .core_imem_resp_error(core_imem_resp_error),
     .icache_invalidate_valid(icache_invalidate_valid),
+    .icache_invalidate_line(1'b0), .icache_invalidate_addr(32'd0),
     .icache_invalidate_ready(icache_invalidate_ready),
     .icache_invalidate_complete(icache_invalidate_complete),
     .imem_refill_req_valid(imem_refill_req_valid),

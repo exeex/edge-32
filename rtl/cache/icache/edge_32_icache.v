@@ -1,5 +1,6 @@
 // Fixed RV32 I-cache boundary: scalar fetch, 128-bit AXI refill, invalidate owner.
 module edge_32_icache #(
+  parameter ENABLE_LINE_INVALIDATE=0,
   parameter ICACHE_BYTES=32768
 )(
   input wire clk,
@@ -11,6 +12,8 @@ module edge_32_icache #(
   output wire [31:0] core_imem_resp_data,
   output wire core_imem_resp_error,
   input wire icache_invalidate_valid,
+  input wire icache_invalidate_line,
+  input wire [31:0] icache_invalidate_addr,
   output wire icache_invalidate_ready,
   output wire icache_invalidate_complete,
   output wire imem_refill_req_valid,
@@ -51,7 +54,7 @@ module edge_32_icache #(
   );
 
   edge_ifu_icache #(
-    .PC_WIDTH(32), .ICACHE_BYTES(ICACHE_BYTES), .LINE_BYTES(64)
+    .ENABLE_LINE_INVALIDATE(ENABLE_LINE_INVALIDATE), .PC_WIDTH(32), .ICACHE_BYTES(ICACHE_BYTES), .LINE_BYTES(64)
   ) icache (
     .forever_cpuclk(clk), .cpurst_b(reset_n),
     .fetch_req_valid(icache_req_valid && !icache_invalidate_valid &&
@@ -60,6 +63,7 @@ module edge_32_icache #(
     .fetch_req_ready(icache_array_req_ready),
     .fetch_req_addr(icache_req_addr),
     .invalidate_valid(icache_invalidate_valid),
+    .invalidate_line(icache_invalidate_line), .invalidate_addr(icache_invalidate_addr),
     .invalidate_ready(icache_invalidate_ready),
     .fetch_resp_valid(icache_resp_valid),
     .fetch_resp_ready(icache_resp_ready), .fetch_resp_bits(icache_resp_bits),

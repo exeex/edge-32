@@ -1,6 +1,7 @@
 // Single-request I-cache: 128-bit line refill, scalar instruction response.
 module edge_ifu_icache #(
   parameter PC_WIDTH = 32,
+  parameter ENABLE_LINE_INVALIDATE = 0,
   // Legacy line-consuming frontends explicitly select 128. RV32 uses 32.
   parameter FETCH_WIDTH = 32,
   parameter ICACHE_BYTES = 16384,
@@ -14,6 +15,8 @@ module edge_ifu_icache #(
   input  wire [PC_WIDTH-1:0]     fetch_req_addr,
 
   input  wire                    invalidate_valid,
+  input  wire                    invalidate_line,
+  input  wire [PC_WIDTH-1:0]     invalidate_addr,
   output wire                    invalidate_ready,
 
   output wire                    fetch_resp_valid,
@@ -55,6 +58,9 @@ module edge_ifu_icache #(
   reg [LINE_INDEX_WIDTH-1:0] miss_index_q;
   reg [TAG_WIDTH-1:0] miss_tag_q;
   reg invalidate_active_q;
+  reg invalidate_line_q;
+  reg invalidate_lookup_q;
+  reg [TAG_WIDTH-1:0] invalidate_tag_q;
   reg [LINE_INDEX_WIDTH-1:0] invalidate_index_q;
   reg lookup_valid_q;
   reg [PC_WIDTH-1:0] lookup_addr_q;
@@ -85,8 +91,8 @@ module edge_ifu_icache #(
   assign resp_primary_ready = !resp_valid_q || fetch_resp_ready;
   assign resp_can_update = resp_primary_ready;
   assign fetch_req_ready =
-    !invalidate_active_q && !lookup_valid_q && !miss_pending_q &&
-    resp_can_update;
+    !invalidate_active_q && !invalidate_lookup_q && !lookup_valid_q && !miss_pending_q &&
+    resp_can_update && !invalidate_valid;
   assign req_fire = fetch_req_valid && fetch_req_ready;
   assign lookup_complete = lookup_valid_q &&
     (lookup_hit ? resp_can_update : imem_req_ready);
@@ -97,11 +103,11 @@ module edge_ifu_icache #(
   assign imem_resp_ready = miss_pending_q && resp_primary_ready;
   assign miss_resp_fire = imem_resp_valid && imem_resp_ready;
   assign invalidate_ready =
-    !invalidate_active_q && !lookup_valid_q && !miss_pending_q &&
+    !invalidate_active_q && !invalidate_lookup_q && !lookup_valid_q && !miss_pending_q &&
     !resp_valid_q;
   assign invalidate_fire = invalidate_valid && invalidate_ready;
-  assign invalidate_last = invalidate_index_q == {LINE_INDEX_WIDTH{1'b1}};
-  assign tag_clear_valid = invalidate_active_q;
+  assign invalidate_last = invalidate_line_q || invalidate_index_q == {LINE_INDEX_WIDTH{1'b1}};
+  assign tag_clear_valid = invalidate_active_q && (!invalidate_line_q || lookup_hit);
 
   wire [FETCH_WIDTH-1:0] selected_hit_word;
   wire [FETCH_WIDTH-1:0] selected_refill_word;
@@ -119,7 +125,7 @@ module edge_ifu_icache #(
   assign debug_icache_bytes = ICACHE_BYTES_U32;
   assign debug_hit = lookup_complete && lookup_hit;
   assign debug_miss_pending = miss_pending_q;
-  assign debug_invalidate_busy = invalidate_active_q;
+  assign debug_invalidate_busy = invalidate_active_q || invalidate_lookup_q;
 
   wire terminal = !BURST || imem_resp_last || refill_beat_q == 3;
   wire burst_error = imem_resp_error || (BURST &&
@@ -163,9 +169,10 @@ module edge_ifu_icache #(
     .write_valid_bit(!burst_error),
     .clear_valid(tag_clear_valid),
     .clear_index(invalidate_index_q),
-    .read_index(lookup_valid_q ? lookup_index_q : req_index),
+    .read_index((invalidate_lookup_q || (invalidate_active_q && invalidate_line_q)) ?
+      invalidate_index_q : lookup_valid_q ? lookup_index_q : req_index),
     .read_tag(), .read_valid_bit(),
-    .read_compare_tag(lookup_tag_q), .read_match(lookup_hit)
+    .read_compare_tag(invalidate_line_q ? invalidate_tag_q : lookup_tag_q), .read_match(lookup_hit)
   );
 
   always @(posedge forever_cpuclk or negedge cpurst_b) begin
@@ -182,6 +189,7 @@ module edge_ifu_icache #(
       miss_tag_q <= {TAG_WIDTH{1'b0}};
       // SRAM metadata has no bulk reset.  Scrub valid bits before admitting
       // the first lookup instead of resetting every cache entry in parallel.
+      invalidate_line_q <= 0; invalidate_lookup_q <= 0; invalidate_tag_q <= 0;
       invalidate_active_q <= 1'b1;
       invalidate_index_q <= {LINE_INDEX_WIDTH{1'b0}};
       lookup_valid_q <= 1'b0;
@@ -192,12 +200,21 @@ module edge_ifu_icache #(
       if (invalidate_active_q) begin
         if (invalidate_last) begin
           invalidate_active_q <= 1'b0;
+          invalidate_line_q <= 0;
         end
         invalidate_index_q <= invalidate_index_q +
           {{(LINE_INDEX_WIDTH-1){1'b0}}, 1'b1};
+      end else if (invalidate_lookup_q) begin
+        // One SRAM read cycle precedes tag comparison / conditional valid clear.
+        invalidate_lookup_q <= 0;
+        invalidate_active_q <= 1;
       end else if (invalidate_fire) begin
-        invalidate_active_q <= 1'b1;
-        invalidate_index_q <= {LINE_INDEX_WIDTH{1'b0}};
+        invalidate_line_q <= ENABLE_LINE_INVALIDATE && invalidate_line;
+        invalidate_lookup_q <= ENABLE_LINE_INVALIDATE && invalidate_line;
+        invalidate_active_q <= !(ENABLE_LINE_INVALIDATE && invalidate_line);
+        invalidate_index_q <= (ENABLE_LINE_INVALIDATE && invalidate_line) ?
+          invalidate_addr[LINE_OFFSET_WIDTH +: LINE_INDEX_WIDTH] : {LINE_INDEX_WIDTH{1'b0}};
+        invalidate_tag_q <= invalidate_addr[LINE_OFFSET_WIDTH + LINE_INDEX_WIDTH +: TAG_WIDTH];
       end
 
       if (resp_valid_q && fetch_resp_ready) begin

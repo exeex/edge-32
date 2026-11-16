@@ -14,6 +14,10 @@ module edge32_debug_port #(
   output reg resp_error,
   output reg interrupt,
   output reg [63:0] resp_data,
+  output reg debug_icache_req_valid,
+  output reg [31:0] debug_icache_addr,
+  input wire debug_icache_req_ready,
+  input wire debug_icache_complete,
   input wire halted,
   input wire illegal,
   input wire debug_gpr_allowed,
@@ -47,16 +51,18 @@ module edge32_debug_port #(
   reg stopped_q;
   reg gpr_pending_q;
   reg halt_pending_q;
+  reg icache_pending_q;
   assign debug_gpr_resp_ready = reset_n && gpr_pending_q && !debug_gpr_req_valid && !resp_valid;
   reg halted_q;
 
-  assign req_ready = reset_n && !resp_valid && !gpr_pending_q && !halt_pending_q;
+  assign req_ready = reset_n && !resp_valid && !gpr_pending_q && !halt_pending_q && !icache_pending_q;
 
   always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
       stopped_q <= 1'b1;
       debug_gpr_write <= 0; debug_gpr_wdata <= 0;
       debug_break_pc <= 0; debug_break_enable <= 0;
+      icache_pending_q <= 0; debug_icache_req_valid <= 0; debug_icache_addr <= 0;
       halt_pending_q <= 0;
       gpr_pending_q <= 0; debug_gpr_req_valid <= 0; debug_gpr_addr <= 0;
       halted_q <= 1'b0;
@@ -69,6 +75,12 @@ module edge32_debug_port #(
       core_force_stop <= 1'b0;
     end else begin
       halted_q <= debug_gpr_allowed;
+      if (debug_icache_req_valid && debug_icache_req_ready)
+        debug_icache_req_valid <= 0;
+      if (icache_pending_q && !debug_icache_req_valid && debug_icache_complete) begin
+        icache_pending_q <= 0;
+        resp_valid <= 1; resp_error <= 0; resp_data <= 0;
+      end
       // Do not acknowledge the command pulse itself or stale pre-stop permission.
       // The core owns quiescence; the external requester sees only completion.
       if (halt_pending_q && !core_force_stop && debug_gpr_allowed) begin
@@ -93,14 +105,21 @@ module edge32_debug_port #(
         if (req_write) begin
           case (req_id)
             ID_CONTROL: begin
-              // Reject reserved bits and simultaneous start/stop commands.
-              if (|req_data[63:3] || (&req_data[1:0])) begin
+              // START, HALT and instruction synchronization are exclusive actions.
+              if (|req_data[31:4] || (!req_data[3] && |req_data[63:32]) ||
+                  (req_data[3] && |req_data[33:32]) || (&req_data[1:0]) ||
+                  (req_data[3] && (|req_data[1:0] || !debug_gpr_allowed))) begin
                 resp_error <= 1'b1;
               end else begin
                 if (req_data[2]) interrupt <= 1'b0;
                 if (req_data[0] || req_data[1]) stopped_q <= req_data[1];
                 core_start <= req_data[0];
                 core_force_stop <= req_data[1];
+                if (req_data[3]) begin
+                  icache_pending_q <= 1; debug_icache_req_valid <= 1;
+                  debug_icache_addr <= req_data[63:32];
+                  resp_valid <= 0;
+                end
                 if (req_data[1]) begin
                   halt_pending_q <= 1;
                   resp_valid <= 0;
