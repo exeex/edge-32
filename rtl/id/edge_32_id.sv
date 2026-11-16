@@ -63,12 +63,10 @@ module edge_32_id_stage #(
   wire id_stall;
   reg [2:0] id_uses_fpr;
   reg [4:0] id_write_rd;
-  wire if_id_fire;
 
 `include "id/decode.svh"
 `include "id/dependencies.svh"
 
 `include "id/admission.svh"
 `include "id/slot.svh"
-    assign if_id_fire = if_valid && if_ready;
 endmodule

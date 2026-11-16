@@ -10,8 +10,10 @@
     else if (pipeline_kill) id_valid <= 1'b0;
     else if (if_capacity_ready || id_can_advance) id_valid <= if_valid && if_ready;
   end
+  // A killed/invalid slot may hold arbitrary payload. Keep late kill/valid
+  // qualification off the wide capture mux; stalls still retain all fields.
   always @(posedge clk) begin
-    if (if_id_fire) begin
+    if (if_capacity_ready) begin
       id_pc <= if_pc; id_inst <= if_inst; id_error <= if_error;
     end
   end

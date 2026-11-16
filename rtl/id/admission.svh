@@ -1,5 +1,6 @@
+  // Payload ownership follows capacity; valid/kill alone decide observability.
   always @(posedge clk) begin
-    if(if_id_fire) begin
+    if(if_capacity_ready) begin
       {id_frs0,id_frs1,id_frs2,id_write_rd} <=
         {if_frs0,if_frs1,if_frs2,if_write_rd};
       {id_uses_fpr,id_rd_gpr,id_rd_fpr,id_csr_write} <=
