@@ -87,6 +87,17 @@ module edge_32_cache_biu #(
   reg read_owner_q;
   reg [3:0] read_beat_onehot_q;
 
+  // Two-entry elastic response queue. The spare entry absorbs backpressure
+  // without a combinational cache-ready path to AXI. Normal latency is one edge.
+  reg [1:0] refill_count_q;
+  reg refill_read_q, refill_write_q;
+  reg [DATA_WIDTH-1:0] refill_data_q [0:1];
+  reg [1:0] refill_last_q, refill_error_q;
+  wire refill_valid = refill_count_q != 0;
+  wire refill_ready = read_owner_q == OWNER_DCACHE ?
+    dcache_refill_resp_ready : icache_resp_ready;
+  wire refill_pop = refill_valid && refill_ready;
+
   reg wb_valid_q;
   reg wb_aw_sent_q;
   reg wb_w_sent_q;
@@ -94,7 +105,7 @@ module edge_32_cache_biu #(
   reg [DATA_WIDTH-1:0] wb_data_q;
   reg wb_last_q;
 
-  wire read_idle = !read_active_q;
+  wire read_idle = !read_active_q && !refill_valid;
   // D-cache has priority because its MSHR blocks the scalar pipeline. The
   // one-entry I-cache buffer keeps a simultaneous fetch request lossless.
   wire grant_dcache = read_idle && dcache_refill_req_valid;
@@ -126,20 +137,41 @@ module edge_32_cache_biu #(
   assign axi_arprot = 3'b000;
   assign axi_arsize = 3'b100;
 
-  assign icache_resp_valid = read_active_q &&
-                             (read_owner_q == OWNER_ICACHE) && axi_rvalid;
-  assign icache_resp_last = icache_resp_valid && read_terminal;
-  assign icache_resp_data = axi_rdata;
-  assign icache_resp_error = icache_resp_valid && read_response_error;
-  assign dcache_refill_resp_valid = read_active_q &&
-                                    (read_owner_q == OWNER_DCACHE) && axi_rvalid;
-  assign dcache_refill_resp_data = axi_rdata;
-  assign dcache_refill_resp_last = dcache_refill_resp_valid && read_terminal;
-  assign dcache_refill_resp_error = dcache_refill_resp_valid &&
-                                    read_response_error;
-  assign axi_rready = read_active_q &&
-    ((read_owner_q == OWNER_DCACHE) ? dcache_refill_resp_ready :
-                                     icache_resp_ready);
+  assign icache_resp_valid = refill_valid && (read_owner_q == OWNER_ICACHE);
+  assign icache_resp_last = icache_resp_valid && refill_last_q[refill_read_q];
+  assign icache_resp_data = refill_data_q[refill_read_q];
+  assign icache_resp_error = icache_resp_valid && refill_error_q[refill_read_q];
+  assign dcache_refill_resp_valid = refill_valid && (read_owner_q == OWNER_DCACHE);
+  assign dcache_refill_resp_data = refill_data_q[refill_read_q];
+  assign dcache_refill_resp_last = dcache_refill_resp_valid && refill_last_q[refill_read_q];
+  assign dcache_refill_resp_error = dcache_refill_resp_valid && refill_error_q[refill_read_q];
+  // Conservatively wait a cycle to reopen a full queue after a pop. At the
+  // normal one-entry occupancy, simultaneous push/pop sustains one beat/clock.
+  assign axi_rready = read_active_q && (refill_count_q != 2);
+
+  always @(posedge clk) begin
+    if (!reset_n) begin
+      refill_count_q <= 0;
+      refill_read_q <= 0;
+      refill_write_q <= 0;
+    end else begin
+      case ({r_fire, refill_pop})
+        2'b10: refill_count_q <= refill_count_q + 1'b1;
+        2'b01: refill_count_q <= refill_count_q - 1'b1;
+        default: ;
+      endcase
+      if (r_fire) refill_write_q <= !refill_write_q;
+      if (refill_pop) refill_read_q <= !refill_read_q;
+    end
+  end
+  // Count owns reset/cancellation; data and sideband have identical lifetimes.
+  always @(posedge clk) begin
+    if (r_fire) begin
+      refill_data_q[refill_write_q] <= axi_rdata;
+      refill_last_q[refill_write_q] <= read_terminal;
+      refill_error_q[refill_write_q] <= read_response_error;
+    end
+  end
 
   assign dcache_wb_ready = !wb_valid_q;
   assign axi_awaddr = wb_addr_q;
