@@ -68,7 +68,7 @@ module edge_32_dcache_adapter #(
   assign core_resp_rdata = cache_load_resp_valid ? cache_load_resp_value :
                                                    {VALUE_WIDTH{1'b0}};
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) store_done_q <= 1'b0;
     else begin
       store_done_q <= store_fire;

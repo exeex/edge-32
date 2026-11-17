@@ -87,7 +87,7 @@ module edge_32_icache #(
   assign icache_invalidate_complete=
     icache_invalidate_inflight_q&&!icache_invalidate_busy;
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       icache_invalidate_inflight_q<=1'b0;
     end else begin

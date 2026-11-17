@@ -19,7 +19,7 @@ module edge32_debug_console #(parameter DEPTH=64)(
   localparam [15:0] CAPACITY=DEPTH;
   assign status={CAPACITY,count8,5'd0,overflow_q,full,!empty};
   assign data=empty?32'd0:{23'd0,1'b1,bytes_q[read_q]};
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin read_q<=0;write_q<=0;count_q<=0;overflow_q<=0;end
     else begin
       if(clear_overflow)overflow_q<=0;

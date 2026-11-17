@@ -19,7 +19,7 @@ module edge_32_mul_asap7 (
   .a({src0[31] && ((funct3==3'b001)||(funct3==3'b010)),src0}),
   .b({src1[31] && (funct3==3'b001),src1}), .product(product)
  );
- always @(posedge clk or negedge reset_n)
+ always @(posedge clk)
   if(!reset_n) is_valid_q<=3'b0;
   else is_valid_q<={is_valid_q[1:0],accept};
  always @(posedge clk) high_q<={high_q[1:0],funct3!=3'b000};

@@ -96,7 +96,7 @@ module edge_dcache_banked_data_array #(
   integer byte_idx;
   integer init_i;
 
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) begin
       lsu0_rvalid <= 1'b0;
       lsu0_rdata <= {SCALAR_WIDTH{1'b0}};

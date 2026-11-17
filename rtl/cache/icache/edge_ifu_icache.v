@@ -175,7 +175,7 @@ module edge_ifu_icache #(
     .read_compare_tag(invalidate_line_q ? invalidate_tag_q : lookup_tag_q), .read_match(lookup_hit)
   );
 
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b) begin
       resp_valid_q <= 1'b0;
       resp_bits_q <= {FETCH_WIDTH{1'b0}};

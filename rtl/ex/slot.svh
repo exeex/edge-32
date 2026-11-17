@@ -1,4 +1,4 @@
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) ex_valid <= 1'b0;
     else if (pipeline_kill) ex_valid <= 1'b0;
     else if (!(ex_valid && !ex_release_ready))

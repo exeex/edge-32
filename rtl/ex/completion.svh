@@ -11,7 +11,7 @@
   reg fp_done_q, fp_wb_valid_q;
   // Only FP operations use this completion channel. Keep EX occupied so the
   // owner can capture the held result, flags and destination with fp_done_q.
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       fp_done_q <= 1'b0;
       fp_wb_valid_q <= 1'b0;

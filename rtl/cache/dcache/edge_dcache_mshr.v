@@ -116,7 +116,7 @@ module edge_dcache_mshr #(
   assign active_addr = addr_q;
   assign active_beat = beat_q;
 
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b) begin
       valid_q <= 1'b0;
       stale_q <= 1'b0;

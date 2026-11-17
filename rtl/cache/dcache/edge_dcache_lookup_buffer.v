@@ -139,7 +139,7 @@ module edge_dcache_lookup_buffer #(
   endtask
 
   integer i;
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) begin
       for (i = 0; i < 2; i = i + 1) begin
         valid_q[i] <= 1'b0;

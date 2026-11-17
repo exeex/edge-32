@@ -79,7 +79,7 @@ module edge_32_dtcm_router #(
   assign core_resp_rdata = (owner_q==OWNER_DTCM_LOAD) ? dtcm_formatted_rdata:
                            cache_resp_rdata;
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       owner_q<=OWNER_NONE; dtcm_store_resp_q<=1'b0;
       dtcm_load_size_q<=2'b0; dtcm_load_signed_q<=1'b0;

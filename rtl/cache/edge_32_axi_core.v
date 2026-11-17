@@ -93,12 +93,10 @@ module edge32_axi_core #(
   output wire                         putchar_valid,
   output wire [7:0]                   putchar_char
 );
-  // Keep external reset assertion asynchronous, but release every internal
-  // state element on a forever_cpuclk edge.  This avoids recovery/removal
-  // skew between the core, cache arrays/controllers, and AXI state machines
-  // when cpurst_b is released by an FPGA board-level reset source.
-  (* ASYNC_REG = "TRUE" *) reg [1:0] reset_sync_q;
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  // Internal reset is already qualified by the containing reset manager.
+  // Keep the wrapper's two clocked release stages for its existing latency.
+  reg [1:0] reset_sync_q;
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b)
       reset_sync_q <= 2'b00;
     else

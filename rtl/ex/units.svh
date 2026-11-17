@@ -8,7 +8,7 @@
   reg fp_capture_pending_q;
   reg [4:0] fp_frs0_q, fp_frs1_q, fp_frs2_q;
   wire fp_capture_pending = ENABLE_FPU && fp_capture_pending_q;
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) fp_capture_pending_q <= 1'b0;
     else fp_capture_pending_q <= ENABLE_FPU && id_capture_enable && id_valid &&
       !id_error && id_issue_legal &&

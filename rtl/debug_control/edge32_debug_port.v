@@ -45,31 +45,32 @@ module edge32_debug_port #(
   output wire core_start,
   output wire core_force_stop
 );
-  `include "reset/edge32_reset_release.svh"
+  // Internal synchronous reset; the containing reset manager owns capture/release.
+  wire local_reset_n = reset_n;
   reg resp_valid_q;
-  assign resp_valid = local_reset_n && resp_valid_q;
+  assign resp_valid = resp_valid_q;
   reg resp_error_q;
   assign resp_error = resp_error_q;
   reg interrupt_q;
-  assign interrupt = local_reset_n && interrupt_q;
+  assign interrupt = interrupt_q;
   reg [63:0] resp_data_q;
   assign resp_data = resp_data_q;
   reg debug_dcache_req_valid_q;
-  assign debug_dcache_req_valid = local_reset_n && debug_dcache_req_valid_q;
+  assign debug_dcache_req_valid = debug_dcache_req_valid_q;
   reg debug_dcache_invalidate_q;
   assign debug_dcache_invalidate = debug_dcache_invalidate_q;
   reg [31:0] debug_dcache_addr_q;
   assign debug_dcache_addr = debug_dcache_addr_q;
   reg debug_icache_req_valid_q;
-  assign debug_icache_req_valid = local_reset_n && debug_icache_req_valid_q;
+  assign debug_icache_req_valid = debug_icache_req_valid_q;
   reg [31:0] debug_icache_addr_q;
   assign debug_icache_addr = debug_icache_addr_q;
   reg debug_resume_q;
-  assign debug_resume = local_reset_n && debug_resume_q;
+  assign debug_resume = debug_resume_q;
   reg debug_step_q;
-  assign debug_step = local_reset_n && debug_step_q;
+  assign debug_step = debug_step_q;
   reg debug_pc_write_q;
-  assign debug_pc_write = local_reset_n && debug_pc_write_q;
+  assign debug_pc_write = debug_pc_write_q;
   reg [PC_WIDTH-1:0] debug_pc_wdata_q;
   assign debug_pc_wdata = debug_pc_wdata_q;
   reg [PC_WIDTH-1:0] debug_break_pc_q;
@@ -77,19 +78,19 @@ module edge32_debug_port #(
   reg debug_break_enable_q;
   assign debug_break_enable = debug_break_enable_q;
   reg debug_gpr_write_q;
-  assign debug_gpr_write = local_reset_n && debug_gpr_write_q;
+  assign debug_gpr_write = debug_gpr_write_q;
   reg [31:0] debug_gpr_wdata_q;
   assign debug_gpr_wdata = debug_gpr_wdata_q;
   reg debug_gpr_req_valid_q;
-  assign debug_gpr_req_valid = local_reset_n && debug_gpr_req_valid_q;
+  assign debug_gpr_req_valid = debug_gpr_req_valid_q;
   reg [4:0] debug_gpr_addr_q;
   assign debug_gpr_addr = debug_gpr_addr_q;
   reg [PC_WIDTH-1:0] boot_pc_q;
   assign boot_pc = boot_pc_q;
   reg core_start_q;
-  assign core_start = local_reset_n && core_start_q;
+  assign core_start = core_start_q;
   reg core_force_stop_q;
-  assign core_force_stop = local_reset_n && core_force_stop_q;
+  assign core_force_stop = core_force_stop_q;
 
   localparam [2:0] ID_CONTROL = 3'd0;
   localparam [2:0] ID_BOOT_PC = 3'd1;
@@ -106,10 +107,10 @@ module edge32_debug_port #(
   reg icache_pending_q, dcache_pending_q;
   reg control_pending_q;
   reg step_pending_q, step_launched_q;
-  assign debug_gpr_resp_ready = local_reset_n && gpr_pending_q && !debug_gpr_req_valid_q && !resp_valid_q;
+  assign debug_gpr_resp_ready = gpr_pending_q && !debug_gpr_req_valid_q && !resp_valid_q;
   reg halted_q;
 
-  assign req_ready = local_reset_n && !resp_valid_q && !gpr_pending_q && !halt_pending_q && !icache_pending_q && !dcache_pending_q && !control_pending_q && !step_pending_q;
+  assign req_ready = !resp_valid_q && !gpr_pending_q && !halt_pending_q && !icache_pending_q && !dcache_pending_q && !control_pending_q && !step_pending_q;
 
   always @(posedge clk) begin
     if (!local_reset_n) begin

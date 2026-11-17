@@ -116,7 +116,7 @@ module edge_dcache_hit_queue #(
   assign debug_count = count_q;
 
   integer i;
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b) begin
       head_q <= {PTR_WIDTH{1'b0}};
       tail_q <= {PTR_WIDTH{1'b0}};

@@ -35,7 +35,7 @@ module edge_32_icache_adapter #(
   assign core_resp_error = cache_resp_error && pending_q;
   assign core_resp_data = cache_resp_bits;
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       pending_q <= 1'b0;
     end else begin

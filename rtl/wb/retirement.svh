@@ -1,6 +1,6 @@
 // Implementation owned by this stage module.
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       icache_address_header_q<=0; dcache_address_header_q<=0;
       halted<=0; illegal<=0;

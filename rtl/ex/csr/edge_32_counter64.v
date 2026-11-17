@@ -6,7 +6,7 @@ module edge_32_counter64 (
   output reg [63:0] value
 );
   reg carry16_q, carry32_q, carry48_q;
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       value<=64'd0;
       carry16_q<=1'b0; carry32_q<=1'b0; carry48_q<=1'b0;

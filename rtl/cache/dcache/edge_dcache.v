@@ -580,7 +580,7 @@ module edge_dcache #(
     metadata_reset_pipe_q <= {metadata_reset_pipe_q[0], cpurst_b};
   assign metadata_reset_b = metadata_reset_pipe_q[1];
   assign metadata_init_active_q = !metadata_online_q;
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b)
       metadata_online_q <= 1'b0;
     else if (metadata_reset_b && metadata_sweep_active_q &&
@@ -592,7 +592,7 @@ module edge_dcache #(
   assign metadata_init_active_q = metadata_sweep_active_q;
 `endif
 
-  always @(posedge forever_cpuclk or negedge metadata_reset_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!metadata_reset_b) begin
       metadata_sweep_active_q <= 1'b1;
       metadata_init_index_q <= {LINE_INDEX_WIDTH{1'b0}};
@@ -1104,7 +1104,7 @@ module edge_dcache #(
   // The requester owns a stable address until acceptance. Preserve the SRAM
   // decision through stalls; any metadata write invalidates it before reuse.
   // This breaks SRAM availability/tag comparison -> data-SRAM store control.
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b) begin
       store_class_valid_q <= 1'b0;
       store_class_hit_q <= 1'b0;
@@ -1169,7 +1169,7 @@ module edge_dcache #(
     end
   endfunction
 
-  always @(posedge forever_cpuclk or negedge cpurst_b) begin
+  always @(posedge forever_cpuclk) begin
     if (!cpurst_b) begin
       clean_writeback_tag_q <= {TAG_WIDTH{1'b0}};
       clean_immediate_complete_valid_q <= 1'b0;

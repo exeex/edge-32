@@ -566,7 +566,7 @@ assign tensor_done_valid     = cmd_fire && !is_start;
 assign tensor_done_seq_id    = cmd_seq_id;
 assign tensor_done_epoch     = cmd_epoch;
 
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
+always @(posedge forever_cpuclk) begin
   if(!cpurst_b) asic_ready_q<=1'b0;
   else if(cmd_fire&&ASIC_POWER_CONTROL&&is_asic_power)
     asic_ready_q<=control_imm8[0];
@@ -589,7 +589,7 @@ assign dma_start_y       = dma_y_q[63:0];
 assign dma_start_circular_tiles = cmd_capture_value[15:0];
 assign dma_sync_req      = cmd_fire && is_dma_sync;
 
-always @(posedge forever_cpuclk or negedge cpurst_b) begin
+always @(posedge forever_cpuclk) begin
   if (!cpurst_b) begin
     dma_n_q[31:0] <= 32'b0;
     dma_entry_q[31:0] <= 32'b0;

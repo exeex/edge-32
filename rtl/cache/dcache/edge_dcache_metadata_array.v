@@ -24,7 +24,7 @@ module edge_dcache_metadata_array #(
         read_q <= metadata_q[read_index];
     end
   end
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) begin
       sampled_index_q <= '0;
       sampled_valid_q <= 1'b0;

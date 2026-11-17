@@ -170,7 +170,7 @@ module edge_32_cache_biu #(
     end
   end
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       icache_buf_valid_q <= 1'b0;
       icache_buf_addr_q <= {ADDR_WIDTH{1'b0}};
@@ -188,7 +188,7 @@ module edge_32_cache_biu #(
     end
   end
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       wb_valid_q <= 1'b0;
       wb_aw_sent_q <= 1'b0;

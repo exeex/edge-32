@@ -1,5 +1,5 @@
 // Implementation owned by this stage module.
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       mem_started_q<=0; mul_started_q<=0;
       accel_started_q<=0; cache_started_q<=0;

@@ -5,7 +5,7 @@
   assign if_capacity_ready = (!id_valid || id_can_advance) && !csr_interlock && !csr_serial_busy;
   assign if_ready = if_capacity_ready && !pipeline_kill;
   assign id_capture_enable = id_can_advance && !pipeline_kill;
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) id_valid <= 1'b0;
     else if (pipeline_kill) id_valid <= 1'b0;
     else if (if_capacity_ready || id_can_advance) id_valid <= if_valid && if_ready;

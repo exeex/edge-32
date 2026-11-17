@@ -127,7 +127,7 @@ module edge_fpu_alu #(parameter GPR_WIDTH = 64, parameter PREDECODED = 0,
     .slow_complete_rd(),.slow_complete_rd_bank(),.slow_complete_value(slow_value),
     .slow_complete_fflags(slow_flags));
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin
       busy_q<=0; cancelled_q<=0; complete_valid<=0; complete_gpr_write<=0; complete_rd<=0;
       complete_value<=0; complete_fflags<=0; pending_rd_q<=0;

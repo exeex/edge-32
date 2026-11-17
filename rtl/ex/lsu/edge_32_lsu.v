@@ -95,7 +95,7 @@ module edge_32_lsu #(
     endcase
   end
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       state_q <= IDLE;
       op_done <= 1'b0;

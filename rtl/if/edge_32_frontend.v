@@ -67,7 +67,7 @@ module edge_32_frontend #(
   assign op_inst = fifo_inst_q[fifo_read_q];
   assign op_error = fifo_error_q[fifo_read_q];
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       fetch_pc_q <= RESET_PC;
       running_q <= AUTO_START;

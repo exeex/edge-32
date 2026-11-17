@@ -1,5 +1,5 @@
 // Implementation owned by this stage module.
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) wb_pending_q<=1'b0;
     else if(core_start_i||core_force_stop_i||halted) wb_pending_q<=1'b0;
     else wb_pending_q<=ex_wb_fire;

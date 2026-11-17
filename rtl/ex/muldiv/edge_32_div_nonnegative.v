@@ -33,7 +33,7 @@ module edge32_div_nonnegative (
   wire [31:0] magnitude = rem_op ? remainder : dividend;
   assign op_ready = state==IDLE && !result_valid;
   assign busy = state!=IDLE || result_valid;
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if(!reset_n) begin state<=IDLE; result_valid<=0; end
     else begin
       result_valid<=0;

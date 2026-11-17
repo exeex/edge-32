@@ -222,7 +222,7 @@ module edge_dcache_registered_lookup_buffer #(
 
   // Only ownership/classification state needs reset. Payload is observable
   // only while valid/classified, and is overwritten before acquiring ownership.
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) begin
       valid0_q <= 1'b0; valid1_q <= 1'b0;
       classified0_q <= 1'b0; classified1_q <= 1'b0;

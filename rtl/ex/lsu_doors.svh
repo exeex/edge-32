@@ -49,7 +49,7 @@
       assign router_payload = payload_q;
       assign router_base = {{(61-DTCM_ADDR_WIDTH){1'b0}},base_q};
       assign router_valid = pending;
-      always @(posedge clk or negedge reset_n) begin
+      always @(posedge clk) begin
         if (!reset_n) pending <= 1'b0;
         else if (enqueue) pending <= 1'b1;
         else if (router_valid && router_ready) pending <= 1'b0;
@@ -117,7 +117,7 @@
   assign fp_cache_valid = fp_cache_pending;
   assign fp_cache_payload = fp_cache_payload_q;
   assign c_ready[1] = !fp_cache_pending;
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) fp_cache_pending <= 1'b0;
     else if (c_valid[1] && c_ready[1]) fp_cache_pending <= 1'b1;
     else if (cache_fire && c_select_fp) fp_cache_pending <= 1'b0;
@@ -139,7 +139,7 @@
   assign dtcm_lsu_wstrb = t_strb[t_select_fp];
   assign t_resp = {2{t_pending && dtcm_lsu_rvalid}} & {t_owner_fp,!t_owner_fp};
 
-  always @(posedge clk or negedge reset_n) begin
+  always @(posedge clk) begin
     if (!reset_n) begin
       c_pending <= 1'b0;
       c_owner_fp <= 1'b0;

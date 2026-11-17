@@ -24,7 +24,7 @@ module edge_32_gpr (
     reg initialized;
     assign write_select[entry] = write_enable && (write_rd == entry[4:0]);
     assign initialized_q[entry] = initialized;
-    always @(posedge clk or negedge reset_n)
+    always @(posedge clk)
       if (!reset_n) initialized <= 1'b0;
       else if (write_select[entry]) initialized <= 1'b1;
   end endgenerate

@@ -53,7 +53,7 @@ module edge_dcache_banked_data_array #(
   wire [7:0] lsu0_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu0_wstrb} << (lsu0_subword*4);
   wire [63:0] lsu0_bank_rdata;
   reg lsu0_read_subword_q;
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) lsu0_read_subword_q <= 1'b0;
     else if (lsu0_fire && !lsu0_write) lsu0_read_subword_q <= lsu0_subword;
   end
@@ -64,7 +64,7 @@ module edge_dcache_banked_data_array #(
   wire [7:0] lsu1_bank_wstrb = {{(8-SCALAR_WIDTH/8){1'b0}}, lsu1_wstrb} << (lsu1_subword*4);
   wire [63:0] lsu1_bank_rdata;
   reg lsu1_read_subword_q;
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) lsu1_read_subword_q <= 1'b0;
     else if (lsu1_fire && !lsu1_write) lsu1_read_subword_q <= lsu1_subword;
   end
@@ -225,7 +225,7 @@ module edge_dcache_banked_data_array #(
                      {bank3_rdata, bank2_rdata} :
                      {bank1_rdata, bank0_rdata};
 
-  always @(posedge clk or negedge reset_b) begin
+  always @(posedge clk) begin
     if (!reset_b) begin
       lsu0_rvalid <= 1'b0;
       lsu1_rvalid <= 1'b0;
