@@ -139,7 +139,7 @@ module edge_32_core #(
   wire [31:0] wb_value_q;
 
   wire ex_wb_fire = ex_done;
-  assign putchar_valid = ex_wb_fire && ex_wb.putchar && !ex_wb.fault;
+  assign putchar_valid = ex_wb.putchar;
   assign putchar_char = ex_wb.putchar_value;
   wire pipeline_kill = redirect || terminal_complete || wb_terminal || halted ||
                        core_start_i || core_force_stop_i;

@@ -317,7 +317,7 @@ module edge_32_register_decode #(parameter ENABLE_FPU=0,
   assign write_rd=edge_break ? 5'd31:inst[11:7];
   assign rd_gpr=(write_rd!=0)&&(op_imm||op_reg||(opcode==rv32::OPCODE_LUI)||
     (opcode==rv32::OPCODE_AUIPC)||(opcode==rv32::OPCODE_JAL)||(opcode==rv32::OPCODE_JALR)||
-    (opcode==rv32::OPCODE_LOAD)||csr_op||fp_to_gpr||
+    (opcode==rv32::OPCODE_LOAD)||(csr_op && inst[31:20]!=rv32::CSR_EDGE_PUTCHAR)||fp_to_gpr||
     ((opcode==rv32::OPCODE_EDGE_ASIC)&&(funct7==rv32::ASIC_GETCSR)));
   assign rd_fpr=fp_load||fp_fma||(fp_op&&!fp_to_gpr);
   // Conservatively interlock a CSR writer without waiting for legality.

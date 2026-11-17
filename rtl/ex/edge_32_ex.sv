@@ -193,7 +193,7 @@ module edge_32_ex_stage #(
   assign ex_wb.writes_gpr = ex_writes_gpr;
   assign ex_wb.fault = ex_faulting;
   assign ex_wb.halt = is_terminal_break;
-  assign ex_wb.putchar = is_edge_putchar && csr_write;
+  `include "ex/putchar.svh"
   assign ex_wb.putchar_value = ex_rs1_value[7:0];
   assign ex_wb.writes_icache_header = is_icache_header_csr && csr_write;
   assign ex_wb.writes_dcache_header = is_dcache_header_csr && csr_write;

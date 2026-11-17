@@ -6,7 +6,7 @@ package edge32_stage;
     logic fast, alu;
     logic [4:0] rd;
     logic writes_gpr, fault, halt;
-    logic putchar;
+    logic putchar; // Qualified immediate EX event; independent of ex_done.
     logic [7:0] putchar_value;
     logic writes_icache_header, writes_dcache_header;
     logic [31:0] header_value;
