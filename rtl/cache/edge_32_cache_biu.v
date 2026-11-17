@@ -83,6 +83,8 @@ module edge_32_cache_biu #(
 
   reg icache_buf_valid_q;
   reg [ADDR_WIDTH-1:0] icache_buf_addr_q;
+  reg ar_valid_q, ar_owner_q;
+  reg [ADDR_WIDTH-1:0] ar_addr_q;
   reg read_active_q;
   reg read_owner_q;
   reg [3:0] read_beat_onehot_q;
@@ -105,7 +107,7 @@ module edge_32_cache_biu #(
   reg [DATA_WIDTH-1:0] wb_data_q;
   reg wb_last_q;
 
-  wire read_idle = !read_active_q && !refill_valid;
+  wire read_idle = !ar_valid_q && !read_active_q && !refill_valid;
   // D-cache has priority because its MSHR blocks the scalar pipeline. The
   // one-entry I-cache buffer keeps a simultaneous fetch request lossless.
   wire grant_dcache = read_idle && dcache_refill_req_valid;
@@ -124,14 +126,15 @@ module edge_32_cache_biu #(
   wire wb_response_error = (axi_bid != WRITEBACK_AXI_ID) || |axi_bresp;
 
   assign icache_req_ready = !icache_buf_valid_q;
-  assign dcache_refill_req_ready = grant_dcache && axi_arready;
+  assign dcache_refill_req_ready = read_idle;
 
-  assign axi_arvalid = grant_dcache || grant_icache;
-  assign axi_araddr = grant_dcache ?
-    dcache_refill_req_addr[ADDR_WIDTH-1:0] : icache_buf_addr_q;
+  // Cache acceptance reserves the AR slot; external backpressure cannot
+  // change its selected address or owner. All other AR attributes are constant.
+  assign axi_arvalid = ar_valid_q;
+  assign axi_araddr = ar_addr_q;
   assign axi_arburst = 2'b01;
   assign axi_arcache = 4'h0;
-  assign axi_arid = grant_dcache ? DCACHE_AXI_ID : ICACHE_AXI_ID;
+  assign axi_arid = ar_owner_q ? DCACHE_AXI_ID : ICACHE_AXI_ID;
   assign axi_arlen = {{(LEN_WIDTH-2){1'b0}}, 2'b11};
   assign axi_arlock = 1'b0;
   assign axi_arprot = 3'b000;
@@ -191,11 +194,25 @@ module edge_32_cache_biu #(
   assign dcache_wb_complete = wb_b_fire && wb_last_q && !wb_response_error;
   assign dcache_wb_error = wb_b_fire && wb_response_error;
 
+  always @(posedge clk) begin
+    if (!reset_n) ar_valid_q <= 1'b0;
+    else if (grant_dcache || grant_icache) ar_valid_q <= 1'b1;
+    else if (ar_fire) ar_valid_q <= 1'b0;
+  end
+  // Payload is protected by slot validity and changes only at cache acceptance.
+  always @(posedge clk) begin
+    if (grant_dcache || grant_icache) begin
+      ar_owner_q <= grant_dcache ? OWNER_DCACHE : OWNER_ICACHE;
+      ar_addr_q <= grant_dcache ?
+        dcache_refill_req_addr[ADDR_WIDTH-1:0] : icache_buf_addr_q;
+    end
+  end
+
   // AR initializes all response context before read_active_q exposes it.
   // Predecode the final beat on accepted transfers, including across R stalls.
   always @(posedge clk) begin
     if (ar_fire) begin
-      read_owner_q <= grant_dcache ? OWNER_DCACHE : OWNER_ICACHE;
+      read_owner_q <= ar_owner_q;
       read_beat_onehot_q <= 4'b0001;
     end else if (r_fire) begin
       read_beat_onehot_q <= {read_beat_onehot_q[2:0], 1'b0};
@@ -214,8 +231,8 @@ module edge_32_cache_biu #(
       end
       if (ar_fire) begin
         read_active_q <= 1'b1;
-        if (grant_icache) icache_buf_valid_q <= 1'b0;
       end
+      if (grant_icache) icache_buf_valid_q <= 1'b0;
       if (r_fire && read_terminal) read_active_q <= 1'b0;
     end
   end
