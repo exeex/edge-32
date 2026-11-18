@@ -38,9 +38,9 @@ module edge_ifu_icache_tag_array #(
     .PortADataOut(metadata_rdata)
   );
 
-  assign read_tag = rst_b ? metadata_rdata[TAG_WIDTH-1:0]
-                          : {TAG_WIDTH{1'b0}};
-  assign read_valid_bit = rst_b && metadata_rdata[TAG_WIDTH];
+  // Raw SRAM metadata: synchronous controller reset and scrub own validity.
+  assign read_tag = metadata_rdata[TAG_WIDTH-1:0];
+  assign read_valid_bit = metadata_rdata[TAG_WIDTH];
 
   assign read_match = read_valid_bit && (read_tag == read_compare_tag);
 endmodule

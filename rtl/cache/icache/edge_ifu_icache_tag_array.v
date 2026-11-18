@@ -31,9 +31,9 @@ module edge_ifu_icache_tag_array #(
     end
   end
 
-  assign read_tag = rst_b ? read_metadata_q[TAG_WIDTH-1:0]
-                          : {TAG_WIDTH{1'b0}};
-  assign read_valid_bit = rst_b && read_metadata_q[TAG_WIDTH];
+  // Raw SRAM metadata: synchronous controller reset and scrub own validity.
+  assign read_tag = read_metadata_q[TAG_WIDTH-1:0];
+  assign read_valid_bit = read_metadata_q[TAG_WIDTH];
 
 `ifdef IVERILOG_SIM
   integer init_i;
