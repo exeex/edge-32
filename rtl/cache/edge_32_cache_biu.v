@@ -219,15 +219,19 @@ module edge_32_cache_biu #(
     end
   end
 
+  // Empty-slot payload sampling runs in parallel with the cache miss decision.
+  // Only validity authorizes arbitration; an occupied slot holds its address.
+  always @(posedge clk) begin
+    if (!icache_buf_valid_q) icache_buf_addr_q <= icache_req_addr;
+  end
+
   always @(posedge clk) begin
     if (!reset_n) begin
       icache_buf_valid_q <= 1'b0;
-      icache_buf_addr_q <= {ADDR_WIDTH{1'b0}};
       read_active_q <= 1'b0;
     end else begin
       if (icache_req_valid && icache_req_ready) begin
         icache_buf_valid_q <= 1'b1;
-        icache_buf_addr_q <= icache_req_addr;
       end
       if (ar_fire) begin
         read_active_q <= 1'b1;
