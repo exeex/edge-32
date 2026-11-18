@@ -341,7 +341,7 @@ module edge_dcache #(
   wire data_lsu1_rvalid;
   wire [VALUE_WIDTH-1:0] data_lsu1_rdata;
   wire clean_wb_read_valid;
-  wire refill_data_write_valid;
+  wire refill_data_slot_valid;
   wire data_mem_valid;
   wire data_mem_ready;
   wire data_mem_write;
@@ -353,6 +353,7 @@ module edge_dcache #(
   wire [127:0] data_mem_rdata;
   wire mshr_miss_ready;
   wire mshr_active;
+  wire mshr_refill_active;
   wire mshr_complete;
   wire mshr_complete_valid;
   wire [SEQ_ID_WIDTH-1:0] mshr_complete_seq_id;
@@ -691,15 +692,18 @@ module edge_dcache #(
   assign data_lsu1_wdata = lsu_store_req1_data;
   assign data_lsu1_wstrb = lsu_store_req1_wstrb;
   assign clean_wb_read_valid = clean_wb_active_q && !clean_wb_data_valid_q;
-  assign refill_data_write_valid = mshr_refill_store_valid;
-  assign data_mem_valid = clean_wb_read_valid || refill_data_write_valid;
-  assign data_mem_write = refill_data_write_valid && !clean_wb_read_valid;
+  // Reserve the refill bank before error qualification. A failed beat keeps
+  // its write operation kind, but commits no bytes; it must not become a read.
+  assign refill_data_slot_valid = refill_resp_valid && mshr_refill_active;
+  assign data_mem_valid = clean_wb_read_valid || refill_data_slot_valid;
+  assign data_mem_write = refill_data_slot_valid && !clean_wb_read_valid;
   assign data_mem_line_index = clean_wb_read_valid ?
     clean_wb_line_index_q : mshr_line_index;
   assign data_mem_beat_index = clean_wb_read_valid ?
     clean_wb_beat_q : mshr_refill_beat;
   assign data_mem_wdata = mshr_refill_store_data;
-  assign data_mem_wstrb = 16'hffff;
+  // Error only cancels byte writes, never bank arbitration or payload selection.
+  assign data_mem_wstrb = {16{mshr_refill_store_valid}};
 
   edge_dcache_pair_predictor #(
     .VALUE_WIDTH(VALUE_WIDTH)
@@ -963,7 +967,7 @@ module edge_dcache #(
     .complete_signed(mshr_complete_signed),
     .complete_error(mshr_complete_error),
     .complete_word(mshr_complete_word),
-    .active(mshr_active), .refill_active(),
+    .active(mshr_active), .refill_active(mshr_refill_active),
     .active_addr(mshr_active_addr), .active_beat()
   );
 
