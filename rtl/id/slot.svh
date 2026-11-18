@@ -1,8 +1,8 @@
   // ID->EX issue needs EX capacity and only live ID operands can stall.
-  assign id_can_advance = (!ex_valid || ex_release_ready) && (!id_valid || !id_stall);
+  assign id_can_advance = debug_admit && (!ex_valid || ex_release_ready) && (!id_valid || !id_stall);
     assign csr_interlock = id_valid && !id_error && id_csr_write;
   // IF->ID admission can fill an empty ID while EX remains occupied.
-  assign if_capacity_ready = (!id_valid || id_can_advance) && !csr_interlock && !csr_serial_busy;
+  assign if_capacity_ready = debug_admit && (!id_valid || id_can_advance) && !csr_interlock && !csr_serial_busy;
   assign if_ready = if_capacity_ready && !pipeline_kill;
   assign id_capture_enable = id_can_advance && !pipeline_kill;
   always @(posedge clk) begin

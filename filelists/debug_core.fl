@@ -1,0 +1,4 @@
+# Optional native debug integration; use alongside edge_32.fl.
++define+EDGE32_DEBUG
+${EDGE32_ROOT}/rtl/debug_control/edge32_debug_state.sv
+${EDGE32_ROOT}/rtl/debug_control/edge32_debug_port.v

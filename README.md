@@ -213,3 +213,33 @@ public FPGA resource profile from the parent checkout:
 The public Edge32 RTL is licensed under
 [CERN-OHL-P-2.0](LICENSE.md). The parent `edge-cores` repository has its own
 Apache-2.0 license; the license of this submodule applies to the files here.
+
+## Public native debug integration
+
+Compile `filelists/edge_32.fl` together with `filelists/debug_core.fl` to enable
+`EDGE32_DEBUG`. The `edge32_axi_core` wrapper then exposes the addressed
+`debug_req_*` / `debug_resp_*` handshake and `debug_interrupt`. Its legacy
+`boot_pc`, `core_start` and `core_force_stop` inputs are unused in this
+configuration; tie them low. The debug controller owns start/resume/halt.
+Without this define, the original ports and execution behavior are retained.
+
+The integration connects `edge32_debug_state`, halted PC/GPR access, acknowledged
+single-step/resume, and drained I/D-cache maintenance through the public core.
+The optional raw debug ports on `edge_32_core` and `edge_32_cached_core` require
+the same serialized, halted-owner contract as `edge32_debug_port`; they are not
+an asynchronous bus. HALT stops admission while EX/WB finish, then publishes the
+architectural PC. Reset cancels outstanding debug/cache ownership. GPR writes
+preserve x0 and yield to architectural WB.
+
+Add `filelists/debug_jtag.fl` for the external JTAG/DMI adapter. Its system-bus
+access port must reach the same physical memory as the CPU. Keep the transport
+reset separate from the target reset so DMI remains accessible through
+`ndmreset`; the containing system must qualify target reset with
+`edge32_core_reset_bridge`. Cache line synchronization and dirty writeback are
+required before debug memory accesses, as implemented by the DMI/SBA controller.
+
+The edge-cores `examples/jtag-hello` harness builds these public sources directly
+with a shared behavioral RAM and remote_bitbang socket server. It advertises
+RV32IM and disables the FPU. FPU registers and FPU debug/APR integration remain
+out of scope. This public debug composition has functional validation; it does
+not inherit a new APR closure claim from the separately measured physical views.

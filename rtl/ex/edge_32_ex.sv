@@ -78,6 +78,9 @@ module edge_32_ex_stage #(
   output wire [31:0] dmem_req_wdata,
   output wire dmem_req_write,
   output wire [3:0] dmem_req_wstrb,
+`ifdef EDGE32_DEBUG
+  output wire [PC_WIDTH-1:0] debug_ex_next_pc,
+`endif
   output wire ex_done,
   output wire ex_release_ready,
   output reg ex_valid,
@@ -97,6 +100,10 @@ module edge_32_ex_stage #(
   output wire terminal_complete,
   output wire wb_fp_csr_q
 );
+`ifdef EDGE32_DEBUG
+  assign debug_ex_next_pc = (ex_wb.halt || ex_wb.fault) ? ex_pc :
+    (ex_control && branch_taken) ? branch_target : ex_pc + 32'd4;
+`endif
   wire accel_done;
   wire accel_req_fire;
   reg accel_started_q;

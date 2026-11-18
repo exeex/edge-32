@@ -14,6 +14,24 @@ module edge_32_core #(
 `ifdef EDGE32_EXTERNAL_FPU
   `EDGE32_FPU_PORTS
 `endif
+`ifdef EDGE32_DEBUG
+  input wire debug_step, debug_resume, debug_pc_write,
+  input wire [PC_WIDTH-1:0] debug_pc_wdata,
+  output wire debug_control_ack,
+  input wire debug_gpr_write,
+  input wire [31:0] debug_gpr_wdata,
+  input wire debug_break_enable,
+  input wire [PC_WIDTH-1:0] debug_break_pc,
+  output wire [PC_WIDTH-1:0] debug_pc,
+  output wire [2:0] debug_cause,
+  input wire debug_gpr_req_valid,
+  output wire debug_gpr_req_ready,
+  input wire [4:0] debug_gpr_addr,
+  output wire debug_gpr_resp_valid,
+  input wire debug_gpr_resp_ready,
+  output wire [31:0] debug_gpr_data,
+  output wire debug_gpr_allowed,
+`endif
   input wire clk, input wire reset_n,
   input wire [PC_WIDTH-1:0] boot_pc,
   input wire core_start,input wire core_force_stop,
@@ -61,8 +79,32 @@ module edge_32_core #(
   // ^     ^          |     WB writes the GPR local read owner.
   // |     +----------+
   // +---- EX redirect      Resolution cancels younger IF/ID work.
+`ifdef EDGE32_DEBUG
+  wire core_start_i = (AUTO_START ? 1'b0 : core_start) || debug_resume || debug_step;
+  // A debug HALT drains EX/WB; it must not cancel an accepted instruction.
+  wire core_force_stop_i = 1'b0;
+  wire wb_halted, debug_block, debug_fetch_block;
+  wire [PC_WIDTH-1:0] debug_ex_next_pc;
+  wire debug_break_candidate = debug_break_enable && id_valid &&
+    !halted && id_pc == debug_break_pc;
+  wire debug_id_hold = debug_break_candidate || debug_fetch_block;
+  wire debug_break_hit = debug_break_candidate &&
+    (!ex_valid || ex_release_ready) && !redirect && !pipeline_kill;
+  assign debug_gpr_allowed = halted && !core_start_i;
+  edge32_debug_state #(.PC_WIDTH(PC_WIDTH), .AUTO_START(AUTO_START)) debug_state (
+    .clk(clk), .reset_n(reset_n), .start(core_start_i && !debug_resume && !debug_step),
+    .halt_req(core_force_stop), .boot_pc(boot_pc), .resume(debug_resume),
+    .step(debug_step), .issue_fire(id_valid && id_capture_enable),
+    .pc_write(debug_pc_write), .pc_wdata(debug_pc_wdata), .control_ack(debug_control_ack),
+    .breakpoint_hit(debug_break_hit), .ex_valid(ex_valid), .ex_complete(ex_wb_fire),
+    .ex_terminal(ex_wb.halt || ex_wb.fault), .ex_fault(ex_wb.fault),
+    .ex_next_pc(debug_ex_next_pc), .wb_pending(wb_pending_q), .wb_commit(wb_commit),
+    .block_issue(debug_block), .block_fetch(debug_fetch_block),
+    .debug_halted(halted), .debug_pc(debug_pc), .debug_cause(debug_cause));
+`else
   wire core_start_i = AUTO_START ? 1'b0 : core_start;
   wire core_force_stop_i = AUTO_START ? 1'b0 : core_force_stop;
+`endif
 
   // IF outputs: data, lifetime and feedback.
   wire if_csr_write;
@@ -145,11 +187,23 @@ module edge_32_core #(
                        core_start_i || core_force_stop_i;
 
   edge_32_if_stage #(.PC_WIDTH(PC_WIDTH), .ENABLE_FPU(ENABLE_FPU), .AUTO_START(AUTO_START)) if_stage (
+`ifdef EDGE32_DEBUG
+    .boot_pc((debug_resume || debug_step) ? debug_pc : boot_pc),
+`else
     .boot_pc(boot_pc),
+`endif
     .clk(clk),
+`ifdef EDGE32_DEBUG
+    .core_force_stop_i(debug_fetch_block),
+`else
     .core_force_stop_i(core_force_stop_i),
+`endif
     .core_start_i(core_start_i),
+`ifdef EDGE32_DEBUG
+    .frontend_stop(frontend_stop || debug_fetch_block),
+`else
     .frontend_stop(frontend_stop),
+`endif
     .if_capacity_ready(if_capacity_ready),
     .if_ready(if_ready),
     .imem_req_ready(imem_req_ready),
@@ -186,6 +240,16 @@ module edge_32_core #(
   wire [31:0] gpr_debug_x31;
   assign debug_x31 = {32'd0, gpr_debug_x31};
   edge_32_gpr_read_port gpr_read_port (
+`ifdef EDGE32_DEBUG
+    .debug_gpr_write(debug_gpr_write),
+    .debug_gpr_wdata(debug_gpr_wdata),
+    .debug_gpr_req_valid(debug_gpr_req_valid),
+    .debug_gpr_req_ready(debug_gpr_req_ready),
+    .debug_gpr_addr(debug_gpr_addr),
+    .debug_gpr_resp_valid(debug_gpr_resp_valid),
+    .debug_gpr_resp_ready(debug_gpr_resp_ready),
+    .debug_gpr_data(debug_gpr_data),
+`endif
     .clk(clk), .reset_n(reset_n), .if_accept(if_valid && if_ready),
     .if_rs1(if_rs1), .if_rs2(if_rs2), .uses_gpr(id_uses_gpr),
     .ex_valid(ex_valid), .ex_writes_gpr(ex_writes_gpr), .ex_rd(ex_rd),
@@ -219,7 +283,11 @@ module edge_32_core #(
     .is_fp_compute(is_fp_compute),
     .is_fp_csr(is_fp_csr),
     .is_icache_header_csr(is_icache_header_csr),
+`ifdef EDGE32_DEBUG
+    .pipeline_kill(pipeline_kill || debug_fetch_block), .debug_hold(debug_id_hold),
+`else
     .pipeline_kill(pipeline_kill),
+`endif
     .rd(ex_rd),
     .reset_n(reset_n),
     .wb_dcache_header_q(wb_dcache_header_q),
@@ -273,7 +341,11 @@ module edge_32_core #(
     .dmem_resp_error(dmem_resp_error),
     .dmem_resp_rdata(dmem_resp_rdata),
     .dmem_resp_valid(dmem_resp_valid),
+`ifdef EDGE32_DEBUG
+    .halted(wb_halted),
+`else
     .halted(halted),
+`endif
     .icache_address_header_q(icache_address_header_q),
     .icache_invalidate_complete(icache_invalidate_complete),
     .icache_invalidate_ready(icache_invalidate_ready),
@@ -319,6 +391,9 @@ module edge_32_core #(
     .ex_done(ex_done),
     .ex_release_ready(ex_release_ready),
     .ex_valid(ex_valid),
+`ifdef EDGE32_DEBUG
+    .debug_ex_next_pc(debug_ex_next_pc),
+`endif
     .ex_wb(ex_wb),
     .ex_writes_fpr(ex_writes_fpr),
     .ex_writes_gpr(ex_writes_gpr),
@@ -350,7 +425,11 @@ module edge_32_core #(
     .ex_wb_fire(ex_wb_fire),
     .reset_n(reset_n),
     .dcache_address_header_q(dcache_address_header_q),
+`ifdef EDGE32_DEBUG
+    .halted(wb_halted),
+`else
     .halted(halted),
+`endif
     .icache_address_header_q(icache_address_header_q),
     .illegal(illegal),
     .wb_commit(wb_commit),

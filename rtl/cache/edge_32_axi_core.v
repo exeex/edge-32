@@ -21,6 +21,15 @@ module edge32_axi_core #(
 `ifdef EDGE32_EXTERNAL_FPU
   `EDGE32_FPU_PORTS
 `endif
+`ifdef EDGE32_DEBUG
+  input wire debug_req_valid, debug_req_write,
+  input wire [2:0] debug_req_id,
+  input wire [63:0] debug_req_data,
+  output wire debug_req_ready, debug_resp_valid, debug_resp_error,
+  output wire [63:0] debug_resp_data,
+  input wire debug_resp_ready,
+  output wire debug_interrupt,
+`endif
   input  wire                         forever_cpuclk,
   input  wire                         cpurst_b,
   input  wire                         core_start,
@@ -104,6 +113,68 @@ module edge32_axi_core #(
   end
   wire core_reset_n = reset_sync_q[1];
 
+`ifdef EDGE32_DEBUG
+  wire debug_step, debug_resume, debug_pc_write;
+  wire [PC_WIDTH-1:0] debug_pc_wdata;
+  wire debug_control_ack;
+  wire debug_gpr_write;
+  wire [31:0] debug_gpr_wdata;
+  wire debug_break_enable;
+  wire [PC_WIDTH-1:0] debug_break_pc;
+  wire [PC_WIDTH-1:0] debug_pc;
+  wire [2:0] debug_cause;
+  wire debug_gpr_req_valid;
+  wire debug_gpr_req_ready;
+  wire [4:0] debug_gpr_addr;
+  wire debug_gpr_resp_valid;
+  wire debug_gpr_resp_ready;
+  wire [31:0] debug_gpr_data;
+  wire debug_gpr_allowed;
+  wire debug_dcache_invalidate;
+  wire [31:0] debug_dcache_addr;
+  wire debug_dcache_req_valid;
+  wire debug_dcache_req_ready, debug_dcache_complete;
+  wire [31:0] debug_icache_addr;
+  wire debug_icache_req_valid;
+  wire debug_icache_req_ready, debug_icache_complete;
+  wire [PC_WIDTH-1:0] debug_boot_pc;
+  wire debug_core_start, debug_core_force_stop;
+  edge32_debug_port #(.PC_WIDTH(PC_WIDTH)) debug_port (
+ .clk(forever_cpuclk), .reset_n(core_reset_n),
+ .req_valid(debug_req_valid), .req_write(debug_req_write), .req_id(debug_req_id),
+ .req_data(debug_req_data), .req_ready(debug_req_ready), .resp_valid(debug_resp_valid),
+ .resp_ready(debug_resp_ready), .resp_error(debug_resp_error), .resp_data(debug_resp_data),
+ .interrupt(debug_interrupt), .halted(halted), .illegal(illegal),
+ .cycle_count(cycle_count), .instret_count(instret_count),
+ .boot_pc(debug_boot_pc), .core_start(debug_core_start), .core_force_stop(debug_core_force_stop),
+    .debug_step(debug_step),
+    .debug_resume(debug_resume),
+    .debug_pc_write(debug_pc_write),
+    .debug_pc_wdata(debug_pc_wdata),
+    .debug_control_ack(debug_control_ack),
+    .debug_gpr_write(debug_gpr_write),
+    .debug_gpr_wdata(debug_gpr_wdata),
+    .debug_break_enable(debug_break_enable),
+    .debug_break_pc(debug_break_pc),
+    .debug_pc(debug_pc),
+    .debug_cause(debug_cause),
+    .debug_gpr_req_valid(debug_gpr_req_valid),
+    .debug_gpr_req_ready(debug_gpr_req_ready),
+    .debug_gpr_addr(debug_gpr_addr),
+    .debug_gpr_resp_valid(debug_gpr_resp_valid),
+    .debug_gpr_resp_ready(debug_gpr_resp_ready),
+    .debug_gpr_data(debug_gpr_data),
+    .debug_gpr_allowed(debug_gpr_allowed),
+    .debug_dcache_invalidate(debug_dcache_invalidate),
+    .debug_dcache_addr(debug_dcache_addr),
+    .debug_dcache_req_valid(debug_dcache_req_valid),
+    .debug_dcache_req_ready(debug_dcache_req_ready),
+    .debug_dcache_complete(debug_dcache_complete),
+    .debug_icache_addr(debug_icache_addr),
+    .debug_icache_req_valid(debug_icache_req_valid),
+    .debug_icache_req_ready(debug_icache_req_ready),
+    .debug_icache_complete(debug_icache_complete));
+`endif
   wire imem_refill_req_valid;
   wire imem_refill_req_ready;
   wire [PC_WIDTH-1:0] imem_refill_req_addr;
@@ -142,12 +213,46 @@ module edge32_axi_core #(
     .AUTO_START(0),
     .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) cached_core (
+`ifdef EDGE32_DEBUG
+    .debug_step(debug_step),
+    .debug_resume(debug_resume),
+    .debug_pc_write(debug_pc_write),
+    .debug_pc_wdata(debug_pc_wdata),
+    .debug_control_ack(debug_control_ack),
+    .debug_gpr_write(debug_gpr_write),
+    .debug_gpr_wdata(debug_gpr_wdata),
+    .debug_break_enable(debug_break_enable),
+    .debug_break_pc(debug_break_pc),
+    .debug_pc(debug_pc),
+    .debug_cause(debug_cause),
+    .debug_gpr_req_valid(debug_gpr_req_valid),
+    .debug_gpr_req_ready(debug_gpr_req_ready),
+    .debug_gpr_addr(debug_gpr_addr),
+    .debug_gpr_resp_valid(debug_gpr_resp_valid),
+    .debug_gpr_resp_ready(debug_gpr_resp_ready),
+    .debug_gpr_data(debug_gpr_data),
+    .debug_gpr_allowed(debug_gpr_allowed),
+    .debug_dcache_invalidate(debug_dcache_invalidate),
+    .debug_dcache_addr(debug_dcache_addr),
+    .debug_dcache_req_valid(debug_dcache_req_valid),
+    .debug_dcache_req_ready(debug_dcache_req_ready),
+    .debug_dcache_complete(debug_dcache_complete),
+    .debug_icache_addr(debug_icache_addr),
+    .debug_icache_req_valid(debug_icache_req_valid),
+    .debug_icache_req_ready(debug_icache_req_ready),
+    .debug_icache_complete(debug_icache_complete),
+`endif
+
 `ifdef EDGE32_EXTERNAL_FPU
     `EDGE32_FPU_CONNECT
 `endif
     .clk(forever_cpuclk), .reset_n(core_reset_n),
+`ifdef EDGE32_DEBUG
+    .boot_pc(debug_boot_pc), .core_start(debug_core_start), .core_force_stop(debug_core_force_stop),
+`else
     .boot_pc(boot_pc),.core_start(core_start),
     .core_force_stop(core_force_stop),
+`endif
     .icache_address_header(icache_address_header),
     .dcache_address_header(dcache_address_header),
     .imem_refill_req_valid(imem_refill_req_valid),

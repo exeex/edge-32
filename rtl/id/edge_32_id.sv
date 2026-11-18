@@ -27,6 +27,9 @@ module edge_32_id_stage #(
   input wire is_fp_compute,
   input wire is_fp_csr,
   input wire is_icache_header_csr,
+`ifdef EDGE32_DEBUG
+  input wire debug_hold,
+`endif
   input wire pipeline_kill,
   input wire [4:0] rd,
   input wire reset_n,
@@ -50,6 +53,11 @@ module edge_32_id_stage #(
   output wire if_capacity_ready,
   output wire if_ready
 );
+`ifdef EDGE32_DEBUG
+  wire debug_admit = !debug_hold;
+`else
+  wire debug_admit = 1'b1;
+`endif
   wire csr_interlock;
   wire id_can_advance;
   wire id_csr_hazard;

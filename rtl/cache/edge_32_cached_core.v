@@ -20,6 +20,31 @@ module edge_32_cached_core #(
 `ifdef EDGE32_EXTERNAL_FPU
   `EDGE32_FPU_PORTS
 `endif
+`ifdef EDGE32_DEBUG
+  input wire debug_step, debug_resume, debug_pc_write,
+  input wire [PC_WIDTH-1:0] debug_pc_wdata,
+  output wire debug_control_ack,
+  input wire debug_gpr_write,
+  input wire [31:0] debug_gpr_wdata,
+  input wire debug_break_enable,
+  input wire [PC_WIDTH-1:0] debug_break_pc,
+  output wire [PC_WIDTH-1:0] debug_pc,
+  output wire [2:0] debug_cause,
+  input wire debug_gpr_req_valid,
+  output wire debug_gpr_req_ready,
+  input wire [4:0] debug_gpr_addr,
+  output wire debug_gpr_resp_valid,
+  input wire debug_gpr_resp_ready,
+  output wire [31:0] debug_gpr_data,
+  output wire debug_gpr_allowed,
+  input wire debug_dcache_invalidate,
+  input wire [31:0] debug_dcache_addr,
+  input wire debug_dcache_req_valid,
+  output wire debug_dcache_req_ready, debug_dcache_complete,
+  input wire [31:0] debug_icache_addr,
+  input wire debug_icache_req_valid,
+  output wire debug_icache_req_ready, debug_icache_complete,
+`endif
   input  wire                   clk,
   input  wire                   reset_n,
   input  wire [PC_WIDTH-1:0]    boot_pc,
@@ -121,6 +146,30 @@ module edge_32_cached_core #(
   wire cache_core_resp_valid,cache_core_resp_error;
   wire [31:0] cache_core_resp_rdata;
 
+`ifdef EDGE32_DEBUG
+  wire debug_inv_ready, debug_inv_complete;
+  wire debug_clean_ready, debug_clean_complete;
+  reg debug_inv_owned_q, debug_clean_owned_q;
+  wire debug_inv_select = debug_icache_req_valid && !debug_inv_owned_q;
+  wire debug_clean_select = debug_dcache_req_valid && !debug_clean_owned_q;
+  assign debug_icache_req_ready = debug_inv_ready && !debug_inv_owned_q;
+  assign debug_icache_complete = debug_inv_owned_q && debug_inv_complete;
+  assign debug_dcache_req_ready = debug_clean_ready && !debug_clean_owned_q;
+  assign debug_dcache_complete = debug_clean_owned_q && debug_clean_complete;
+  assign icache_invalidate_ready = debug_inv_ready && !debug_icache_req_valid && !debug_inv_owned_q;
+  assign icache_invalidate_complete = debug_inv_complete && !debug_inv_owned_q;
+  assign cache_op_ready = debug_clean_ready && !debug_dcache_req_valid && !debug_clean_owned_q;
+  assign cache_op_complete_valid = debug_clean_complete && !debug_clean_owned_q;
+  always @(posedge clk) begin
+    if (!reset_n) begin debug_inv_owned_q<=0; debug_clean_owned_q<=0; end
+    else begin
+      if (debug_icache_req_valid && debug_icache_req_ready) debug_inv_owned_q<=1;
+      else if (debug_icache_complete) debug_inv_owned_q<=0;
+      if (debug_dcache_req_valid && debug_dcache_req_ready) debug_clean_owned_q<=1;
+      else if (debug_dcache_complete) debug_clean_owned_q<=0;
+    end
+  end
+`endif
   wire icache_invalidate_valid;
   wire icache_invalidate_ready;
   wire icache_invalidate_complete;
@@ -136,6 +185,27 @@ module edge_32_cached_core #(
     .AUTO_START(AUTO_START),
     .EDGE_ASIC_ID(EDGE_ASIC_ID)
   ) core (
+`ifdef EDGE32_DEBUG
+    .debug_step(debug_step),
+    .debug_resume(debug_resume),
+    .debug_pc_write(debug_pc_write),
+    .debug_pc_wdata(debug_pc_wdata),
+    .debug_control_ack(debug_control_ack),
+    .debug_gpr_write(debug_gpr_write),
+    .debug_gpr_wdata(debug_gpr_wdata),
+    .debug_break_enable(debug_break_enable),
+    .debug_break_pc(debug_break_pc),
+    .debug_pc(debug_pc),
+    .debug_cause(debug_cause),
+    .debug_gpr_req_valid(debug_gpr_req_valid),
+    .debug_gpr_req_ready(debug_gpr_req_ready),
+    .debug_gpr_addr(debug_gpr_addr),
+    .debug_gpr_resp_valid(debug_gpr_resp_valid),
+    .debug_gpr_resp_ready(debug_gpr_resp_ready),
+    .debug_gpr_data(debug_gpr_data),
+    .debug_gpr_allowed(debug_gpr_allowed),
+`endif
+
 `ifdef EDGE32_EXTERNAL_FPU
     `EDGE32_FPU_CONNECT
 `endif
@@ -228,7 +298,11 @@ module edge_32_cached_core #(
 
 `endif
 
-  edge_32_icache #(.ICACHE_BYTES(ICACHE_BYTES)) icache_boundary (
+  edge_32_icache #(.ICACHE_BYTES(ICACHE_BYTES)
+`ifdef EDGE32_DEBUG
+    , .ENABLE_LINE_INVALIDATE(1)
+`endif
+  ) icache_boundary (
     .clk(clk),
     .reset_n(reset_n),
     .core_imem_req_valid(core_imem_req_valid),
@@ -237,10 +311,16 @@ module edge_32_cached_core #(
     .core_imem_resp_valid(core_imem_resp_valid),
     .core_imem_resp_data(core_imem_resp_data),
     .core_imem_resp_error(core_imem_resp_error),
+`ifdef EDGE32_DEBUG
+    .icache_invalidate_valid((icache_invalidate_valid && !debug_icache_req_valid && !debug_inv_owned_q) || debug_inv_select),
+    .icache_invalidate_line(debug_inv_select), .icache_invalidate_addr(debug_icache_addr),
+    .icache_invalidate_ready(debug_inv_ready), .icache_invalidate_complete(debug_inv_complete),
+`else
     .icache_invalidate_valid(icache_invalidate_valid),
     .icache_invalidate_line(1'b0), .icache_invalidate_addr(32'd0),
     .icache_invalidate_ready(icache_invalidate_ready),
     .icache_invalidate_complete(icache_invalidate_complete),
+`endif
     .imem_refill_req_valid(imem_refill_req_valid),
     .imem_refill_req_ready(imem_refill_req_ready),
     .imem_refill_req_addr(imem_refill_req_addr),
@@ -270,12 +350,20 @@ module edge_32_cached_core #(
     .core_dmem_resp_valid(cache_core_resp_valid),
     .core_dmem_resp_error(cache_core_resp_error),
     .core_dmem_resp_rdata(cache_core_resp_rdata),
+`ifdef EDGE32_DEBUG
+    .cache_op_valid((cache_op_valid && !debug_dcache_req_valid && !debug_clean_owned_q) || debug_clean_select),
+    .cache_op_ready(debug_clean_ready), .cache_op_is_va(debug_clean_select ? 1'b1 : cache_op_is_va),
+    .cache_op_kind(debug_clean_select ? {debug_dcache_invalidate,1'b1} : cache_op_kind),
+    .cache_op_addr(debug_clean_select ? debug_dcache_addr : cache_op_addr),
+    .cache_op_complete_valid(debug_clean_complete),
+`else
     .cache_op_valid(cache_op_valid),
     .cache_op_ready(cache_op_ready),
     .cache_op_is_va(cache_op_is_va),
     .cache_op_kind(cache_op_kind),
     .cache_op_addr(cache_op_addr),
     .cache_op_complete_valid(cache_op_complete_valid),
+`endif
     .dmem_refill_req_valid(dmem_refill_req_valid),
     .dmem_refill_req_ready(dmem_refill_req_ready),
     .dmem_refill_req_addr(dmem_refill_req_addr),
