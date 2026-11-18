@@ -1,3 +1,9 @@
+// Keep the admission helper with its include so generated stage owners also resolve it.
+`ifdef EDGE32_DEBUG
+  wire debug_admit = !debug_hold;
+`else
+  wire debug_admit = 1'b1;
+`endif
   // ID->EX issue needs EX capacity and only live ID operands can stall.
   assign id_can_advance = debug_admit && (!ex_valid || ex_release_ready) && (!id_valid || !id_stall);
     assign csr_interlock = id_valid && !id_error && id_csr_write;
